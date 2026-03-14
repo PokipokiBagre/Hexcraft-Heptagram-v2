@@ -91,28 +91,31 @@
         }
 
         function cargarImagenesNube() {
-            // A. Cambiar las imágenes de la grilla y los accesos directos
-            document.querySelectorAll('img[src^="img/"]').forEach(img => {
-                const nombreLocal = img.getAttribute('src').replace('img/', '');
-                
-                // Excluimos explícitamente el 'icon.png' base por si quieres que ese siempre cargue en local, 
-                // o lo quitas si también subiste el icono al gestor.
-                if (nombreLocal !== 'icon.png') {
-                    const nuevaUrl = db.storage.getUrlInterfaz(nombreLocal);
-                    img.src = nuevaUrl;
-                    
-                    // Si falla la carga desde Supabase, el onerror que ya tienes en el HTML cargará icon.png
-                }
-            });
-
-            // B. Cambiar la imagen de fondo del Hero Header
-            const header = document.querySelector('.hero-section');
-            if (header) {
-                // Generamos la URL para hex-002.png
-                const bgUrl = db.storage.getUrlInterfaz('hex-002.png');
-                header.style.backgroundImage = `linear-gradient(rgba(18,0,36,0.7), rgba(18,0,36,0.7)), url('${bgUrl}')`;
-            }
+    // A. Cambiar las imágenes de la grilla y los accesos directos
+    document.querySelectorAll('img[src^="img/"]').forEach(img => {
+        const nombreLocal = img.getAttribute('src').replace('img/', '');
+        
+        if (nombreLocal !== 'icon.png') {
+            const nuevaUrl = db.storage.getUrlInterfaz(nombreLocal);
+            
+            // 1. Asignamos el evento de error ANTES de cambiar la fuente
+            img.onerror = () => {
+                img.onerror = null; // Evita bucles infinitos si el icono también falla
+                img.src = 'img/icon.png';
+            };
+            
+            // 2. Le inyectamos la URL mágica de Supabase
+            img.src = nuevaUrl;
         }
+    });
+
+    // B. Cambiar la imagen de fondo del Hero Header
+    const header = document.querySelector('.hero-section');
+    if (header) {
+        const bgUrl = db.storage.getUrlInterfaz('hex-002.png');
+        header.style.backgroundImage = `linear-gradient(rgba(18,0,36,0.7), rgba(18,0,36,0.7)), url('${bgUrl}')`;
+    }
+}
 
         iniciar();
     </script>
