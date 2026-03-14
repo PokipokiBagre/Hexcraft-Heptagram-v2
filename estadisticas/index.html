@@ -9,15 +9,17 @@
 </head>
 <body>
     <div class="nav-bar" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--gold-dim); padding-bottom: 15px; margin-bottom: 20px;">
-        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <div style="display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
             <button onclick="window.location.href='../index.html'" style="background: #111; border-color: #555;">⬅ Volver al Inicio</button>
             <button onclick="window.mostrarCatalogo()">👤 Catálogo</button>
             <button onclick="window.mostrarResumen()">📊 Resumen Visual</button>
             <span style="background: #004a00; color: #00ff00; border: 1px solid #00ff00; padding: 10px 15px; border-radius: 4px; font-weight: bold; box-shadow: 0 0 10px rgba(0,255,0,0.3); cursor:default; display:flex; align-items:center;">🟢 CONECTADO</span>
         </div>
-        <h2 style="margin: 0; display:none;">FICHA DE ESTADO HEX</h2>
-        <div id="hex-session-badge"></div>
-        <button onclick="window.abrirMenuOP()" style="border-style: dashed; background:#2e004f;">⚙️ Acceso OP</button>
+        <div style="display: flex; gap: 10px; align-items: center;">
+            <div id="hex-session-badge"></div>
+            <button onclick="window.abrirMenuOP()" style="border-style: dashed; background:#2e004f;">⚙️ Acceso OP</button>
+        </div>
+    </div>
 
     <div id="loader" class="loading" style="margin-bottom: 20px;">
         <div style="margin-bottom: 10px; color:var(--gold); font-weight:bold;">Decodificando Datos desde el Servidor...</div>
