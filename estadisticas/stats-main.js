@@ -490,23 +490,31 @@ async function iniciar() {
         if (performance.getEntriesByType("navigation")[0]?.type === "reload") localStorage.removeItem('hex_stats_v2');
 
         // Inicializar auth y detectar si es admin
-        await hexAuth.init();
-        estadoUI.esAdmin = hexAuth.esAdmin();
+await hexAuth.init();
 
-        // Badge de sesión — si es admin, el badge abre el panel OP directamente
-        const badge = document.getElementById('hex-session-badge');
-        if (badge) {
-            if (hexAuth.esAdmin()) {
-                badge.innerHTML = `<span style="background:#4a004a; color:#d4af37; border:1px dashed #d4af37;
-                    padding:8px 14px; border-radius:4px; font-weight:bold;
-                    font-family:'Cinzel'; cursor:pointer; font-size:0.85em;"
-                    onclick="window.abrirMenuOP()">
-                    ⚙️ MÁSTER
-                    </span>`;
-            } else {
-                badge.innerHTML = hexAuth.renderStatusBadge();
-            }
-        }
+// Forzar recarga del perfil por si RLS tardó
+if (hexAuth.estaLogueado() && !hexAuth.esAdmin()) {
+    const { data } = await supabase
+        .from('perfiles_usuario')
+        .select('rol')
+        .eq('id', (await supabase.auth.getUser()).data.user.id)
+        .single();
+    if (data?.rol === 'admin') {
+        hexAuth._perfil = { rol: 'admin' };
+    }
+}
+
+estadoUI.esAdmin = hexAuth.esAdmin();
+
+// Badge en nav
+const badge = document.getElementById('hex-session-badge');
+if (badge) {
+    if (hexAuth.esAdmin()) {
+        badge.innerHTML = `<span style="background:#4a004a; color:#d4af37; border:1px dashed #d4af37; padding:8px 14px; border-radius:4px; font-weight:bold; font-family:'Cinzel'; cursor:pointer; font-size:0.85em;" onclick="window.abrirMenuOP()">⚙️ MÁSTER</span>`;
+    } else {
+        badge.innerHTML = hexAuth.renderStatusBadge();
+    }
+}
 
         const loader = document.getElementById('loader');
         const barra  = document.getElementById('carga-progreso');
