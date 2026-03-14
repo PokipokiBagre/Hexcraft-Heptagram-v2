@@ -90,26 +90,27 @@
             cargarImagenesNube();
         }
 
-        function cargarImagenesNube() {
-    // A. Cambiar las imágenes de la grilla y los accesos directos
+function cargarImagenesNube() {
+    // 1. Obtenemos el icono mágico directamente desde Supabase
+    // Así evitamos los errores 404 de tu carpeta local
+    const urlIconoNube = db.storage.getUrlInterfaz('icon.png');
+
+    // 2. Cambiar las imágenes de la grilla y los accesos directos
     document.querySelectorAll('img[src^="img/"]').forEach(img => {
         const nombreLocal = img.getAttribute('src').replace('img/', '');
+        const nuevaUrl = db.storage.getUrlInterfaz(nombreLocal);
         
-        if (nombreLocal !== 'icon.png') {
-            const nuevaUrl = db.storage.getUrlInterfaz(nombreLocal);
-            
-            // 1. Asignamos el evento de error ANTES de cambiar la fuente
-            img.onerror = () => {
-                img.onerror = null; // Evita bucles infinitos si el icono también falla
-                img.src = 'img/icon.png';
-            };
-            
-            // 2. Le inyectamos la URL mágica de Supabase
-            img.src = nuevaUrl;
-        }
+        // Si la imagen original de Supabase falla por algo, ponemos el icono de Supabase
+        img.onerror = () => {
+            img.onerror = null; // Evita bucles infinitos
+            img.src = urlIconoNube;
+        };
+        
+        // Asignamos la imagen principal
+        img.src = nuevaUrl;
     });
 
-    // B. Cambiar la imagen de fondo del Hero Header
+    // 3. Cambiar la imagen de fondo del Hero Header (El rol actual)
     const header = document.querySelector('.hero-section');
     if (header) {
         const bgUrl = db.storage.getUrlInterfaz('hex-002.png');
