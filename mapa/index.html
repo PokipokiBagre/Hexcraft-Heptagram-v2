@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mapa de Hechizos | HEX</title>
+    <link rel="icon" type="image/png" href="../img/icon.png">
+    <link rel="stylesheet" href="../stylemapa.css?v=6.0">
+</head>
+<body>
+    <div id="ui-overlay" style="pointer-events: none;">
+        <div class="nav-bar" style="pointer-events: auto;">
+            <button onclick="window.location.href='../index.html'" class="btn-basic">⬅ Volver</button>
+            <h2 style="margin:0; color:var(--gold); text-shadow:0 0 10px rgba(212,175,55,0.5);">MAPA DE HECHIZOS</h2>
+            <div style="display:flex; gap:10px; align-items:center;">
+                <button id="btn-ordenar" class="btn-action oculto" style="background:#003366; border-color:#00ffff;" onclick="window.ordenarMapaYifanHu()">🌀 Auto-Ordenar</button>
+                <button id="btn-save-map" class="btn-action oculto" onclick="window.guardarCambiosMapa()">💾 Guardar Cambios</button>
+                
+                <button id="btn-editar-mapa" class="btn-action oculto" style="background:#4a004a; border-color:#ff00ff;" onclick="window.toggleModoEdicion()">✏️ Editor Estructural</button>
+                
+                <button onclick="window.abrirMenuOP()" style="background:#2e004f; color:var(--gold); border:1px dashed var(--gold); padding:8px 15px; border-radius:4px; cursor:pointer; font-weight:bold; font-family:'Cinzel';">⚙️ Acceso OP</button>
+                
+                <div class="view-controls">
+                    <button id="mode-descubiertos" class="btn-switch active" onclick="window.cambiarModoVisual('descubiertos')">Descubiertos</button>
+                    <button id="mode-afinidades" class="btn-switch" onclick="window.cambiarModoVisual('afinidades')">Afinidades</button>
+                </div>
+            </div>
+        </div>
+
+        <button id="btn-toggle-sidebar" onclick="document.getElementById('sidebar-jugadores').classList.toggle('open')" style="display: none; pointer-events: auto; position: absolute; top: 90px; left: 20px; z-index: 30; background: rgba(10,0,20,0.85); border: 1px solid var(--gold); color: var(--gold); padding: 8px 15px; border-radius: 6px; font-family: 'Cinzel', serif; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">👥 Jugadores</button>
+
+        <div id="sidebar-jugadores" class="sidebar" style="pointer-events: auto; top: 140px;">
+            <h3 style="color:var(--gold); text-align:center; font-family:'Cinzel'; margin: 0 0 15px 0; border-bottom: 1px solid var(--gold); padding-bottom: 10px;">JUGADORES</h3>
+            <button class="btn-jugador activo" id="btn-jug-Todos" onclick="window.seleccionarJugador('Todos')">
+                <div style="width:24px;height:24px;border-radius:50%;background:#444;color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;">★</div>
+                <span>Todos</span>
+            </button>
+            <div id="lista-jugadores"></div>
+        </div>
+
+        <div id="panel-info" class="panel-info oculto" style="pointer-events: auto; max-height: 80vh; overflow-y: auto;">
+            <button id="btn-cerrar-panel" onclick="window.cerrarPanelInfo()" title="Deseleccionar nodo">✕</button>
+
+            <h3 id="info-titulo">Nombre Hechizo</h3>
+            <div id="info-tags" class="tags-container"></div>
+            
+            <p id="info-desc" style="color: #aaa; font-size: 0.85em; line-height: 1.4; margin-bottom: 10px; font-style: italic;"></p>
+            <p id="info-efecto" style="color: #fff; font-size: 0.9em; font-weight: bold; margin-bottom: 10px; border-top: 1px dashed #444; padding-top: 10px;"></p>
+            
+            <details id="info-detalles" style="background: rgba(0,0,0,0.6); padding: 10px; border-radius: 6px; margin-bottom: 10px; border: 1px solid #333;">
+                <summary style="color: var(--gold); cursor: pointer; font-weight: bold; font-family: 'Cinzel'; font-size: 0.85em;">🔍 Ver Detalles</summary>
+                <div style="margin-top: 10px; font-size: 0.8em; color: #ddd; line-height: 1.5;">
+                    <div id="box-overcast"><b style="color:#ff7777">Overcast (100%):</b> <span id="info-overcast"></span></div>
+                    <div id="box-undercast" style="margin-top:6px;"><b style="color:#77aaff">Undercast (50%):</b> <span id="info-undercast"></span></div>
+                    <div id="box-especial" style="margin-top:6px;"><b style="color:#d4af37">Especial:</b> <span id="info-especial"></span></div>
+                </div>
+            </details>
+
+            <div id="info-op"></div>
+        </div>
+        
+        <div id="panel-edicion-avanzada" class="panel-info oculto" style="resize: both; overflow: auto; min-width: 300px; min-height: 200px; right: 20px; top: 90px; height: fit-content; max-height: calc(100vh - 110px); border-radius: 12px; left: auto; width: 480px; pointer-events: auto; background: rgba(15,0,30,0.95); border: 2px solid var(--gold); box-shadow: -5px 5px 20px rgba(0,0,0,0.8); z-index: 100;">
+            </div>
+
+        <div id="herramientas-editor" class="oculto" style="position: absolute; bottom: 25px; left: 20px; z-index: 100; display: flex; gap: 12px; background: rgba(10,0,20,0.85); padding: 12px; border-radius: 12px; border: 1px solid var(--cyan-magic); pointer-events: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.9);">
+            <button id="tool-cursor" onclick="window.mapaEditor.setHerramienta('cursor')" style="width: 75px; height: 75px; border-radius: 8px; background: var(--cyan-magic); color: #000; border: 2px solid var(--cyan-magic); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: 0.2s; box-shadow: 0 0 15px rgba(0,255,255,0.5);">
+                <span style="font-size: 2em; margin-bottom: 2px;">👆</span>
+                <span style="font-family: 'Cinzel'; font-weight: bold; font-size: 0.75em;">Select</span>
+            </button>
+            <button id="tool-enlace" onclick="window.mapaEditor.setHerramienta('enlace')" style="width: 75px; height: 75px; border-radius: 8px; background: #111; color: var(--cyan-magic); border: 2px solid var(--cyan-magic); cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: 0.2s; box-shadow: none;" title="SHIFT + Soltar para conectar a varios">
+                <span style="font-size: 2em; margin-bottom: 2px;">↗️</span>
+                <span style="font-family: 'Cinzel'; font-weight: bold; font-size: 0.75em;">Flecha</span>
+            </button>
+            <button onclick="window.crearNodoNuevo()" style="width: 75px; height: 75px; border-radius: 8px; background: #111; color: #00ff00; border: 2px solid #00ff00; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; transition: 0.2s;">
+                <span style="font-size: 2em; margin-bottom: 2px;">➕</span>
+                <span style="font-family: 'Cinzel'; font-weight: bold; font-size: 0.75em;">Nodo</span>
+            </button>
+        </div>
+
+    </div>
+
+    <canvas id="mapa-canvas"></canvas>
+
+    <div id="loader" class="loading">
+        <div style="margin-bottom: 10px; color:var(--gold); font-weight:bold;">Trazando Mapa de Hechizos...</div>
+        <div style="width: 300px; height: 8px; background: #111; border: 1px solid var(--gold); border-radius: 4px;">
+            <div id="carga-progreso" style="width: 0%; height: 100%; background: var(--cyan-magic); transition: width 0.3s;"></div>
+        </div>
+    </div>
+
+    <script type="module" src="mapa-main.js"></script>
+    <script type="module" src="mapa-edicion.js"></script> 
+</body>
+</html>

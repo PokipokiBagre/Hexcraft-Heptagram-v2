@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Hechizos | HEX ROL</title>
+    <link rel="icon" type="image/png" href="../img/icon.png"> 
+    <link rel="stylesheet" href="../stylehechizos.css">
+</head>
+<!DOCTYPE html>
+<html lang="es">
+<body>
+    <div class="container-hex">
+        <div class="nav-bar">
+            <div style="display:flex; gap:10px;">
+                <button class="btn-nav btn-volver" onclick="window.location.href='../index.html'">⬅ Inicio</button>
+                <button id="btn-nav-catalogo" class="btn-nav btn-volver oculto" onclick="window.cambiarVista('catalogo')">👤 Personajes</button>
+                <button id="btn-nav-all-hechizos" class="btn-nav btn-volver" onclick="window.cambiarVista('catalogo-hechizos')">📖 Catálogo Hechizos</button>
+                <button class="btn-nav" style="border-color:#00ff00; background:#001a00; padding:10px 15px; cursor:default;" disabled title="Conectado a la Base de Datos">🟢</button>
+            </div>
+            <button class="btn-nav btn-op" onclick="window.abrirMenuOP()">⚙️ Acceso OP</button>
+        </div>
+
+        <h1 id="main-title">SISTEMA DE HECHIZOS</h1>
+        
+        <div id="loader" class="loading" style="margin-bottom: 20px;">
+            <div style="margin-bottom: 10px; color:var(--gold);">Decodificando Datos desde el Servidor...</div>
+            <div style="width: 80%; max-width: 400px; height: 10px; background: #111; border: 1px solid var(--gold); border-radius: 5px; margin: 0 auto; overflow: hidden;">
+                <div id="carga-progreso" style="width: 0%; height: 100%; background: var(--cyan-magic); transition: width 0.4s ease-out; box-shadow: 0 0 10px var(--cyan-magic);"></div>
+            </div>
+        </div>
+
+        <div id="c-catalogo" class="vista-seccion oculto">
+            <div class="filter-group">
+                <button onclick="window.setFiltro('rol', 'Todos')" id="btn-rol-Todos" class="btn-active">Todos</button>
+                <button onclick="window.setFiltro('rol', 'Jugador')" id="btn-rol-Jugador">Jugadores</button>
+                <button onclick="window.setFiltro('rol', 'NPC')" id="btn-rol-NPC">NPCs</button>
+            </div>
+            <div class="filter-group" style="margin-bottom: 30px;">
+                <button onclick="window.setFiltro('act', 'Todos')" id="btn-act-Todos" class="btn-active">Ambos</button>
+                <button onclick="window.setFiltro('act', 'Activo')" id="btn-act-Activo">Vivos / Activos</button>
+                <button onclick="window.setFiltro('act', 'Inactivo')" id="btn-act-Inactivo">Muertos / Inactivos</button>
+            </div>
+            <div id="grid-catalogo"></div>
+        </div>
+
+        <div id="c-grimorio" class="vista-seccion oculto">
+            <div id="header-grimorio"></div>
+            <div class="filter-group">
+                <select id="f-grim-afinidad" class="search-bar" onchange="window.aplicarFiltrosGrimorio()"><option value="Todos">Todas las Afinidades</option><option>Física</option><option>Energética</option><option>Espiritual</option><option>Mando</option><option>Psíquica</option><option>Oscura</option></select>
+                <input type="text" id="f-grim-texto" class="search-bar" placeholder="Buscar en grimorio..." onkeyup="window.aplicarFiltrosGrimorio()">
+            </div>
+            <div id="grid-grimorio" class="grid-inventario"></div>
+        </div>
+
+        <div id="c-catalogo-hechizos" class="vista-seccion oculto">
+            <h2 style="margin-top:0;">Enciclopedia Mágica</h2>
+            <div class="filter-group" style="gap:15px; margin-bottom:20px;">
+                <select id="f-all-afinidad" class="search-bar" style="margin:0; width:auto;" onchange="window.aplicarFiltrosAll()"><option value="Todos">Todas Afinidades</option><option>Física</option><option>Energética</option><option>Espiritual</option><option>Mando</option><option>Psíquica</option><option>Oscura</option></select>
+                <select id="f-all-clase" class="search-bar" style="margin:0; width:auto;" onchange="window.aplicarFiltrosAll()"><option value="Todos">Todas Clases</option><option value="Clase 1">Clase 1</option><option value="Clase 2">Clase 2</option><option value="Clase 3">Clase 3</option><option value="Clase 4">Clase 4</option><option value="Clase 5">Clase 5</option></select>
+                <select id="f-all-estado" class="search-bar" style="margin:0; width:auto;" onchange="window.aplicarFiltrosAll()"><option value="Todos">Todos (Descubrimiento)</option><option value="Descubierto">Solo Descubiertos</option><option value="Oculto">Solo Sellados</option></select>
+                <input type="text" id="f-all-texto" class="search-bar" style="margin:0; flex:1;" placeholder="Buscar en la enciclopedia..." onkeyup="window.aplicarFiltrosAll()">
+            </div>
+            <div id="grid-catalogo-hechizos" class="grid-inventario"></div>
+        </div>
+
+        <div id="c-gestion" class="vista-seccion oculto">
+            <div id="header-gestion"></div>
+            <div class="filter-group" style="gap:20px;">
+                <select id="op-f-afinidad" class="search-bar" onchange="window.aplicarFiltrosGestion()"><option value="Todos">Todas Afinidades</option><option>Física</option><option>Energética</option><option>Espiritual</option><option>Mando</option><option>Psíquica</option><option>Oscura</option></select>
+                <select id="op-f-clase" class="search-bar" onchange="window.aplicarFiltrosGestion()"><option value="Todos">Todas Clases</option><option value="Clase 1">Clase 1</option><option value="Clase 2">Clase 2</option><option value="Clase 3">Clase 3</option><option value="Clase 4">Clase 4</option><option value="Clase 5">Clase 5</option></select>
+                <input type="text" id="op-f-texto" class="search-bar" placeholder="Buscar hechizo..." onkeyup="window.aplicarFiltrosGestion()">
+            </div>
+            <div id="grid-gestion" class="grid-inventario"></div>
+        </div>
+
+        <div id="c-aprendizaje" class="vista-seccion oculto">
+            <div id="header-aprendizaje"></div>
+            <div class="filter-group">
+                <select id="f-apr-afinidad" class="search-bar" onchange="window.aplicarFiltrosAprendizaje()"><option value="Todos">Todas Afinidades</option><option>Física</option><option>Energética</option><option>Espiritual</option><option>Mando</option><option>Psíquica</option><option>Oscura</option></select>
+                <input type="text" id="f-apr-texto" class="search-bar" placeholder="Buscar en el árbol..." onkeyup="window.aplicarFiltrosAprendizaje()">
+                <select id="f-apr-clase" class="search-bar" onchange="window.aplicarFiltrosAprendizaje()"><option value="Todos">Todas Clases</option><option value="Clase 1">Clase 1</option><option value="Clase 2">Clase 2</option><option value="Clase 3">Clase 3</option><option value="Clase 4">Clase 4</option><option value="Clase 5">Clase 5</option></select>
+            </div>
+            <div id="grid-aprendizaje"></div>
+        </div>
+
+        <div id="c-casteo" class="vista-seccion oculto">
+            <div id="header-casteo"></div>
+            <div style="background:#111; border:1px solid var(--gold); border-radius:8px; padding:15px; margin-bottom:20px;">
+                <div style="display:flex; flex-wrap:wrap; gap:15px; align-items:center; justify-content:space-between;">
+                    <label style="color:var(--gold); font-weight:bold; font-size: 1.1em;">
+                        CANT. DE HECHIZOS SIMULTÁNEOS: 
+          <input type="number" id="cast-num" value="3" min="1" max="50" class="input-casteo" style="width:80px; display:inline-block; margin-left:10px;" onchange="window.generarFilasCasteo()" onwheel="window.scrollCasteo(event)">
+                    </label>
+                    <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                        <button onclick="window.copiarPrimerHechizo()" class="btn-nav" style="background:#333; border-color:#888;">📋 Copiar Primer Hechizo</button>
+                        <button onclick="window.copiarPrimerDado()" class="btn-nav" style="background:#333; border-color:#888;">📋 Copiar Primer Dado</button>
+                        <button onclick="window.conjurarHechizos()" class="btn-nav" style="background:#4a004a; border-color:#ff00ff; color:white; font-size:1.1em;">⚡ CALCULAR CONJUROS ⚡</button>
+                    </div>
+                </div>
+            </div>
+            <div id="casteo-filas"></div>
+        </div>
+
+    </div>
+
+    <button id="btn-sync-global" class="btn-sync-float oculto" onclick="window.ejecutarSincronizacion()"></button>
+
+    <script type="module" src="inventario-main.js"></script>
+</body>
+</html>

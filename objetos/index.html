@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HEX - GESTIÓN DE OBJETOS</title>
+    <link rel="icon" type="image/png" href="../img/icon.png"> 
+    <link rel="stylesheet" href="../styleobjetos.css?v=8.3"> 
+</head>
+<body>
+    <div class="container-hex">
+        <div style="text-align: left; margin-bottom: 10px;"><a href="../index.html" style="color: #d4af37; text-decoration: none; font-size: 0.8em;">⬅ Volver al Inicio</a></div>
+        <h1>SISTEMA DE OBJETOS</h1>
+        <nav>
+            <button onclick="window.mostrarPagina('grilla')">Inventarios</button>
+            <button onclick="window.mostrarPagina('resumen')">Resumen Visual</button>
+            <button onclick="window.mostrarPagina('catalogo')">Catálogo</button>
+            <button style="border-color:#00ff00; background:#001a00; color:#00ff00; cursor:default;" disabled>🟢 CONECTADO</button>
+            <button onclick="window.ejecutarSyncLog()" style="background:#2e004f; border-style: dashed;">Acceso OP</button>
+        </nav>
+        
+        <section id="pag-grilla" class="pagina"><div id="contenedor-grilla"></div></section>
+        <section id="pag-resumen" class="pagina"><div id="contenedor-resumen"></div></section>
+        <section id="pag-inventario" class="pagina"><div id="contenedor-jugadores"></div></section>
+        <section id="pag-catalogo" class="pagina"><div id="tabla-todos-objetos"></div></section>
+        <section id="pag-op-menu" class="pagina"><div id="menu-op-central"></div></section>
+        <section id="pag-control" class="pagina"><div id="panel-interactivo"></div></section>
+        <section id="pag-crear" class="pagina"><div id="panel-creacion"></div></section>
+        <section id="pag-crear-multi" class="pagina"><div id="panel-creacion-multi"></div></section>
+        <section id="pag-party-loot" class="pagina"><div id="panel-party-loot"></div></section>
+        <section id="pag-transfer" class="pagina"><div id="panel-transferencia"></div></section>
+        
+        <input type="file" id="input-log" style="display:none">
+    </div>
+
+    <button id="btn-sync-global" class="btn-sync-float oculto" onclick="window.ejecutarSincronizacion()"></button>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <script type="module" src="obj-main.js?v=8.3"></script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ficha de Estado - HEX</title>
+    <link rel="icon" type="image/png" href="../img/icon.png"> 
+    <link rel="stylesheet" href="../stylestats.css?v=2.4">
+</head>
+<body>
+    <div class="nav-bar" style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--gold-dim); padding-bottom: 15px; margin-bottom: 20px;">
+        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+            <button onclick="window.location.href='../index.html'" style="background: #111; border-color: #555;">⬅ Volver al Inicio</button>
+            <button onclick="window.mostrarCatalogo()">👤 Catálogo</button>
+            <button onclick="window.mostrarResumen()">📊 Resumen Visual</button>
+            <span style="background: #004a00; color: #00ff00; border: 1px solid #00ff00; padding: 10px 15px; border-radius: 4px; font-weight: bold; box-shadow: 0 0 10px rgba(0,255,0,0.3); cursor:default; display:flex; align-items:center;">🟢 CONECTADO</span>
+        </div>
+        <h2 style="margin: 0; display:none;">FICHA DE ESTADO HEX</h2>
+        <button onclick="window.abrirMenuOP()" style="border-style: dashed; background:#2e004f;">⚙️ Acceso OP</button>
+    </div>
+
+    <div id="loader" class="loading" style="margin-bottom: 20px;">
+        <div style="margin-bottom: 10px; color:var(--gold); font-weight:bold;">Decodificando Datos desde el Servidor...</div>
+        <div style="width: 80%; max-width: 400px; height: 10px; background: #111; border: 1px solid var(--gold); border-radius: 5px; margin: 0 auto; overflow: hidden;">
+            <div id="carga-progreso" style="width: 0%; height: 100%; background: var(--cyan-magic); transition: width 0.4s ease-out; box-shadow: 0 0 10px var(--cyan-magic);"></div>
+        </div>
+    </div>
+
+    <div id="vista-catalogo" class="catalogo-grid oculto"></div>
+    <div id="vista-resumen" class="detalle-container oculto" style="max-width:1400px; background:transparent; border:none; box-shadow:none; padding:0;"></div>
+    <div id="vista-detalle" class="detalle-container oculto"></div>
+    <div id="vista-op" class="detalle-container oculto" style="text-align: center;"></div>
+
+    <div id="modal-op" class="hex-modal oculto">
+        <div class="hex-modal-content" id="hex-modal-content">
+            <div id="modal-drag-header" class="modal-header">
+                <span id="modal-header-title" style="font-weight:bold; color:var(--gold); font-size:1.1em; pointer-events:none;">🛠️ PANEL DE EDICIÓN MÁSTER</span>
+                <span class="close-btn" onclick="window.cerrarModalOP()">×</span>
+            </div>
+            <div id="modal-op-body" class="modal-body-scroll"></div>
+        </div>
+    </div>
+
+    <button id="btn-sync-global" class="btn-sync-float oculto" onclick="window.ejecutarSincronizacion()"></button>
+
+    <script type="module" src="stats-main.js"></script>
+</body>
+</html>
