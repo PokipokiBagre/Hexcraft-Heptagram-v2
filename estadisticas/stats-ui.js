@@ -8,6 +8,8 @@ const normalizar = (str) => str.toString().trim().toLowerCase()
     .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n') 
     .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
 
+const calcTotal = (base, spells, spellEff, buff) => (base || 0) + (spells || 0) + (spellEff || 0) + (buff || 0);
+
 const bTextSplit = (spells, spellEff, buff) => {
     let parts = [];
     if (spells !== 0) parts.push(`<span style="color:var(--cyan-magic); font-weight:bold;">Hcz: ${spells > 0 ? '+' : ''}${spells}</span>`);
