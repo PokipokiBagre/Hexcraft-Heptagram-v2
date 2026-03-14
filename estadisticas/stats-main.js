@@ -259,19 +259,19 @@ window.mostrarCatalogo = () => { estadoUI.vistaActual = 'catalogo'; refrescarVis
 window.mostrarResumen  = () => { estadoUI.vistaActual = 'resumen';  refrescarVistas(); window.scrollTo(0,0); };
 window.abrirDetalle    = (nombre) => { estadoUI.personajeSeleccionado = nombre; estadoUI.vistaActual = 'detalle'; refrescarVistas(); window.scrollTo(0,0); };
 
-// ── LOGIN CON SUPABASE en lugar de prompt+atob ───────────────
 window.abrirMenuOP = async () => {
-    // Si ya está autenticado como admin, activar directamente
-    if (hexAuth.esAdmin()) {
-        estadoUI.esAdmin = true;
+    // Re-verificar sesión en cada click por si acaso
+    await hexAuth.init();
+    estadoUI.esAdmin = hexAuth.esAdmin();
+
+    if (estadoUI.esAdmin) {
         if (estadoUI.vistaActual !== 'detalle') estadoUI.vistaActual = 'hex';
         refrescarVistas();
         return;
     }
-    // Si no, mostrar el modal de login de Supabase
+
+    // No está logueado como admin — mostrar modal
     hexAuth._mostrarModalLogin();
-    // Cuando el login sea exitoso, la página se recarga automáticamente
-    // y en el siguiente init() detectará la sesión y activará esAdmin
 };
 
 window.mostrarPaginaOP = (subvista) => { estadoUI.vistaActual = subvista; refrescarVistas(); };
