@@ -1,55 +1,57 @@
-import { invGlobal, objGlobal, statsGlobal, guardar } from './obj-state.js';
+// ============================================================
+// obj-data.js — VERSIÓN SUPABASE
+// ============================================================
 
-const API_OBJETOS = 'https://script.google.com/macros/s/AKfycbzPv0e8nKY8hTX7_rIJixL4EmFLDHaX-QHjNTNFonMz7hamiJfn__GAH1PtZeFFG5eU/exec'; 
+import { invGlobal, objGlobal, statsGlobal, guardar } from './obj-state.js';
+import { db } from '../hex-db.js';
 
 export async function cargarTodoDesdeCSV() {
-    const sheetObjURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQDaZ1Zr9YWmgW05Hzpv4IQzpMaKrgSvVUm_Yrps3DdwwPpIjD4iHrdLyPHGucuTHnwwYdM7bPrcnRO/pub?output=csv&cachebust=" + new Date().getTime();
-    const sheetStatsURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQOl-ENpkVGioSaquRc1pkuNUyk-vCEQGGSAN3MMtzwcP5AjlLTLbjsc4wAdy3fcQgRhzQAZ2CtRWbx/pub?output=csv&cachebust=" + new Date().getTime();
-
     try {
-        const [resObj, resStats] = await Promise.all([
-            fetch(sheetObjURL).then(r => r.text()),
-            fetch(sheetStatsURL).then(r => r.text())
+        // Carga paralela desde Supabase
+        const [catalogoArr, inventarioArr, personajesArr] = await Promise.all([
+            db.objetos.getCatalogo(),
+            db.objetos.getInventarioCompleto(),
+            db.personajes.getAll()
         ]);
         
-        // 1. PROCESAR OBJETOS
-        const filasObj = resObj.split(/\r?\n/).map(l => l.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.replace(/^"|"$/g, '').trim()));
-        for (let k in invGlobal) delete invGlobal[k];
+        // 1. PROCESAR OBJETOS (Catálogo)
         for (let k in objGlobal) delete objGlobal[k];
-
-        filasObj.slice(1).forEach(f => {
-            const nombre = f[0]; if (!nombre) return;
-            objGlobal[nombre] = { 
-                tipo: f[1] || '-', mat: f[2] || '-', eff: f[3] || 'Sin descripción', rar: f[4] || 'Común',
-                desc: f[7] || '', 
-                afinidades: { "Física": parseInt(f[8]) || 0, "Energética": parseInt(f[9]) || 0, "Espiritual": parseInt(f[10]) || 0, "Mando": parseInt(f[11]) || 0, "Psíquica": parseInt(f[12]) || 0, "Oscura": parseInt(f[13]) || 0 }
-            };
-            const jugs = f[5] ? f[5].split(',').map(j => j.trim()) : [];
-            const cants = f[6] ? f[6].split(',').map(c => parseInt(c.trim()) || 0) : [];
-            jugs.forEach((j, i) => {
-                if (!invGlobal[j]) invGlobal[j] = {};
-                invGlobal[j][nombre] = (cants[i] || 0);
-            });
+        catalogoArr.forEach(o => {
+            if (o.nombre) {
+                objGlobal[o.nombre] = { 
+                    tipo: o.tipo || '-', 
+                    mat:  o.material || '-', 
+                    eff:  o.efecto || 'Sin descripción', 
+                    rar:  o.rareza || 'Común' 
+                };
+            }
         });
 
-        // 2. PROCESAR ESTADÍSTICAS (Identidades)
-        const filasStats = resStats.split(/\r?\n/).map(l => l.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.replace(/^"|"$/g, '').trim()));
-        for (let k in statsGlobal) delete statsGlobal[k];
+        // 2. PROCESAR INVENTARIOS
+        for (let k in invGlobal) delete invGlobal[k];
+        inventarioArr.forEach(inv => {
+            const j = inv.personaje_nombre;
+            const o = inv.objeto_nombre;
+            const c = inv.cantidad;
+            
+            if (!invGlobal[j]) invGlobal[j] = {};
+            if (c > 0) invGlobal[j][o] = c;
+        });
 
-        filasStats.slice(1).forEach(f => {
-            const nombre = f[0]; if (!nombre) return;
-            const idenParts = (f[17] || '0_1').split('_');
-            statsGlobal[nombre] = {
-                isPlayer: idenParts[0] === '1', 
-                isActive: idenParts[1] === '1',
-                iconoOverride: f[18] || ""
+        // 3. PROCESAR ESTADÍSTICAS (Para filtros Activo/Jugador)
+        for (let k in statsGlobal) delete statsGlobal[k];
+        personajesArr.forEach(p => {
+            statsGlobal[p.nombre] = {
+                isPlayer:      p.is_player, 
+                isActive:      p.is_active,
+                iconoOverride: p.icono_override || ""
             };
-            // Inicializar su inventario en 0 si no estaba en la BD de objetos
-            if (!invGlobal[nombre]) invGlobal[nombre] = {};
+            // Inicializar su inventario en 0 si no tiene objetos
+            if (!invGlobal[p.nombre]) invGlobal[p.nombre] = {};
         });
 
         guardar();
-    } catch (e) { console.error("Error cargando CSVs:", e); }
+    } catch (e) { console.error("Error cargando desde Supabase:", e); }
 }
 
 export async function sincronizarObjetosBD(cola) {
@@ -57,24 +59,50 @@ export async function sincronizarObjetosBD(cola) {
         const actualizaciones = Object.values(cola);
         if(actualizaciones.length === 0) return true;
 
-        const response = await fetch(API_OBJETOS, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({ accion: 'sync_objetos', actualizaciones })
+        // Transformamos la cola (que tiene formato visual) al formato que espera Supabase
+        const cambiosInventario = [];
+        const promesasObjetos = [];
+
+        actualizaciones.forEach(act => {
+            // 1. Actualizar el catálogo de objetos (si se modificó descripción, rareza, etc)
+            promesasObjetos.push(db.objetos.upsertObjeto({
+                nombre: act.objeto,
+                tipo:   act.tipo,
+                material: act.mat,
+                efecto: act.eff,
+                rareza: act.rar
+            }));
+
+            // 2. Extraer cantidades. La cola guarda strings como "Renato, Corvin" y "2, 1"
+            const players = act.duenos ? act.duenos.split(',').map(s=>s.trim()).filter(Boolean) : [];
+            const cants   = act.cantidades ? act.cantidades.split(',').map(s=>parseInt(s.trim())) : [];
+            
+            // Para asegurar que si un objeto se quedó en 0 se borre, 
+            // iteramos sobre TODOS los personajes que alguna vez tuvieron inventario
+            Object.keys(invGlobal).forEach(j => {
+                const idx = players.indexOf(j);
+                const cantActual = (idx !== -1) ? cants[idx] : 0;
+                cambiosInventario.push({
+                    personaje_nombre: j,
+                    objeto_nombre: act.objeto,
+                    cantidad: cantActual
+                });
+            });
         });
-        
-        const resText = await response.text();
-        try {
-            const result = JSON.parse(resText);
-            if(result.status === 'success') return true;
-            alert("Error en Apps Script:\n" + result.message);
-            return false;
-        } catch(e) {
-            alert("Google bloqueó la solicitud o el código crashó.");
-            return false;
-        }
-    } catch (e) { 
-        alert("Fallo crítico de Red. Revisa el link de API_OBJETOS.");
-        return false; 
+
+        // Ejecutar upserts de Catálogo
+        await Promise.all(promesasObjetos);
+
+        // Ejecutar Sincronización Batch de Inventario
+        const exitoInv = await db.objetos.sincronizarBatch(cambiosInventario);
+
+        if(exitoInv) return true;
+        alert("Error al sincronizar inventarios en Supabase.");
+        return false;
+
+    } catch (e) {
+        console.error("Error fatal en sincronización:", e);
+        alert("Error de conexión con la base de datos.");
+        return false;
     }
 }
