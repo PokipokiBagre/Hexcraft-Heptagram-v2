@@ -1,7 +1,12 @@
+// ============================================================
+// obj-state.js — ESTADO GLOBAL DE OBJETOS
+// ============================================================
+
 export let invGlobal = {}; 
 export let objGlobal = {}; 
-export let statsGlobal = {}; // NUEVO: Para guardar si son Jugadores/Activos
+export let statsGlobal = {}; // Para guardar si son Jugadores/Activos
 export let historial = []; 
+
 export let estadoUI = {
     vistaActual: 'grilla',
     jugadorInv: null, 
@@ -32,6 +37,10 @@ export let estadoUI = {
 
 export function guardar() { 
     localStorage.setItem('hex_obj_v4', JSON.stringify({ 
-        inv: invGlobal, obj: objGlobal, his: historial, modoSync: estadoUI.modoSincronizado, colaCambios: estadoUI.colaCambios 
+        inv: invGlobal, 
+        obj: objGlobal, 
+        his: historial, 
+        modoSync: estadoUI.modoSincronizado, 
+        colaCambios: estadoUI.colaCambios 
     })); 
 }
