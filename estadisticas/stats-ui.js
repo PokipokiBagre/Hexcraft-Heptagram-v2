@@ -2,8 +2,11 @@ import { statsGlobal, listaEstados, estadoUI, dbExtra } from './stats-state.js';
 import { calcularVidaRojaMax, calcularVexMax, getMayorAfinidad } from './stats-logic.js';
 import { db } from '../hex-db.js'; // <-- IMPORTAMOS LA DB CENTRALIZADA
 
-const normalizar = (str) => str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/\s+/g,'_').replace(/[^a-z0-9ñ_]/g,'');
-const calcTotal = (base, spells, spellEff, buff) => (base || 0) + (spells || 0) + (spellEff || 0) + (buff || 0);
+const normalizar = (str) => str.toString().trim().toLowerCase()
+    .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
+    .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
+    .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n') 
+    .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
 
 const bTextSplit = (spells, spellEff, buff) => {
     let parts = [];
