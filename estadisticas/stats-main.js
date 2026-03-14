@@ -2,7 +2,7 @@ import { statsGlobal, listaEstados, estadoUI, dbExtra } from './stats-state.js';
 import { cargarTodoDesdeCSV, procesarTextoCSV, cargarDiccionarioEstados } from './stats-data.js';
 import { dibujarCatalogo, dibujarResumenVisual, dibujarDetalle, dibujarMenuOP, dibujarHexOP, dibujarFormularioCrear, dibujarPanelEdicionOP } from './stats-ui.js';
 import { generarCSVExportacion, descargarArchivoCSV, calcularVidaRojaMax, getMysticBonus } from './stats-logic.js';
-import { hexAuth } from '../hex-auth.js';
+import { hexAuth, supabase } from '../hex-auth.js';
 import { db } from '../hex-db.js';
 
 // ============================================================
@@ -53,8 +53,14 @@ window.sincronizarUI = () => {
     }
 
     // Actualizar badge de sesión
-    const badge = document.getElementById('hex-session-badge');
-    if (badge) badge.innerHTML = hexAuth.renderStatusBadge();
+    const _badge = document.getElementById('hex-session-badge');
+    if (_badge) {
+        if (hexAuth.esAdmin()) {
+            _badge.innerHTML = `<span style="background:#4a004a; color:#d4af37; border:1px dashed #d4af37; padding:8px 14px; border-radius:4px; font-weight:bold; font-family:'Cinzel'; cursor:pointer; font-size:0.85em;" onclick="window.abrirMenuOP()">⚙️ MÁSTER</span>`;
+        } else {
+            _badge.innerHTML = hexAuth.renderStatusBadge();
+        }
+    }
 
     window.scrollTo(0, scrollVentana);
 };
@@ -489,32 +495,37 @@ async function iniciar() {
     try {
         if (performance.getEntriesByType("navigation")[0]?.type === "reload") localStorage.removeItem('hex_stats_v2');
 
-        // Inicializar auth y detectar si es admin
-await hexAuth.init();
+        // Inicializar auth
+        await hexAuth.init();
 
-// Forzar recarga del perfil por si RLS tardó
-if (hexAuth.estaLogueado() && !hexAuth.esAdmin()) {
-    const { data } = await supabase
-        .from('perfiles_usuario')
-        .select('rol')
-        .eq('id', (await supabase.auth.getUser()).data.user.id)
-        .single();
-    if (data?.rol === 'admin') {
-        hexAuth._perfil = { rol: 'admin' };
-    }
-}
+        // Si está logueado pero el perfil no cargó (RLS timing), forzar carga manual
+        if (hexAuth.estaLogueado() && !hexAuth.esAdmin()) {
+            try {
+                const { data: { user } } = await supabase.auth.getUser();
+                if (user) {
+                    const { data: perfil } = await supabase
+                        .from('perfiles_usuario')
+                        .select('rol, personaje_nombre')
+                        .eq('id', user.id)
+                        .single();
+                    if (perfil) hexAuth._perfil = perfil;
+                }
+            } catch(e) { console.warn('No se pudo cargar perfil:', e); }
+        }
 
-estadoUI.esAdmin = hexAuth.esAdmin();
+        estadoUI.esAdmin = hexAuth.esAdmin();
 
-// Badge en nav
-const badge = document.getElementById('hex-session-badge');
-if (badge) {
-    if (hexAuth.esAdmin()) {
-        badge.innerHTML = `<span style="background:#4a004a; color:#d4af37; border:1px dashed #d4af37; padding:8px 14px; border-radius:4px; font-weight:bold; font-family:'Cinzel'; cursor:pointer; font-size:0.85em;" onclick="window.abrirMenuOP()">⚙️ MÁSTER</span>`;
-    } else {
-        badge.innerHTML = hexAuth.renderStatusBadge();
-    }
-}
+        // Badge de sesión
+        const badge = document.getElementById('hex-session-badge');
+        const actualizarBadge = () => {
+            if (!badge) return;
+            if (hexAuth.esAdmin()) {
+                badge.innerHTML = `<span style="background:#4a004a; color:#d4af37; border:1px dashed #d4af37; padding:8px 14px; border-radius:4px; font-weight:bold; font-family:'Cinzel'; cursor:pointer; font-size:0.85em;" onclick="window.abrirMenuOP()">⚙️ MÁSTER</span>`;
+            } else if (hexAuth.estaLogueado()) {
+                badge.innerHTML = hexAuth.renderStatusBadge();
+            }
+        };
+        actualizarBadge();
 
         const loader = document.getElementById('loader');
         const barra  = document.getElementById('carga-progreso');
