@@ -347,10 +347,12 @@ export const db = {
     }, 
 
     // ══════════════════════════════════════════════════════
-    // STORAGE (Imágenes de Interfaz)
+    // STORAGE (Centralizado)
     // ══════════════════════════════════════════════════════
     storage: {
-        // Convierte el nombre local (ej: "objetos.jpg") a su URL oficial en Supabase Storage
+        // LA ÚNICA FUENTE DE LA VERDAD PARA LAS IMÁGENES
+        urlBase: 'https://gkscqurkpyteusqyspsu.supabase.co/storage/v1/object/public/imagenes-hex',
+
         getUrlInterfaz(nombreArchivo) {
             if (!nombreArchivo) return '';
             
