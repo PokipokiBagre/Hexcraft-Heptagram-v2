@@ -7,26 +7,37 @@ const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFz
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
+// ──────────────────────────────────────────────────────────────
+// hexAuth: objeto principal de autenticación
+// ──────────────────────────────────────────────────────────────
 export const hexAuth = {
 
     // Estado en memoria (se llena al llamar init())
     _session: null,
     _perfil: null,
 
-
+    // ── Inicializar (llamar al inicio de cada página) ──
     async init() {
         const { data: { session } } = await supabase.auth.getSession();
         this._session = session;
 
         if (session) {
-            const { data } = await supabase
-                .from('perfiles_usuario')
-                .select('rol, personaje_nombre, email')
-                .eq('id', session.user.id)
-                .single();
-            this._perfil = data;
+            // Intentar cargar perfil con reintentos
+            for (let intento = 0; intento < 3; intento++) {
+                try {
+                    const { data, error } = await supabase
+                        .from('perfiles_usuario')
+                        .select('rol, personaje_nombre, email')
+                        .eq('id', session.user.id)
+                        .single();
+                    if (data) { this._perfil = data; break; }
+                    if (error) console.warn(`Intento ${intento+1} fallido:`, error.message);
+                } catch(e) { console.warn('Error cargando perfil:', e); }
+                if (intento < 2) await new Promise(r => setTimeout(r, 500));
+            }
         }
 
+        // Escuchar cambios de sesión en tiempo real
         supabase.auth.onAuthStateChange(async (_event, session) => {
             this._session = session;
             if (session) {
@@ -35,7 +46,7 @@ export const hexAuth = {
                     .select('rol, personaje_nombre, email')
                     .eq('id', session.user.id)
                     .single();
-                this._perfil = data;
+                if (data) this._perfil = data;
             } else {
                 this._perfil = null;
             }
@@ -225,5 +236,4 @@ export const hexAuth = {
 };
 
 // Hacer disponible globalmente por compatibilidad con onclick en HTML
-// Al final de init(), antes del return:
-window.hexAuth = hexAuth; // asegurar que está global
+window.hexAuth = hexAuth;
