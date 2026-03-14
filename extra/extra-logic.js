@@ -2,10 +2,12 @@
 // extra-logic.js — Lógica de filtrado y búsqueda
 // ============================================================
 
-import { estadoUI, itemsPersonajes, itemsObjetos } from './extra-state.js';
+import { estadoUI, itemsPersonajes, itemsObjetos, itemsInterfaz } from './extra-state.js';
 
 export function getItemsActivos() {
-    return estadoUI.tab === 'personajes' ? itemsPersonajes : itemsObjetos;
+    if (estadoUI.tab === 'personajes') return itemsPersonajes;
+    if (estadoUI.tab === 'objetos') return itemsObjetos;
+    return itemsInterfaz; // Para la nueva pestaña
 }
 
 export function getItemsFiltrados() {
@@ -30,7 +32,11 @@ export function getEstadisticas() {
 }
 
 export function marcarExiste(keyNorm, tipoIcono, nuevaUrl) {
-    const items = tipoIcono === 'imgpersonajes' ? itemsPersonajes : itemsObjetos;
+    let items;
+    if (tipoIcono === 'imgpersonajes') items = itemsPersonajes;
+    else if (tipoIcono === 'imgobjetos') items = itemsObjetos;
+    else items = itemsInterfaz;
+
     const item  = items.find(i => i.keyNorm === keyNorm);
     if (item) {
         item.existe     = true;
