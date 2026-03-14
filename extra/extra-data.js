@@ -9,8 +9,9 @@ import { BUCKET, STORAGE_URL, itemsPersonajes, itemsObjetos, itemsInterfaz } fro
 const norm = (str) => str ? str.toString().trim().toLowerCase()
     .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
     .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
-    .replace(/[úùüû]/g,'u').replace(/\s+/g,'_')
-    .replace(/[^a-z0-9ñ_]/g,'') : '';
+    .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n') // <-- Transformamos ñ en n
+    .replace(/\s+/g,'_')
+    .replace(/[^a-z0-9_]/g,'') : ''; // <-- Quitamos la ñ de los caracteres permitidos
 
 export async function asegurarBucket() {
     const { data: buckets } = await supabase.storage.listBuckets();
