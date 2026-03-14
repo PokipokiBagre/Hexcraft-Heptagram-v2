@@ -4,7 +4,7 @@
 
 import { supabase } from '../hex-auth.js';
 import { db }       from '../hex-db.js';
-import { BUCKET, STORAGE_URL, itemsPersonajes, itemsObjetos } from './extra-state.js';
+import { BUCKET, STORAGE_URL, itemsPersonajes, itemsObjetos, itemsInterfaz } from './extra-state.js';
 
 const norm = (str) => str ? str.toString().trim().toLowerCase()
     .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
@@ -21,52 +21,95 @@ export async function asegurarBucket() {
 }
 
 export async function cargarDatos() {
-    // Listar archivos existentes en el bucket
-    const [resP, resO] = await Promise.all([
+    // Listar archivos existentes en el bucket (añadimos imginterfaz)
+    const [resP, resO, resI] = await Promise.all([
         supabase.storage.from(BUCKET).list('imgpersonajes', { limit: 1000 }),
-        supabase.storage.from(BUCKET).list('imgobjetos',    { limit: 1000 })
+        supabase.storage.from(BUCKET).list('imgobjetos',    { limit: 1000 }),
+        supabase.storage.from(BUCKET).list('imginterfaz',   { limit: 1000 })
     ]);
 
-    const setPersonajes = new Set(
-        (resP.data || []).map(f => f.name.replace(/\.(png|jpg|jpeg|webp)$/i, '').toLowerCase())
-    );
-    const setObjetos = new Set(
-        (resO.data || []).map(f => f.name.replace(/\.(png|jpg|jpeg|webp)$/i, '').toLowerCase())
-    );
+    const setPersonajes = new Set((resP.data || []).map(f => f.name.replace(/\.(png|jpg|jpeg|webp)$/i, '').toLowerCase()));
+    const setObjetos    = new Set((resO.data || []).map(f => f.name.replace(/\.(png|jpg|jpeg|webp)$/i, '').toLowerCase()));
+    const setInterfaz   = new Set((resI.data || []).map(f => f.name.replace(/\.(png|jpg|jpeg|webp)$/i, '').toLowerCase()));
 
-    // Personajes
+    // 1. Personajes
     const personajes = await db.personajes.getAll();
     itemsPersonajes.length = 0;
     personajes.forEach(p => {
         const key = norm(p.icono_override || p.nombre) + 'icon';
-        const existe = setPersonajes.has(key);
         itemsPersonajes.push({
             nombre:     p.nombre,
             keyNorm:    key,
             tipoIcono:  'imgpersonajes',
             urlStorage: `${STORAGE_URL}/imgpersonajes/${key}.png`,
             urlGithub:  `../img/imgpersonajes/${key}.png`,
-            existe
+            existe:     setPersonajes.has(key)
         });
     });
 
-    // Objetos
+    // 2. Objetos
     const catalogo = await db.objetos.getCatalogo();
     itemsObjetos.length = 0;
     catalogo.forEach(o => {
         const key = norm(o.nombre);
-        const existe = setObjetos.has(key);
         itemsObjetos.push({
             nombre:     o.nombre,
             keyNorm:    key,
             tipoIcono:  'imgobjetos',
             urlStorage: `${STORAGE_URL}/imgobjetos/${key}.png`,
             urlGithub:  `../img/imgobjetos/${key}.png`,
-            existe
+            existe:     setObjetos.has(key)
+        });
+    });
+
+    // 3. Interfaz (Escaneo de HTML)
+    const rutasHTML = [
+        '../index.html',
+        '../objetos/index.html',
+        '../estadisticas/index.html',
+        '../misiones/index.html',
+        '../hechizos/index.html',
+        '../mapa/index.html',
+        '../extra/index.html'
+    ];
+
+    const imgEncontradas = new Set();
+    itemsInterfaz.length = 0;
+
+    for (const ruta of rutasHTML) {
+        try {
+            const req = await fetch(ruta);
+            if (!req.ok) continue;
+            const text = await req.text();
+
+            // Busca src="img/archivo.png" o src="../img/archivo.png"
+            const regexSrc = /src=["'](?:\.\.\/)?img\/([^"']+)["']/gi;
+            // Busca url('img/archivo.png') o url('../img/archivo.png')
+            const regexUrl = /url\(['"]?(?:\.\.\/)?img\/([^)"']+)['"]?\)/gi;
+
+            let match;
+            while ((match = regexSrc.exec(text)) !== null) imgEncontradas.add(match[1]);
+            while ((match = regexUrl.exec(text)) !== null) imgEncontradas.add(match[1]);
+        } catch(e) {
+            console.warn('No se pudo leer la ruta HTML:', ruta);
+        }
+    }
+
+    imgEncontradas.forEach(archivo => {
+        const nombreLimpio = archivo.replace(/\.(png|jpg|jpeg|webp|gif)$/i, '');
+        const key = norm(nombreLimpio);
+        itemsInterfaz.push({
+            nombre:     archivo, // ej: "hex-002.png"
+            keyNorm:    key,
+            tipoIcono:  'imginterfaz',
+            urlStorage: `${STORAGE_URL}/imginterfaz/${key}.png`,
+            urlGithub:  `../img/${archivo}`,
+            existe:     setInterfaz.has(key)
         });
     });
 }
 
+// ... mantener tu función subirImagen y convertirAPNG intactas debajo ...
 export async function subirImagen(file, keyNorm, tipoIcono, onProgreso) {
     const rutaPNG = `${tipoIcono}/${keyNorm}.png`;
     const rutaJPG = `${tipoIcono}/${keyNorm}.jpg`;
