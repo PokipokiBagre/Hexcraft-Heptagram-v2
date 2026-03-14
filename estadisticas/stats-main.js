@@ -534,3 +534,13 @@ async function iniciar() {
 }
 
 iniciar();
+
+// Función que faltaba — llamada desde stats-ui.js (dibujarHexOP)
+window.copiarHexLog = (event) => {
+    const textarea = document.getElementById('hex-log-textarea');
+    if (!textarea) return;
+    navigator.clipboard.writeText(textarea.value).then(() => {
+        const btn = event?.target;
+        if (btn) { const orig = btn.innerText; btn.innerText = '✅ COPIADO'; setTimeout(() => btn.innerText = orig, 1500); }
+    });
+};
