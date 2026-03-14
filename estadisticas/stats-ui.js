@@ -1,13 +1,14 @@
 import { statsGlobal, listaEstados, estadoUI, dbExtra } from './stats-state.js';
 import { calcularVidaRojaMax, calcularVexMax, getMayorAfinidad } from './stats-logic.js';
-import { db } from '../hex-db.js'; // <-- IMPORTAMOS LA DB CENTRALIZADA
+import { db } from '../hex-db.js'; // <-- IMPORTANTE: Importar la base de datos
 
 const normalizar = (str) => str.toString().trim().toLowerCase()
     .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
     .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
-    .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n') 
+    .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n') // <-- Con la corrección de la "ñ"
     .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
 
+// <-- Con la función de sumar restaurada
 const calcTotal = (base, spells, spellEff, buff) => (base || 0) + (spells || 0) + (spellEff || 0) + (buff || 0);
 
 const bTextSplit = (spells, spellEff, buff) => {
@@ -20,8 +21,8 @@ const bTextSplit = (spells, spellEff, buff) => {
     return `<div style="font-size:0.75em; display:flex; flex-direction:column; gap:4px; margin-top:8px; border-top:1px dashed #444; padding-top:8px;">${parts.join('')}</div>`;
 };
 
-// URL Dinámica para el icono de error (Usamos icon.png de la interfaz por si falla algo)
-const imgError = `this.onerror=null; this.src='${db.storage.urlBase}/imginterfaz/icon.png'`;
+// <-- Usando tu imagen de "no encontrado" desde Supabase
+const imgError = `this.onerror=null; this.src='${db.storage.urlBase}/imginterfaz/no_encontrado.png'`;
 const raridadValor = { "Legendario": 3, "Raro": 2, "Común": 1, "-": 0 };
 
 function AsegurarGuardaD(p) { if(p.guardaDorada === undefined) p.guardaDorada = 0; if(p.baseGuardaDorada === undefined) p.baseGuardaDorada = 0; }
