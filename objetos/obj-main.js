@@ -1,7 +1,13 @@
+// ============================================================
+// obj-main.js — VERSIÓN SUPABASE (Completa)
+// ============================================================
+
 import { invGlobal, objGlobal, statsGlobal, historial, estadoUI, guardar } from './obj-state.js';
 import { cargarTodoDesdeCSV, sincronizarObjetosBD } from './obj-data.js';
 import { modificar, modificarMulti, transferir, descargarLogExcel, descargarEstadoExcel, agregarObjetoManual, agregarObjetosMulti } from './obj-logic.js';
 import { refrescarUI, dibujarMenuOP, dibujarInventarios, dibujarCatalogo, dibujarControl, dibujarCreacionObjeto, dibujarCreacionMulti, dibujarGrillaPersonajes, dibujarPartyLoot, dibujarTransferencia, dibujarResumenVisual } from './obj-ui.js';
+import { hexAuth } from '../hex-auth.js';
+import { db } from '../hex-db.js';
 
 window.actualizarBotonSyncObj = () => {
     const btn = document.getElementById('btn-sync-global');
@@ -18,12 +24,13 @@ window.actualizarBotonSyncObj = () => {
 window.ejecutarSincronizacion = async () => {
     const btn = document.getElementById('btn-sync-global');
     btn.innerText = "Sincronizando..."; btn.disabled = true;
+    
     if(await sincronizarObjetosBD(estadoUI.colaCambios)) {
         estadoUI.colaCambios = {}; 
         guardar();
         
         const cartelito = document.createElement('div');
-        cartelito.innerHTML = "¡Guardado Exitoso! ✅";
+        cartelito.innerHTML = "¡Guardado Exitoso en Supabase! ✅";
         cartelito.style.cssText = "position:fixed; top:30px; left:50%; transform:translateX(-50%); background:var(--gold); color:#000; padding:15px 40px; border-radius:8px; font-weight:bold; font-size:1.2em; z-index:9999; box-shadow:0 0 20px var(--gold); font-family:'Cinzel', serif; text-align:center;";
         document.body.appendChild(cartelito);
 
@@ -46,9 +53,17 @@ window.descargarInventariosJPG = async () => {
 };
 
 async function iniciar() {
+    // 1. INYECTAR EL FAVICON DESDE SUPABASE
+    const favicon = document.querySelector("link[rel='icon']");
+    if (favicon) favicon.href = `${db.storage.urlBase}/imginterfaz/icon.png`;
+
     if (performance.getEntriesByType("navigation")[0]?.type === "reload") { localStorage.removeItem('hex_obj_v4'); }
     const cache = localStorage.getItem('hex_obj_v4');
     const loader = document.getElementById('loader');
+
+    // 2. INICIALIZAR AUTENTICACIÓN
+    await hexAuth.init();
+    estadoUI.esAdmin = hexAuth.esAdmin();
 
     if (!cache) { 
         await cargarTodoDesdeCSV(); 
@@ -58,13 +73,13 @@ async function iniciar() {
         if(p.modoSync !== undefined) estadoUI.modoSincronizado = p.modoSync;
         if(p.colaCambios) estadoUI.colaCambios = p.colaCambios;
         
-        // El await que faltaba para cargar stats/identidades
         await cargarTodoDesdeCSV(); 
     }
     
     estadoUI.cambiosSesion = {};
     estadoUI.vistaActual = 'grilla';
 
+    // MODAL DE VISUALIZACIÓN DE IMÁGENES
     const modal = document.createElement('div');
     modal.id = 'hex-modal-view'; modal.className = 'hex-modal';
     modal.innerHTML = `<img id="hex-modal-img" src="" draggable="false">`;
@@ -83,10 +98,11 @@ async function iniciar() {
     window.onmousemove = (e) => { if (!isDragging) return; modalImg.style.left = (e.clientX - offsetX) + 'px'; modalImg.style.top = (e.clientY - offsetY) + 'px'; };
     window.onmouseup = () => { isDragging = false; modalImg.style.cursor = 'grab'; };
 
+    // AHORA LAS IMÁGENES DEL MODAL CARGAN DESDE SUPABASE Y SOPORTAN LA "Ñ"
     window.verImagen = (url) => { modalImg.src = url; modalImg.style.left = '50%'; modalImg.style.top = '50%'; modalImg.style.transform = 'translate(-50%, -50%)'; modalImg.style.margin = 'auto'; modal.style.display = 'flex'; };
     window.verImagenByName = (name) => {
-        const norm = name.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/\s+/g,'_').replace(/[^a-z0-9ñ_]/g,'');
-        window.verImagen(`../img/imgobjetos/${norm}.png`);
+        const norm = name.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n').replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+        window.verImagen(`${db.storage.urlBase}/imgobjetos/${norm}.png`);
     };
 
     const actualizarLogSesion = () => {
@@ -119,17 +135,16 @@ async function iniciar() {
         window.actualizarBotonSyncObj();
     };
 
-    const _session = 'Y2FuZXk=';
-    window.ejecutarSyncLog = () => { 
+    // LA AUTENTICACIÓN AHORA USA EL MÓDULO HEX-AUTH EN LUGAR DE LA CONTRASEÑA EN BASE64
+    window.ejecutarSyncLog = async () => { 
         if (estadoUI.esAdmin) { 
             window.mostrarPagina('op-menu'); 
-            return; 
-        } 
-        const i = prompt("Acceso Restringido OP:"); 
-        if (i === atob(_session)) { 
-            estadoUI.esAdmin = true; 
-            refrescarUI(); 
-        } 
+        } else {
+            await hexAuth._mostrarModalLogin();
+            // Re-verificamos al cerrar el modal
+            estadoUI.esAdmin = hexAuth.esAdmin();
+            if (estadoUI.esAdmin) refrescarUI();
+        }
     };
 
     window.abrirInventario = (j) => { estadoUI.jugadorInv = j; window.mostrarPagina('inventario'); };
