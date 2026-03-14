@@ -1,5 +1,6 @@
 import { statsGlobal, listaEstados, estadoUI, dbExtra } from './stats-state.js';
 import { calcularVidaRojaMax, calcularVexMax, getMayorAfinidad } from './stats-logic.js';
+import { db } from '../hex-db.js'; // <-- IMPORTAMOS LA DB CENTRALIZADA
 
 const normalizar = (str) => str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/\s+/g,'_').replace(/[^a-z0-9ñ_]/g,'');
 const calcTotal = (base, spells, spellEff, buff) => (base || 0) + (spells || 0) + (spellEff || 0) + (buff || 0);
@@ -14,7 +15,8 @@ const bTextSplit = (spells, spellEff, buff) => {
     return `<div style="font-size:0.75em; display:flex; flex-direction:column; gap:4px; margin-top:8px; border-top:1px dashed #444; padding-top:8px;">${parts.join('')}</div>`;
 };
 
-const imgError = "this.onerror=null; this.src='../img/imgobjetos/no_encontrado.png'";
+// URL Dinámica para el icono de error (Usamos icon.png de la interfaz por si falla algo)
+const imgError = `this.onerror=null; this.src='${db.storage.urlBase}/imginterfaz/icon.png'`;
 const raridadValor = { "Legendario": 3, "Raro": 2, "Común": 1, "-": 0 };
 
 function AsegurarGuardaD(p) { if(p.guardaDorada === undefined) p.guardaDorada = 0; if(p.baseGuardaDorada === undefined) p.baseGuardaDorada = 0; }
@@ -111,7 +113,6 @@ export function dibujarCatalogo() {
 
         const claseInactiva = p.isActive ? '' : 'inactive-card';
         
-        // BOTÓN DE ELIMINAR MEJORADO (Basurero sutil interior)
         let btnEliminar = '';
         if (estadoUI.esAdmin) {
             btnEliminar = `<button onclick="window.borrarPersonaje('${nombre}', event)" style="position: absolute; top: 12px; right: 12px; background: rgba(255, 0, 0, 0.1); color: #ff5555; border: 1px solid rgba(255, 0, 0, 0.3); border-radius: 6px; width: 32px; height: 32px; font-size: 1.1em; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; z-index: 10;" onmouseover="this.style.background='#ff0000'; this.style.color='#fff'; this.style.borderColor='#ff0000';" onmouseout="this.style.background='rgba(255, 0, 0, 0.1)'; this.style.color='#ff5555'; this.style.borderColor='rgba(255, 0, 0, 0.3)';" title="Eliminar Personaje">🗑️</button>`;
@@ -120,7 +121,7 @@ export function dibujarCatalogo() {
         html += `
         <div class="char-card ${claseInactiva}" style="position: relative; ${borderStyle} ${bgStyle} padding: 15px; border-radius: 12px; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'" onclick="window.abrirDetalle('${nombre}')">
             ${btnEliminar}
-            <img src="../img/imgpersonajes/${iconoMuestra}icon.png" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.2); margin-bottom: 10px;" onerror="${imgError}">
+            <img src="${db.storage.urlBase}/imgpersonajes/${iconoMuestra}icon.png" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.2); margin-bottom: 10px;" onerror="${imgError}">
             <h3 style="margin: 0 0 10px 0; font-family: 'Cinzel', serif; font-size: 1.2em; text-transform: uppercase;">${nombre}</h3>
             <div style="background: rgba(0,0,0,0.5); padding: 8px; border-radius: 6px;">
                 <p style="margin: 0; font-size: 0.9em; color: #ddd;">HEX: <strong style="color: var(--gold);">${p.hex}</strong></p>
@@ -157,7 +158,7 @@ export function dibujarResumenVisual() {
         const topItems = myItems.sort((a,b) => (raridadValor[dbExtra.infoObjetos[b]?.rar]||0) - (raridadValor[dbExtra.infoObjetos[a]?.rar]||0)).slice(0, 5);
         let itemsHtml = topItems.map(o => {
             const rarClase = dbExtra.infoObjetos[o]?.rar === 'Raro' ? 'rarity-raro' : (dbExtra.infoObjetos[o]?.rar === 'Legendario' ? 'rarity-legendario' : 'rarity-comun');
-            return `<a href="${linkObj}" target="_blank" class="mini-item-card ${rarClase}" title="${o} (Clic para ir al inventario)" onclick="event.stopPropagation();"><img src="../img/imgobjetos/${normalizar(o)}.png" onerror="${imgError}"></a>`;
+            return `<a href="${linkObj}" target="_blank" class="mini-item-card ${rarClase}" title="${o} (Clic para ir al inventario)" onclick="event.stopPropagation();"><img src="${db.storage.urlBase}/imgobjetos/${normalizar(o)}.png" onerror="${imgError}"></a>`;
         }).join('');
 
         const mySpells = (dbExtra.hechizos.inventario || []).filter(i => i.Personaje.toLowerCase() === pjNameLower);
@@ -165,7 +166,6 @@ export function dibujarResumenVisual() {
             const info = allNodos.find(n => normalizar(n.Nombre) === normalizar(s.Hechizo) || normalizar(n.ID) === normalizar(s.Hechizo));
             s.costo = info ? (parseInt(info.HEX) || 0) : 0;
             
-            // NUEVA LÓGICA: Mostrar nombre siempre, pero marcar si no está descubierto
             s.isUndiscovered = (info && (!info.Conocido || String(info.Conocido).trim().toLowerCase() !== 'si'));
             s.displayName = s.Hechizo;
         });
@@ -191,7 +191,7 @@ export function dibujarResumenVisual() {
         html += `
         <div class="resumen-row" onclick="window.abrirDetalle('${nombre}')" style="background:#111; border-color:#333;">
             <div class="resumen-left">
-                <img src="../img/imgpersonajes/${iconoGrande}icon.png" style="border: 2px solid var(--gold);" onerror="${imgError}">
+                <img src="${db.storage.urlBase}/imgpersonajes/${iconoGrande}icon.png" style="border: 2px solid var(--gold);" onerror="${imgError}">
                 <h3 style="margin:8px 0 0 0; font-size:1.1em; color:var(--gold); text-transform:uppercase; font-family:'Cinzel';">${nombre}</h3>
                 <div class="copy-wrap hex-label" onclick="window.copySilently('HEX: ${p.hex}', event)">
                     ${p.hex}<br><span style="font-size:0.5em; color:#fff;">HEX</span>
@@ -282,7 +282,6 @@ export function dibujarDetalle() {
         const info = allNodos.find(n => normalizar(n.Nombre) === normalizar(s.Hechizo) || normalizar(n.ID) === normalizar(s.Hechizo));
         s.costo = info ? (parseInt(info.HEX) || 0) : 0;
         
-        // NUEVA LÓGICA: Mostrar nombre siempre, colorear amarillo si no está descubierto
         s.isUndiscovered = (info && (!info.Conocido || String(info.Conocido).trim().toLowerCase() !== 'si'));
         s.displayName = s.Hechizo;
     });
@@ -310,7 +309,7 @@ export function dibujarDetalle() {
     <div style="display: flex; align-items: center; gap: 30px; border-bottom: 2px solid #333; padding-bottom: 25px; opacity:${p.isActive ? '1' : '0.5'}; flex-wrap:wrap;">
         
         <div style="position: relative;">
-            <img src="../img/imgpersonajes/${iconoGrande}icon.png" style="width: 140px; height: 140px; border-radius: 50%; border: 4px solid var(--gold); box-shadow: 0 0 20px rgba(212,175,55,0.3); object-fit: cover; background:#000;" onerror="${imgError}">
+            <img src="${db.storage.urlBase}/imgpersonajes/${iconoGrande}icon.png" style="width: 140px; height: 140px; border-radius: 50%; border: 4px solid var(--gold); box-shadow: 0 0 20px rgba(212,175,55,0.3); object-fit: cover; background:#000;" onerror="${imgError}">
             ${p.isNPC ? `<span style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); background: #4a0000; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.7em; font-weight: bold; border: 1px solid #ff0000;">NPC</span>` : ''}
         </div>
 
@@ -636,7 +635,7 @@ export function dibujarHexOP() {
         const char = estadoUI.party[i];
         if(char && statsGlobal[char]) {
             const icono = normalizar(statsGlobal[char]?.iconoOverride || char);
-            html += `<div style="width:90px; height:90px; border:3px solid var(--gold); border-radius:10px; background:url('../img/imgpersonajes/${icono}icon.png') center/cover; position:relative; box-shadow: 0 4px 8px rgba(0,0,0,0.5);" title="${char}">
+            html += `<div style="width:90px; height:90px; border:3px solid var(--gold); border-radius:10px; background:url('${db.storage.urlBase}/imgpersonajes/${icono}icon.png') center/cover; position:relative; box-shadow: 0 4px 8px rgba(0,0,0,0.5);" title="${char}">
                 <button onclick="window.togglePartyMember('${char}', false)" style="position:absolute; top:-10px; right:-10px; background:#ff0000; color:white; border-radius:50%; width:28px; height:28px; font-size:16px; font-weight:bold; border:2px solid #fff; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center; transition: 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">X</button>
                 <div style="position:absolute; bottom:0; background:rgba(0,0,0,0.8); width:100%; font-size:0.7em; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:4px 0; border-radius:0 0 7px 7px; color: var(--gold); font-weight: bold;">${char}</div>
             </div>`;
@@ -659,7 +658,7 @@ export function dibujarHexOP() {
             html += `
                 <label style="display:flex; align-items:center; gap:10px; background:#111; padding:10px; border-radius:6px; border:1px solid #333; cursor:pointer; transition:0.2s; user-select:none;" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='#333'">
                     <input type="checkbox" ${isChecked} onchange="window.togglePartyMember('${nombre}', this.checked)" style="transform:scale(1.4); cursor:pointer; margin-left: 5px;">
-                    <img src="../img/imgpersonajes/${iconoMuestra}icon.png" style="width:35px; height:35px; border-radius:50%; border:1px solid #fff; object-fit:cover;" onerror="${imgError}">
+                    <img src="${db.storage.urlBase}/imgpersonajes/${iconoMuestra}icon.png" style="width:35px; height:35px; border-radius:50%; border:1px solid #fff; object-fit:cover;" onerror="${imgError}">
                     <span style="color:white; font-size:0.9em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:bold; flex:1;">${nombre}</span>
                 </label>
             `;
@@ -700,7 +699,7 @@ export function dibujarHexOP() {
             html += `
             <div class="edit-card" style="background: #111; border: 1px solid var(--gold); border-radius: 12px; padding: 20px;">
                 <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px; border-bottom: 1px solid #333; padding-bottom: 15px;">
-                    <img src="../img/imgpersonajes/${iconoMuestra}icon.png" style="width:60px; height:60px; border-radius:50%; border:2px solid var(--gold); object-fit:cover; background:#000;" onerror="${imgError}">
+                    <img src="${db.storage.urlBase}/imgpersonajes/${iconoMuestra}icon.png" style="width:60px; height:60px; border-radius:50%; border:2px solid var(--gold); object-fit:cover; background:#000;" onerror="${imgError}">
                     <div style="text-align:left;">
                         <h4 style="margin:0 0 5px 0; font-size:1.1em; color: #fff;">${nombre}</h4>
                         <div style="color:var(--gold); font-size:1.1em; font-weight:bold;">HEX: ${p.hex}</div>
@@ -794,7 +793,3 @@ export function dibujarFormularioCrear() {
 export function dibujarFormularioEditar() {
     return `<p>Editor movido a Modal OP dentro de la ficha.</p>`;
 }
-
-
-
-
