@@ -525,6 +525,13 @@ async function iniciar() {
 
         if (loader) setTimeout(() => loader.classList.add('oculto'), 500);
 
+        // Re-verificar admin después de que Supabase termine de cargar el perfil
+        setTimeout(() => {
+            const wasAdmin = estadoUI.esAdmin;
+            estadoUI.esAdmin = hexAuth.esAdmin();
+            if (estadoUI.esAdmin !== wasAdmin) window.sincronizarUI();
+        }, 1500);
+
         const target = new URLSearchParams(window.location.search).get('pj') || decodeURIComponent(window.location.hash.replace('#detalle-','').replace('#inventario-','').replace(/_/g,' '));
         if (target) {
             const exactMatch = Object.keys(statsGlobal).find(k => k.toLowerCase() === target.toLowerCase());
