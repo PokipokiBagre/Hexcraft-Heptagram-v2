@@ -225,4 +225,6 @@ export const hexAuth = {
 };
 
 // Hacer disponible globalmente por compatibilidad con onclick en HTML
-window.hexAuth = hexAuth;
+// Al final de init(), antes del return:
+window.hexAuth = hexAuth; // asegurar que está global
+return this.esAdmin();
