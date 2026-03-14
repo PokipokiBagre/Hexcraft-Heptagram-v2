@@ -493,9 +493,12 @@ window.borrarPersonaje = (nombre, event) => {
 // ============================================================================
 async function iniciar() {
     try {
+        const favicon = document.querySelector("link[rel='icon']");
+        if (favicon) favicon.href = `${db.storage.urlBase}/imginterfaz/icon.png`;
+
+
         if (performance.getEntriesByType("navigation")[0]?.type === "reload") localStorage.removeItem('hex_stats_v2');
 
-        // Inicializar auth
         await hexAuth.init();
 
         // Si está logueado pero el perfil no cargó (RLS timing), forzar carga manual
