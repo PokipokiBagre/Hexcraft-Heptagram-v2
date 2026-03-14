@@ -233,4 +233,17 @@ h1, h2, h3 {
         max-width: 380px !important;
         height: 160px !important;
     }
+
+    /* Forzar que los enlaces mantengan su estilo y no se pongan azules */
+a.grid-item, a.access-card {
+    text-decoration: none !important;
+    color: inherit !important;
 }
+
+/* Forzar que el texto interno sea blanco/dorado siempre */
+.grid-item span, .access-card span {
+    color: #fff !important; 
+}
+    
+}
+
