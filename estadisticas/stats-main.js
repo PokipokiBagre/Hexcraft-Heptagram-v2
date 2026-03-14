@@ -260,17 +260,22 @@ window.mostrarResumen  = () => { estadoUI.vistaActual = 'resumen';  refrescarVis
 window.abrirDetalle    = (nombre) => { estadoUI.personajeSeleccionado = nombre; estadoUI.vistaActual = 'detalle'; refrescarVistas(); window.scrollTo(0,0); };
 
 window.abrirMenuOP = async () => {
-    // Re-verificar sesión en cada click por si acaso
-    await hexAuth.init();
-    estadoUI.esAdmin = hexAuth.esAdmin();
-
+    // Si ya sabemos que es admin por el estado local, entrar directo
     if (estadoUI.esAdmin) {
         if (estadoUI.vistaActual !== 'detalle') estadoUI.vistaActual = 'hex';
         refrescarVistas();
         return;
     }
 
-    // No está logueado como admin — mostrar modal
+    // Verificar con Supabase
+    if (hexAuth.esAdmin()) {
+        estadoUI.esAdmin = true;
+        if (estadoUI.vistaActual !== 'detalle') estadoUI.vistaActual = 'hex';
+        refrescarVistas();
+        return;
+    }
+
+    // No es admin — mostrar login
     hexAuth._mostrarModalLogin();
 };
 
