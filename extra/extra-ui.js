@@ -2,7 +2,7 @@
 // extra-ui.js — Renderizado de la interfaz
 // ============================================================
 
-import { estadoUI } from './extra-state.js';
+import { estadoUI, STORAGE_URL } from './extra-state.js';
 import { getItemsFiltrados, getEstadisticas } from './extra-logic.js';
 
 // ── Stats ────────────────────────────────────────────────────
@@ -34,14 +34,18 @@ export function renderGrid() {
     const filtrados = getItemsFiltrados();
     let html = '';
 
+    // URL Mágica apuntando directo a Supabase
+    const imgFallback = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
+
     filtrados.forEach(item => {
         const claseCard = item.existe ? 'ok' : 'falta';
         const badge     = item.existe
             ? `<div class="badge-ok">✓</div>`
             : `<div class="badge-falta">!</div>`;
-        const imgSrc    = item.existe
-            ? item.urlStorage
-            : `../img/imgobjetos/no_encontrado.png`;
+            
+        // Si no existe, ni siquiera intentamos cargar una rota, ponemos el fallback directo
+        const imgSrc    = item.existe ? item.urlStorage : imgFallback;
+        
         const btnTxt    = item.existe ? '🔄 Cambiar' : '📤 Subir';
         const btnColor  = item.existe ? '#004a00' : '#4a0000';
         const btnBorder = item.existe ? '#00ff00' : '#ff4444';
@@ -51,7 +55,7 @@ export function renderGrid() {
         <div class="img-card ${claseCard}" title="${item.nombre}">
             ${badge}
             <img src="${imgSrc}"
-                 onerror="this.src='../img/imgobjetos/no_encontrado.png'"
+                 onerror="this.onerror=null; this.src='${imgFallback}'"
                  style="cursor:pointer;"
                  onclick="window.abrirUpload('${item.keyNorm}','${item.tipoIcono}','${safeNombre}')">
             <div class="nombre">${item.nombre}</div>
