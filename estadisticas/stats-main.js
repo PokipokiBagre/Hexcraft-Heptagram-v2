@@ -259,24 +259,12 @@ window.mostrarCatalogo = () => { estadoUI.vistaActual = 'catalogo'; refrescarVis
 window.mostrarResumen  = () => { estadoUI.vistaActual = 'resumen';  refrescarVistas(); window.scrollTo(0,0); };
 window.abrirDetalle    = (nombre) => { estadoUI.personajeSeleccionado = nombre; estadoUI.vistaActual = 'detalle'; refrescarVistas(); window.scrollTo(0,0); };
 
-window.abrirMenuOP = async () => {
-    // Si ya sabemos que es admin por el estado local, entrar directo
+// ── El panel OP se activa automáticamente si eres admin ──
+window.abrirMenuOP = () => {
     if (estadoUI.esAdmin) {
         if (estadoUI.vistaActual !== 'detalle') estadoUI.vistaActual = 'hex';
         refrescarVistas();
-        return;
     }
-
-    // Verificar con Supabase
-    if (hexAuth.esAdmin()) {
-        estadoUI.esAdmin = true;
-        if (estadoUI.vistaActual !== 'detalle') estadoUI.vistaActual = 'hex';
-        refrescarVistas();
-        return;
-    }
-
-    // No es admin — mostrar login
-    hexAuth._mostrarModalLogin();
 };
 
 window.mostrarPaginaOP = (subvista) => { estadoUI.vistaActual = subvista; refrescarVistas(); };
@@ -505,9 +493,20 @@ async function iniciar() {
         await hexAuth.init();
         estadoUI.esAdmin = hexAuth.esAdmin();
 
-        // Actualizar badge en nav
+        // Badge de sesión — si es admin, el badge abre el panel OP directamente
         const badge = document.getElementById('hex-session-badge');
-        if (badge) badge.innerHTML = hexAuth.renderStatusBadge();
+        if (badge) {
+            if (hexAuth.esAdmin()) {
+                badge.innerHTML = `<span style="background:#4a004a; color:#d4af37; border:1px dashed #d4af37;
+                    padding:8px 14px; border-radius:4px; font-weight:bold;
+                    font-family:'Cinzel'; cursor:pointer; font-size:0.85em;"
+                    onclick="window.abrirMenuOP()">
+                    ⚙️ MÁSTER
+                    </span>`;
+            } else {
+                badge.innerHTML = hexAuth.renderStatusBadge();
+            }
+        }
 
         const loader = document.getElementById('loader');
         const barra  = document.getElementById('carga-progreso');
