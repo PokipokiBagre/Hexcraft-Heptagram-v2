@@ -1,165 +1,186 @@
 import { statsGlobal, listaEstados, estadoUI, dbExtra } from './stats-state.js';
+import { db } from '../hex-db.js';
 
-const CSV_ESTADOS = './estados.csv'; 
-const CSV_PERSONAJES = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQOl-ENpkVGioSaquRc1pkuNUyk-vCEQGGSAN3MMtzwcP5AjlLTLbjsc4wAdy3fcQgRhzQAZ2CtRWbx/pub?output=csv';
-const CSV_OBJETOS = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQDaZ1Zr9YWmgW05Hzpv4IQzpMaKrgSvVUm_Yrps3DdwwPpIjD4iHrdLyPHGucuTHnwwYdM7bPrcnRO/pub?output=csv';
-const API_HECHIZOS = 'https://script.google.com/macros/s/AKfycby1jLgF-2bGWv0QW0Eg8u7msZ-ab2eQa--olIWQHsin8Kyz0y0xHevK7YyGyMyzq1BWKw/exec';
-const CSV_MISIONES = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vTI_7MnwczeHhMCuQ_YInOHBvVUFv7ZSp_bsvFqkTmC_GvSdINkoskGPk__u9dq9XHTeVo4AMAMQl7v/pub?output=csv';
+// ============================================================
+// stats-data.js — VERSIÓN SUPABASE
+// Reemplaza todos los fetch a Google Sheets y Apps Script
+// ============================================================
 
-// Carga simultánea con barra de progreso animada
 export async function cargarTodoDesdeCSV(barraProgreso) {
     try {
-        let progresoActual = 10; // Inicia en 10%
-        if (barraProgreso) barraProgreso.style.width = progresoActual + '%';
+        if (barraProgreso) barraProgreso.style.width = '10%';
 
-        const avanzarProgreso = () => {
-            progresoActual += 20;
-            if (barraProgreso) barraProgreso.style.width = progresoActual + '%';
-        };
-
-        const [textoPj, textoObj, textoHz, textoMis] = await Promise.all([
-            fetch(CSV_PERSONAJES + '&cb=' + new Date().getTime()).then(r => r.text()).then(t => { avanzarProgreso(); return t; }),
-            fetch(CSV_OBJETOS + '&cb=' + new Date().getTime()).then(r => r.text()).then(t => { avanzarProgreso(); return t; }),
-            fetch(API_HECHIZOS).then(r => r.text()).then(t => { avanzarProgreso(); return t; }),
-            fetch(CSV_MISIONES + '&cb=' + new Date().getTime()).then(r => r.text()).then(t => { avanzarProgreso(); return t; })
+        // Carga paralela desde Supabase
+        const [personajesArr, objetosArr, inventObjArr, hechizosData, misionesArr] = await Promise.all([
+            db.personajes.getAll(),
+            db.objetos.getCatalogo(),
+            db.objetos.getInventarioCompleto(),
+            db.hechizos.getDataCompleta(),
+            db.misiones.getAll()
         ]);
-        
-        procesarTextoCSV(textoPj);
-        procesarObjetos(textoObj);
-        dbExtra.hechizos = JSON.parse(decodeURIComponent(escape(window.atob(textoHz))));
-        
-        // PROCESAR LISTA DE MISIONES ACTIVAS (NOMBRES EXACTOS)
-        dbExtra.misionesActivas = {};
-        textoMis.split(/\r?\n/).slice(1).forEach(l => {
-            let matches = l.match(/(\s*"[^"]+"\s*|\s*[^,]+|,)(?=,|$)/g);
-            if(!matches) return;
-            let c = matches.map(m => m.replace(/^,/, '').replace(/^"|"$/g, '').trim());
-            if(!c[0]) return;
 
-            let titulo = c[0];
-            let estado = parseInt(c[3]) || 0;
-            
-            // Solo recopila Pendientes (1) y En Proceso (2)
-            if (estado === 1 || estado === 2) { 
-                let jugs = (c[7] || '').split(',').map(j => j.trim().toLowerCase());
-                jugs.forEach(j => { 
-                    if(j) {
-                        if (!dbExtra.misionesActivas[j]) dbExtra.misionesActivas[j] = [];
-                        dbExtra.misionesActivas[j].push(titulo);
-                    }
+        if (barraProgreso) barraProgreso.style.width = '60%';
+
+        // ── PERSONAJES → statsGlobal ──────────────────────────────
+        for (let k in statsGlobal) delete statsGlobal[k];
+
+        personajesArr.forEach(p => {
+            statsGlobal[p.nombre] = {
+                isPlayer:  p.is_player,
+                isNPC:    !p.is_player,
+                isActive:  p.is_active,
+                hex:       p.hex        || 0,
+                asistencia: p.asistencia || 1,
+                vex:       p.vex        || 0,
+
+                vidaRojaActual:  p.vida_roja_actual  || 0,
+                vidaRojaMax:    (p.base_vida_roja_max || 0) + (p.hechizo_vida_roja || 0) + (p.efecto_vida_roja || 0) + (p.buff_vida_roja || 0),
+                baseVidaRojaMax: p.base_vida_roja_max || 10,
+
+                vidaAzul:       (p.base_vida_azul || 0) + (p.hechizo_vida_azul || 0) + (p.efecto_vida_azul || 0) + (p.buff_vida_azul || 0),
+                baseVidaAzul:    p.base_vida_azul    || 0,
+
+                guardaDorada:   (p.base_guarda_dorada || 0) + (p.hechizo_guarda || 0) + (p.efecto_guarda || 0) + (p.buff_guarda || 0),
+                baseGuardaDorada: p.base_guarda_dorada || 0,
+
+                danoRojo:       (p.base_dano_rojo || 0) + (p.hechizo_dano_rojo || 0) + (p.efecto_dano_rojo || 0) + (p.buff_dano_rojo || 0),
+                baseDanoRojo:    p.base_dano_rojo   || 0,
+
+                danoAzul:       (p.base_dano_azul || 0) + (p.hechizo_dano_azul || 0) + (p.efecto_dano_azul || 0) + (p.buff_dano_azul || 0),
+                baseDanoAzul:    p.base_dano_azul   || 0,
+
+                elimDorada:     (p.base_elim_dorada || 0) + (p.hechizo_elim || 0) + (p.efecto_elim || 0) + (p.buff_elim || 0),
+                baseElimDorada:  p.base_elim_dorada || 0,
+
+                afinidades: {
+                    fisica:     (p.af_fisica||0)+(p.hz_fisica||0)+(p.ef_fisica||0)+(p.bf_fisica||0),
+                    energetica: (p.af_energetica||0)+(p.hz_energetica||0)+(p.ef_energetica||0)+(p.bf_energetica||0),
+                    espiritual: (p.af_espiritual||0)+(p.hz_espiritual||0)+(p.ef_espiritual||0)+(p.bf_espiritual||0),
+                    mando:      (p.af_mando||0)+(p.hz_mando||0)+(p.ef_mando||0)+(p.bf_mando||0),
+                    psiquica:   (p.af_psiquica||0)+(p.hz_psiquica||0)+(p.ef_psiquica||0)+(p.bf_psiquica||0),
+                    oscura:     (p.af_oscura||0)+(p.hz_oscura||0)+(p.ef_oscura||0)+(p.bf_oscura||0)
+                },
+                afinidadesBase: {
+                    fisica:     p.af_fisica     || 0,
+                    energetica: p.af_energetica || 0,
+                    espiritual: p.af_espiritual || 0,
+                    mando:      p.af_mando      || 0,
+                    psiquica:   p.af_psiquica   || 0,
+                    oscura:     p.af_oscura     || 0
+                },
+                hechizos: {
+                    fisica:           p.hz_fisica     || 0,
+                    energetica:       p.hz_energetica || 0,
+                    espiritual:       p.hz_espiritual || 0,
+                    mando:            p.hz_mando      || 0,
+                    psiquica:         p.hz_psiquica   || 0,
+                    oscura:           p.hz_oscura     || 0,
+                    danoRojo:         p.hechizo_dano_rojo  || 0,
+                    danoAzul:         p.hechizo_dano_azul  || 0,
+                    elimDorada:       p.hechizo_elim       || 0,
+                    vidaRojaMaxExtra: p.hechizo_vida_roja  || 0,
+                    vidaAzulExtra:    p.hechizo_vida_azul  || 0,
+                    guardaDoradaExtra: p.hechizo_guarda    || 0
+                },
+                hechizosEfecto: {
+                    fisica:           p.ef_fisica     || 0,
+                    energetica:       p.ef_energetica || 0,
+                    espiritual:       p.ef_espiritual || 0,
+                    mando:            p.ef_mando      || 0,
+                    psiquica:         p.ef_psiquica   || 0,
+                    oscura:           p.ef_oscura     || 0,
+                    danoRojo:         p.efecto_dano_rojo  || 0,
+                    danoAzul:         p.efecto_dano_azul  || 0,
+                    elimDorada:       p.efecto_elim       || 0,
+                    vidaRojaMaxExtra: p.efecto_vida_roja  || 0,
+                    vidaAzulExtra:    p.efecto_vida_azul  || 0,
+                    guardaDoradaExtra: p.efecto_guarda    || 0
+                },
+                buffs: {
+                    fisica:           p.bf_fisica     || 0,
+                    energetica:       p.bf_energetica || 0,
+                    espiritual:       p.bf_espiritual || 0,
+                    mando:            p.bf_mando      || 0,
+                    psiquica:         p.bf_psiquica   || 0,
+                    oscura:           p.bf_oscura     || 0,
+                    danoRojo:         p.buff_dano_rojo   || 0,
+                    danoAzul:         p.buff_dano_azul   || 0,
+                    elimDorada:       p.buff_elim        || 0,
+                    vidaRojaMaxExtra: p.buff_vida_roja   || 0,
+                    vidaAzulExtra:    p.buff_vida_azul   || 0,
+                    guardaDoradaExtra: p.buff_guarda     || 0
+                },
+                estados:       p.estados       || {},
+                iconoOverride: p.icono_override || ''
+            };
+        });
+
+        // ── OBJETOS → dbExtra ─────────────────────────────────────
+        dbExtra.objetosCount = {};
+        dbExtra.inventarios  = {};
+        dbExtra.infoObjetos  = {};
+
+        objetosArr.forEach(o => {
+            dbExtra.infoObjetos[o.nombre] = { rar: o.rareza || 'Común' };
+        });
+
+        inventObjArr.forEach(row => {
+            const j = row.personaje_nombre.toLowerCase();
+            const o = row.objeto_nombre;
+            if (!dbExtra.objetosCount[j]) dbExtra.objetosCount[j] = 0;
+            if (!dbExtra.inventarios[j])  dbExtra.inventarios[j]  = [];
+            dbExtra.objetosCount[j] += row.cantidad;
+            if (row.cantidad > 0) dbExtra.inventarios[j].push(o);
+            if (!dbExtra.infoObjetos[o]) dbExtra.infoObjetos[o] = { rar: row.objetos?.rareza || 'Común' };
+        });
+
+        // ── HECHIZOS → dbExtra ───────────────────────────────────
+        // hechizosData ya tiene { nodos, nodosOcultos, string, inventario, afinidades }
+        // con el mismo formato que antes usaba el API Base64
+        dbExtra.hechizos = hechizosData;
+
+        // ── MISIONES ACTIVAS → dbExtra ───────────────────────────
+        dbExtra.misionesActivas = {};
+        misionesArr.forEach(m => {
+            if (m.estado === 1 || m.estado === 2) {
+                (m.jugadores || []).forEach(j => {
+                    const jl = j.toLowerCase();
+                    if (!dbExtra.misionesActivas[jl]) dbExtra.misionesActivas[jl] = [];
+                    dbExtra.misionesActivas[jl].push(m.titulo);
                 });
             }
         });
-        
-    } catch (error) { 
-        console.error("Error cargando bases de datos cruzadas:", error); 
+
+        if (barraProgreso) barraProgreso.style.width = '100%';
+
+    } catch (error) {
+        console.error("Error cargando desde Supabase:", error);
     }
 }
 
-function procesarObjetos(texto) {
-    const filas = texto.split(/\r?\n/).map(l => l.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/).map(c => c.replace(/^"|"$/g, '').trim()));
-    dbExtra.objetosCount = {};
-    dbExtra.inventarios = {};
-    dbExtra.infoObjetos = {};
-
-    filas.slice(1).forEach(f => {
-        const nombre = f[0]; if (!nombre) return;
-        dbExtra.infoObjetos[nombre] = { rar: f[4] || 'Común' };
-
-        const jugs = f[5] ? f[5].split(',').map(j => j.trim().toLowerCase()) : [];
-        const cants = f[6] ? f[6].split(',').map(c => parseInt(c.trim()) || 0) : [];
-        
-        jugs.forEach((j, i) => {
-            const count = cants[i] || 0;
-            if (!dbExtra.objetosCount[j]) dbExtra.objetosCount[j] = 0;
-            if (!dbExtra.inventarios[j]) dbExtra.inventarios[j] = [];
-            
-            dbExtra.objetosCount[j] += count;
-            if (count > 0) dbExtra.inventarios[j].push(nombre);
-        });
-    });
-}
-
-export function procesarTextoCSV(texto) {
-    const filas = texto.split(/\r?\n/).map(l => {
-        let matches = l.match(/(\s*"[^"]+"\s*|\s*[^,]+|,)(?=,|$)/g);
-        if(!matches) return []; return matches.map(m => m.replace(/^,/, '').replace(/^"|"$/g, '').trim());
-    });
-    
-    for (let k in statsGlobal) delete statsGlobal[k];
-
-    filas.slice(1).forEach(f => {
-        if(!f[0]) return;
-        const nombre = f[0];
-        const hexParts = (f[1] || '0_1').split('_'); const idenParts = (f[17] || '0_1').split('_');
-        
-        const getTotal = (idx) => parseInt((f[idx] || '0').split('_')[0]) || 0;
-        const getBase = (idx) => parseInt((f[idx] || '0').split('_')[1]) || 0;
-        const getSpell = (idx) => parseInt((f[idx] || '0').split('_')[2]) || 0;
-        const getSpellEff = (idx) => parseInt((f[idx] || '0').split('_')[3]) || 0;
-        const getBuff = (idx) => parseInt((f[idx] || '0').split('_')[4]) || 0;
-        
-        let stData = {};
-        if (f[16]) {
-            const arr = f[16].split('-');
-            listaEstados.forEach((e, i) => {
-                if (e.tipo === 'booleano') stData[e.id] = (arr[i] === '1');
-                else stData[e.id] = parseInt(arr[i]) || 0;
-            });
-        } else {
-            listaEstados.forEach(e => { stData[e.id] = (e.tipo === 'numero') ? 0 : false; });
-        }
-
-        statsGlobal[nombre] = {
-            isPlayer: idenParts[0] === '1', isNPC: idenParts[0] === '0', isActive: idenParts[1] === '1',
-            hex: parseInt(hexParts[0]) || 0, asistencia: parseInt(hexParts[1]) || 1, vex: parseInt(f[2]) || 0,
-            
-            vidaRojaActual: parseInt(f[9]) || 0, 
-            vidaRojaMax: getTotal(10), baseVidaRojaMax: getBase(10),
-            vidaAzul: getTotal(11), baseVidaAzul: getBase(11),
-            guardaDorada: getTotal(12), baseGuardaDorada: getBase(12),
-            danoRojo: getTotal(13), baseDanoRojo: getBase(13),
-            danoAzul: getTotal(14), baseDanoAzul: getBase(14),
-            elimDorada: getTotal(15), baseElimDorada: getBase(15),
-            
-            afinidades: { fisica: getTotal(3), energetica: getTotal(4), espiritual: getTotal(5), mando: getTotal(6), psiquica: getTotal(7), oscura: getTotal(8) },
-            afinidadesBase: { fisica: getBase(3), energetica: getBase(4), espiritual: getBase(5), mando: getBase(6), psiquica: getBase(7), oscura: getBase(8) },
-            hechizos: { fisica: getSpell(3), energetica: getSpell(4), espiritual: getSpell(5), mando: getSpell(6), psiquica: getSpell(7), oscura: getSpell(8), danoRojo: getSpell(13), danoAzul: getSpell(14), elimDorada: getSpell(15), vidaRojaMaxExtra: getSpell(10), vidaAzulExtra: getSpell(11), guardaDoradaExtra: getSpell(12) },
-            hechizosEfecto: { fisica: getSpellEff(3), energetica: getSpellEff(4), espiritual: getSpellEff(5), mando: getSpellEff(6), psiquica: getSpellEff(7), oscura: getSpellEff(8), danoRojo: getSpellEff(13), danoAzul: getSpellEff(14), elimDorada: getSpellEff(15), vidaRojaMaxExtra: getSpellEff(10), vidaAzulExtra: getSpellEff(11), guardaDoradaExtra: getSpellEff(12) },
-            buffs: { fisica: getBuff(3), energetica: getBuff(4), espiritual: getBuff(5), mando: getBuff(6), psiquica: getBuff(7), oscura: getBuff(8), danoRojo: getBuff(13), danoAzul: getBuff(14), elimDorada: getBuff(15), vidaRojaMaxExtra: getBuff(10), vidaAzulExtra: getBuff(11), guardaDoradaExtra: getBuff(12) },
-            
-            estados: stData, iconoOverride: f[18] || ""
-        };
-    });
-}
-
+// ── Estados: ahora vienen de Supabase, no de estados.csv ────
 export async function cargarDiccionarioEstados() {
     try {
-        const res = await fetch(CSV_ESTADOS + '?cb=' + new Date().getTime());
-        if(!res.ok) throw new Error("No se encontró el archivo de estados");
-        const texto = await res.text();
-        
-        const filas = texto.split(/\r?\n/);
+        const estadosArr = await db.estadosConfig.getAll();
         listaEstados.length = 0;
-
-        filas.slice(1).forEach(f => {
-            if(!f.trim()) return;
-            const partes = f.split(',');
-            if (partes.length < 5) return;
-
-            const id = partes[0].replace(/^"|"$/g, '').trim();
-            const nombre = partes[1].replace(/^"|"$/g, '').trim() || id;
-            const tipo = partes[2].replace(/^"|"$/g, '').trim() || 'booleano';
-            const bg = partes[3].replace(/^"|"$/g, '').trim() || '#000';
-            const border = partes[4].replace(/^"|"$/g, '').trim() || '#fff';
-            let desc = partes.slice(5).join(',').replace(/^"|"$/g, '').trim();
-            if (!desc) desc = 'Sin descripción';
-
-            listaEstados.push({ id, nombre, tipo, bg, border, desc });
+        estadosArr.forEach(e => {
+            listaEstados.push({
+                id:     e.id,
+                nombre: e.nombre,
+                tipo:   e.tipo,
+                bg:     e.color_bg,
+                border: e.color_border,
+                desc:   e.descripcion
+            });
         });
     } catch(e) {
-        console.warn("Fallo al cargar estados.csv. Verifica ruta local.");
+        console.warn("Fallo al cargar estados desde Supabase:", e);
     }
 }
 
-
+// ── procesarTextoCSV se mantiene solo para el botón de exportar CSV ──
+// (genera el CSV descargable desde los datos en memoria, no hace fetch)
+export function procesarTextoCSV() {
+    // No hace nada — los datos ya están en statsGlobal desde cargarTodoDesdeCSV
+    // Esta función se conserva por compatibilidad con stats-main.js
+}
