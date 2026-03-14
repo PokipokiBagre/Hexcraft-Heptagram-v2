@@ -344,5 +344,33 @@ export const db = {
                 .eq('id', userId);
             return !error;
         }
+    }, 
+
+    // ══════════════════════════════════════════════════════
+    // STORAGE (Imágenes de Interfaz)
+    // ══════════════════════════════════════════════════════
+    storage: {
+        // Convierte el nombre local (ej: "objetos.jpg") a su URL oficial en Supabase Storage
+        getUrlInterfaz(nombreArchivo) {
+            if (!nombreArchivo) return '';
+            
+            // 1. Normalizar exactamente igual que en extra-data.js
+            const norm = (str) => str.toString().trim().toLowerCase()
+                .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
+                .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
+                .replace(/[úùüû]/g,'u').replace(/\s+/g,'_')
+                .replace(/[^a-z0-9ñ_]/g,'');
+
+            // 2. Extraer el nombre sin la extensión y normalizarlo
+            const nombreLimpio = nombreArchivo.replace(/\.(png|jpg|jpeg|webp|gif)$/i, '');
+            const key = norm(nombreLimpio);
+
+            // 3. Generar la URL pública del bucket (Esto es instantáneo, no requiere 'await')
+            const { data } = supabase.storage
+                .from('imagenes-hex')
+                .getPublicUrl(`imginterfaz/${key}.png`);
+
+            return data.publicUrl;
+        }
     }
-};
+}; 
