@@ -1,9 +1,20 @@
-
+// ============================================================
+// hex-db.js — Cliente Unificado de Base de Datos
+// Coloca este archivo en la RAÍZ del proyecto
+// Reemplaza todas las llamadas a Google Sheets + Apps Script
+// ============================================================
+// Uso en cualquier módulo:
+//   import { db } from '../hex-db.js';
+//   const personajes = await db.personajes.getAll();
+// ============================================================
 
 import { supabase } from './hex-auth.js';
 
 export const db = {
 
+    // ══════════════════════════════════════════════════════
+    // PERSONAJES / ESTADÍSTICAS
+    // ══════════════════════════════════════════════════════
     personajes: {
         async getAll() {
             const { data, error } = await supabase
@@ -58,6 +69,9 @@ export const db = {
         }
     },
 
+    // ══════════════════════════════════════════════════════
+    // ESTADOS CONFIG (reemplaza estados.csv)
+    // ══════════════════════════════════════════════════════
     estadosConfig: {
         async getAll() {
             const { data } = await supabase
@@ -69,7 +83,8 @@ export const db = {
     },
 
     // ══════════════════════════════════════════════════════
-
+    // OBJETOS
+    // ══════════════════════════════════════════════════════
     objetos: {
         async getCatalogo() {
             const { data } = await supabase
@@ -160,19 +175,39 @@ export const db = {
             ]);
 
             const todosNodos = nodos.data || [];
+
+            // Convertir snake_case de Supabase al formato PascalCase que esperan todos los módulos UI
+            const mapNodo = (n) => ({
+                ID:              n.hechizo_id,
+                Nombre:          n.nombre,
+                HEX:             n.hex_cost,
+                Clase:           n.clase,
+                Afinidad:        n.afinidad,
+                Resumen:         n.resumen,
+                Efecto:          n.efecto,
+                'Overcast 100%': n.overcast,
+                'Undercast 50%': n.undercast,
+                Especial:        n.especial,
+                Conocido:        n.es_conocido ? 'si' : '',
+                X:               n.pos_x,
+                Y:               n.pos_y,
+                Size:            n.radio,
+                Color:           n.color
+            });
+
             return {
-                nodos:          todosNodos.filter(n => !n.es_oculto),
-                nodosOcultos:   todosNodos.filter(n => n.es_oculto),
-                string:         (strings.data || []).map(s => ({ Source: s.source_id, Target: s.target_id })),
-                inventario:     (inventario.data || []).map(i => ({
-                    Personaje:        i.personaje_nombre,
-                    Hechizo:          i.hechizo_nombre,
+                nodos:       todosNodos.filter(n => n.es_conocido).map(mapNodo),
+                nodosOcultos:todosNodos.filter(n => !n.es_conocido).map(mapNodo),
+                string:      (strings.data || []).map(s => ({ Source: s.source_id, Target: s.target_id })),
+                inventario:  (inventario.data || []).map(i => ({
+                    Personaje:          i.personaje_nombre,
+                    Hechizo:            i.hechizo_nombre,
                     'Hechizo Afinidad': i.hechizo_afinidad,
-                    'Hechizo Hex':    i.hechizo_hex,
-                    Tipo:             i.tipo,
-                    Origen:           i.origen
+                    'Hechizo Hex':      i.hechizo_hex,
+                    Tipo:               i.tipo,
+                    Origen:             i.origen
                 })),
-                afinidades:     (afinidades.data || []).map(a => [a.afinidad, a.color_t, a.color_b])
+                afinidades:  (afinidades.data || []).map(a => [a.afinidad, a.color_t, a.color_b])
             };
         },
 
