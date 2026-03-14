@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gestor de Imágenes | HEX</title>
+    <link rel="icon" type="image/png" href="../img/icon.png">
+    <link rel="stylesheet" href="../stylestats.css?v=2.4">
+    <style>
+        .img-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 15px;
+            margin-top: 20px;
+        }
+        .img-card {
+            background: rgba(10,0,20,0.8); border: 1px solid #333;
+            border-radius: 8px; padding: 10px; text-align: center;
+            transition: 0.2s; position: relative;
+        }
+        .img-card.falta { border-color: #ff4444; background: rgba(80,0,0,0.35); }
+        .img-card.ok    { border-color: #00aa44; background: rgba(0,40,10,0.35); }
+        .img-card img   { width: 80px; height: 80px; object-fit: cover; border-radius: 6px; border: 1px solid #555; }
+        .img-card .nombre { font-size: 0.7em; color: #ccc; margin-top: 6px; word-break: break-word; font-family: sans-serif; }
+        .badge-falta { position: absolute; top: 5px; right: 5px; background: #ff4444; color: #fff; font-size: 0.6em; padding: 2px 5px; border-radius: 3px; font-weight: bold; }
+        .badge-ok    { position: absolute; top: 5px; right: 5px; background: #00aa44; color: #fff; font-size: 0.6em; padding: 2px 5px; border-radius: 3px; font-weight: bold; }
+
+        .upload-zone {
+            border: 2px dashed var(--gold); border-radius: 8px; padding: 30px;
+            text-align: center; cursor: pointer; transition: 0.2s;
+            background: rgba(0,0,0,0.3); margin: 15px 0;
+        }
+        .upload-zone:hover, .upload-zone.drag-over { background: rgba(212,175,55,0.1); border-color: var(--gold-light); }
+        .upload-zone p { color: #aaa; margin: 5px 0; font-family: sans-serif; font-size: 0.9em; }
+
+        .tab-btn { background: #111; border: 1px solid #444; color: #888; padding: 10px 20px; cursor: pointer; border-radius: 4px; font-family: 'Cinzel'; transition: 0.2s; }
+        .tab-btn.active { background: var(--gold); color: #000; border-color: var(--gold); }
+
+        .progress-bar  { height: 6px; background: #111; border-radius: 3px; overflow: hidden; margin: 5px 0; }
+        .progress-fill { height: 100%; background: var(--cyan-magic); transition: width 0.3s; box-shadow: 0 0 8px var(--cyan-magic); }
+
+        .stats-row { display: flex; gap: 20px; flex-wrap: wrap; margin-bottom: 20px; }
+        .stat-box { background: rgba(10,0,20,0.8); border: 1px solid #333; border-radius: 8px; padding: 15px 20px; text-align: center; flex: 1; min-width: 120px; }
+        .stat-box .num { font-size: 2em; font-weight: bold; color: var(--gold); }
+        .stat-box .lbl { font-size: 0.7em; color: #888; font-family: sans-serif; }
+
+        .filtro-btn { background: #111; border: 1px solid #333; color: #888; padding: 6px 12px; cursor: pointer; border-radius: 4px; font-family: sans-serif; font-size: 0.8em; transition: 0.2s; }
+        .filtro-btn.active          { background: #ff4444; color: #fff; border-color: #ff4444; }
+        .filtro-btn.ok-filter.active{ background: #00aa44; border-color: #00aa44; }
+        .filtro-btn:not(.active):hover { border-color: #666; color: #ccc; }
+
+        #upload-progress { display: none; }
+    </style>
+</head>
+<body>
+    <div class="nav-bar" style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--gold-dim); padding-bottom:15px; margin-bottom:20px;">
+        <div style="display:flex; gap:10px; align-items:center;">
+            <button onclick="window.location.href='../index.html'" style="background:#111; border-color:#555;">⬅ Volver</button>
+            <span style="background:#004a00; color:#00ff00; border:1px solid #00ff00; padding:10px 15px; border-radius:4px; font-weight:bold; display:flex; align-items:center;">🟢 CONECTADO</span>
+        </div>
+        <h2 style="margin:0; color:var(--gold);">🖼️ GESTOR DE IMÁGENES</h2>
+        <div id="hex-session-badge"></div>
+    </div>
+
+    <div id="loader-msg" style="text-align:center; color:var(--gold); padding:40px; font-family:sans-serif;">
+        Cargando datos...
+    </div>
+
+    <div id="main-content" style="display:none;">
+
+        <!-- TABS -->
+        <div style="display:flex; gap:10px; margin-bottom:25px; flex-wrap:wrap;">
+            <button class="tab-btn active" onclick="window.cambiarTab('personajes')" id="tab-personajes">👤 Personajes</button>
+            <button class="tab-btn"        onclick="window.cambiarTab('objetos')"    id="tab-objetos">🎒 Objetos</button>
+        </div>
+
+        <!-- STATS -->
+        <div class="stats-row" id="stats-row"></div>
+
+        <!-- FILTROS -->
+        <div style="display:flex; gap:10px; margin-bottom:15px; align-items:center; flex-wrap:wrap;">
+            <span style="color:#aaa; font-size:0.85em; font-family:sans-serif;">Mostrar:</span>
+            <button class="filtro-btn active" id="filtro-todos" onclick="window.setFiltro('todos')">Todos</button>
+            <button class="filtro-btn"        id="filtro-falta" onclick="window.setFiltro('falta')">❌ Solo Faltantes</button>
+            <button class="filtro-btn ok-filter" id="filtro-ok" onclick="window.setFiltro('ok')">✅ Solo Existentes</button>
+            <input type="text" id="busqueda" placeholder="Buscar..."
+                oninput="window.setBusqueda(this.value)"
+                style="background:#000; border:1px solid #444; color:#fff; padding:6px 12px; border-radius:4px; font-family:sans-serif; font-size:0.85em; margin-left:10px;">
+        </div>
+
+        <!-- PANEL UPLOAD -->
+        <div id="zona-upload" style="display:none; margin-bottom:20px;">
+            <div style="background:rgba(10,0,20,0.9); border:1px solid var(--gold); border-radius:10px; padding:20px;">
+                <h3 style="margin-top:0; color:var(--gold);">📤 Subir Imagen</h3>
+                <p style="color:#aaa; font-family:sans-serif; font-size:0.85em; margin-bottom:10px;">
+                    Subiendo para: <strong id="upload-target-name" style="color:#fff;"></strong>
+                    <span id="upload-target-tipo" style="color:#888; font-size:0.9em;"></span>
+                </p>
+                <div class="upload-zone" id="drop-zone"
+                    onclick="document.getElementById('file-input').click()"
+                    ondragover="event.preventDefault(); this.classList.add('drag-over')"
+                    ondragleave="this.classList.remove('drag-over')"
+                    ondrop="window.handleDrop(event)">
+                    <div style="font-size:2.5em; margin-bottom:10px;">🖼️</div>
+                    <p style="color:var(--gold); font-family:'Cinzel'; font-weight:bold;">Arrastra una imagen aquí</p>
+                    <p>o haz clic para seleccionar</p>
+                    <p style="font-size:0.8em;">Formatos: JPG, PNG, WEBP, GIF</p>
+                </div>
+                <input type="file" id="file-input" accept="image/*" style="display:none"
+                    onchange="window.handleFileSelect(event)">
+                <div id="upload-progress">
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="progress-fill" style="width:0%"></div>
+                    </div>
+                    <p id="upload-status" style="color:#aaa; font-size:0.8em; font-family:sans-serif; text-align:center; margin:5px 0;"></p>
+                </div>
+                <button onclick="window.cerrarUpload()"
+                    style="background:#4a0000; border:1px solid #ff4444; color:#fff; padding:8px 15px; border-radius:4px; cursor:pointer; margin-top:10px; font-family:'Cinzel';">
+                    Cancelar
+                </button>
+            </div>
+        </div>
+
+        <!-- GRID -->
+        <div id="img-grid" class="img-grid"></div>
+
+    </div>
+
+    <script type="module" src="extra-main.js"></script>
+</body>
+</html>
