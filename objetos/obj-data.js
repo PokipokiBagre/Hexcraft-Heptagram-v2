@@ -59,12 +59,27 @@ export async function sincronizarObjetosBD(cola) {
         const actualizaciones = Object.values(cola);
         if(actualizaciones.length === 0) return true;
 
-        // Transformamos la cola (que tiene formato visual) al formato que espera Supabase
         const cambiosInventario = [];
         const promesasObjetos = [];
+        const promesasEliminar = []; // Para los objetos borrados
 
         actualizaciones.forEach(act => {
-            // 1. Actualizar el catálogo de objetos (si se modificó descripción, rareza, etc)
+            // 🚨 SI ES UNA ORDEN DE BORRADO
+            if (act.__ELIMINAR_OBJETO__) {
+                promesasEliminar.push(db.objetos.eliminarObjeto(act.objeto));
+                
+                // Forzamos el borrado en inventario seteando cantidad a 0 para todos
+                Object.keys(invGlobal).forEach(j => {
+                    cambiosInventario.push({
+                        personaje_nombre: j,
+                        objeto_nombre: act.objeto,
+                        cantidad: 0
+                    });
+                });
+                return; // Saltamos lo demás y pasamos al siguiente objeto en la cola
+            }
+
+            // 1. Actualizar el catálogo de objetos normales
             promesasObjetos.push(db.objetos.upsertObjeto({
                 nombre: act.objeto,
                 tipo:   act.tipo,
@@ -73,12 +88,10 @@ export async function sincronizarObjetosBD(cola) {
                 rareza: act.rar
             }));
 
-            // 2. Extraer cantidades. La cola guarda strings como "Renato, Corvin" y "2, 1"
+            // 2. Extraer cantidades.
             const players = act.duenos ? act.duenos.split(',').map(s=>s.trim()).filter(Boolean) : [];
             const cants   = act.cantidades ? act.cantidades.split(',').map(s=>parseInt(s.trim())) : [];
             
-            // Para asegurar que si un objeto se quedó en 0 se borre, 
-            // iteramos sobre TODOS los personajes que alguna vez tuvieron inventario
             Object.keys(invGlobal).forEach(j => {
                 const idx = players.indexOf(j);
                 const cantActual = (idx !== -1) ? cants[idx] : 0;
@@ -90,9 +103,10 @@ export async function sincronizarObjetosBD(cola) {
             });
         });
 
+        // Ejecutar borrados del catálogo
+        await Promise.all(promesasEliminar);
         // Ejecutar upserts de Catálogo
         await Promise.all(promesasObjetos);
-
         // Ejecutar Sincronización Batch de Inventario
         const exitoInv = await db.objetos.sincronizarBatch(cambiosInventario);
 
