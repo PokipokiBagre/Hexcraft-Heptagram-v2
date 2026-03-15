@@ -15,6 +15,12 @@ window.onload = async () => {
     // Asignar la ruta de Supabase
     favicon.href = `${db.storage.urlBase}/imginterfaz/icon.png`;
 
+    // --- AGREGAMOS LA INICIALIZACIÓN DE SUPABASE ---
+    await hexAuth.init();
+    estadoMapa.esAdmin = hexAuth.esAdmin();
+    // -----------------------------------------------
+
+    try { // <-- ¡FALTABA ABRIR EL TRY AQUÍ!
         inicializarCanvas();
         const barra = document.getElementById('carga-progreso');
         const loadScreen = document.getElementById('loader');
