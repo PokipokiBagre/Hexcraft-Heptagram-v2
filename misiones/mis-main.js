@@ -10,8 +10,15 @@ import { db }      from '../hex-db.js';
 // ============================================================
 
 window.onload = async () => {
-    const favicon = document.querySelector("link[rel='icon']");
-    if (favicon) favicon.href = `${db.storage.urlBase}/imginterfaz/icon.png`;
+    // Buscar el favicon o crearlo si no existe
+    let favicon = document.querySelector("link[rel='icon']");
+    if (!favicon) {
+        favicon = document.createElement("link");
+        favicon.rel = "icon";
+        document.head.appendChild(favicon);
+    }
+    // Asignar la ruta de Supabase
+    favicon.href = `${db.storage.urlBase}/imginterfaz/icon.png`;
 
     const perf = performance.getEntriesByType("navigation")[0];
     if (perf && perf.type === "reload") localStorage.removeItem('hex_mis_v1');
