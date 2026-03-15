@@ -20,12 +20,14 @@ window.onload = async () => {
     estadoMapa.esAdmin = hexAuth.esAdmin();
     // -----------------------------------------------
 
-    // 👉 AGREGAR ESTO: Si es admin, mostramos el botón de editar automáticamente
+    // 👉 Si es admin, mostramos AMBOS botones mágicamente
     if (estadoMapa.esAdmin) {
         const btnEditar = document.getElementById('btn-editar-mapa');
+        const btnOrdenar = document.getElementById('btn-ordenar');
         if (btnEditar) btnEditar.classList.remove('oculto');
+        if (btnOrdenar) btnOrdenar.classList.remove('oculto');
     }
-
+    
     try { 
         inicializarCanvas();
         const barra = document.getElementById('carga-progreso');
