@@ -1,14 +1,13 @@
 import { statsGlobal, listaEstados, estadoUI, dbExtra } from './stats-state.js';
 import { calcularVidaRojaMax, calcularVexMax, getMayorAfinidad } from './stats-logic.js';
-import { db } from '../hex-db.js'; // <-- IMPORTANTE: Importar la base de datos
+import { db } from '../hex-db.js';
 
 const normalizar = (str) => str.toString().trim().toLowerCase()
     .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
     .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
-    .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n') // <-- Con la corrección de la "ñ"
+    .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n')
     .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
 
-// <-- Con la función de sumar restaurada
 const calcTotal = (base, spells, spellEff, buff) => (base || 0) + (spells || 0) + (spellEff || 0) + (buff || 0);
 
 const bTextSplit = (spells, spellEff, buff) => {
@@ -21,7 +20,6 @@ const bTextSplit = (spells, spellEff, buff) => {
     return `<div style="font-size:0.75em; display:flex; flex-direction:column; gap:4px; margin-top:8px; border-top:1px dashed #444; padding-top:8px;">${parts.join('')}</div>`;
 };
 
-// <-- Usando tu imagen de "no encontrado" desde Supabase
 const imgError = `this.onerror=null; this.src='${db.storage.urlBase}/imginterfaz/no_encontrado.png'`;
 const raridadValor = { "Legendario": 3, "Raro": 2, "Común": 1, "-": 0 };
 
@@ -481,6 +479,7 @@ function genCard(f, tipoAccion) {
         html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;"><button type="button" ${btnAdd1} onclick="${clickMod}('${paramId}', 10)">+10</button><button type="button" ${btnSub1} onclick="${clickMod}('${paramId}', -10)">-10</button></div>`;
         html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;"><button type="button" ${btnAdd2} onclick="${clickMod}('${paramId}', 50)">+50</button><button type="button" ${btnSub2} onclick="${clickMod}('${paramId}', -50)">-50</button></div>`;
         html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;"><button type="button" ${btnAdd3} onclick="${clickMod}('${paramId}', 100)">+100</button><button type="button" ${btnSub3} onclick="${clickMod}('${paramId}', -100)">-100</button></div>`;
+        html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;"><button type="button" style="${btnStyleBase} background: #e65100;" onclick="${clickMod}('${paramId}', 300)">+300</button><button type="button" style="${btnStyleBase} background: #bf360c;" onclick="${clickMod}('${paramId}', -300)">-300</button></div>`;
         html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;"><button type="button" style="${btnStyleBase} background: #263238;" onclick="${clickMod}('${paramId}', 500)">+500</button><button type="button" style="${btnStyleBase} background: #3e2723;" onclick="${clickMod}('${paramId}', -500)">-500</button></div>`;
     } else {
         html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;"><button type="button" ${btnAdd1} onclick="${clickMod}('${paramId}', 1)">+1</button><button type="button" ${btnSub1} onclick="${clickMod}('${paramId}', -1)">-1</button></div>`;
@@ -522,9 +521,17 @@ export function dibujarPanelEdicionOP() {
                     <button type="button" style="background:#004d40; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 50)">+50</button>
                     <button type="button" style="background:#d84315; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -50)">-50</button>
                 </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
                     <button type="button" style="background:#4a148c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 100)">+100</button>
                     <button type="button" style="background:#880e4f; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -100)">-100</button>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                    <button type="button" style="background:#e65100; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 300)">+300</button>
+                    <button type="button" style="background:#bf360c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -300)">-300</button>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <button type="button" style="background:#263238; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 500)">+500</button>
+                    <button type="button" style="background:#3e2723; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -500)">-500</button>
                 </div>
             </div>
 
@@ -689,6 +696,8 @@ export function dibujarHexOP() {
                 <button type="button" onclick="window.modHexGlobal(-50)" style="background:#d84315; color:white; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer;">-50</button>
                 <button type="button" onclick="window.modHexGlobal(100)" style="background:#4a148c; color:white; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer; margin-left: 10px;">+100</button>
                 <button type="button" onclick="window.modHexGlobal(-100)" style="background:#880e4f; color:white; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer;">-100</button>
+                <button type="button" onclick="window.modHexGlobal(300)" style="background:#e65100; color:white; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer; margin-left: 10px;">+300</button>
+                <button type="button" onclick="window.modHexGlobal(-300)" style="background:#bf360c; color:white; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer;">-300</button>
                 <button type="button" onclick="window.modHexGlobal(500)" style="background:#263238; color:white; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer; margin-left: 10px;">+500</button>
                 <button type="button" onclick="window.modHexGlobal(-500)" style="background:#3e2723; color:white; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer;">-500</button>
                 <button type="button" onclick="window.modHexGlobal(1000)" style="background:#000; border: 1px solid var(--gold); color:var(--gold); padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer; margin-left: 10px;">+1000</button>
@@ -724,6 +733,10 @@ export function dibujarHexOP() {
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
                     <button type="button" style="background:#4a148c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 100)">+100</button>
                     <button type="button" style="background:#880e4f; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -100)">-100</button>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
+                    <button type="button" style="background:#e65100; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 300)">+300</button>
+                    <button type="button" style="background:#bf360c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -300)">-300</button>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                     <button type="button" style="background:#263238; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 500)">+500</button>
