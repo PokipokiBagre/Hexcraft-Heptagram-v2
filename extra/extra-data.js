@@ -6,6 +6,7 @@ import { supabase } from '../hex-auth.js';
 import { db }       from '../hex-db.js';
 import { BUCKET, STORAGE_URL, itemsPersonajes, itemsObjetos, itemsInterfaz } from './extra-state.js';
 
+// Mantiene los guiones y guiones bajos (hex-002, met-004)
 const norm = (str) => str ? str.toString().trim().toLowerCase()
     .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
     .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
@@ -120,28 +121,28 @@ export async function cargarDatos() {
     });
 }
 
+// Función auxiliar: Crea un temporizador que "explota" si el navegador suspende la conexión
+const antiCuelgue = (ms) => new Promise((_, reject) => setTimeout(() => reject(new Error("Conexión pausada por el navegador. Intenta de nuevo.")), ms));
+
 export async function subirImagen(file, keyNorm, tipoIcono, onProgreso) {
     const rutaPNG = `${tipoIcono}/${keyNorm}.png`;
     const rutaJPG = `${tipoIcono}/${keyNorm}.jpg`;
 
-    if (onProgreso) onProgreso(30, 'Procesando formatos...');
+    if (onProgreso) onProgreso(20, 'Procesando imagen en memoria profunda...');
     
-    // Al usar await aquí, garantizamos que no avance hasta tener ambos archivos listos
-    const { blobPNG, blobJPG } = await convertirAFormatos(file);
-
-    const filePNG = new File([blobPNG], `${keyNorm}.png`, { type: 'image/png' });
-    const fileJPG = new File([blobJPG], `${keyNorm}.jpg`, { type: 'image/jpeg' });
+    // Convertimos la imagen a Buffer puro. Esto previene que Chrome mate el archivo si cambias de pestaña.
+    const { bufferPNG, bufferJPG } = await convertirABuffers(file);
 
     if (onProgreso) onProgreso(50, 'Subiendo versión PNG...');
-    const { error: errPNG } = await supabase.storage
-        .from(BUCKET)
-        .upload(rutaPNG, filePNG, { upsert: true, contentType: 'image/png', cacheControl: '3600' });
+    
+    // Carrera: Sube a Supabase O tira error a los 15 segundos si el navegador se durmió
+    const subirPNG = supabase.storage.from(BUCKET).upload(rutaPNG, bufferPNG, { upsert: true, contentType: 'image/png', cacheControl: '3600' });
+    const { error: errPNG } = await Promise.race([subirPNG, antiCuelgue(15000)]);
     if (errPNG) throw new Error(errPNG.message || 'Error PNG');
 
     if (onProgreso) onProgreso(80, 'Subiendo versión JPG...');
-    const { error: errJPG } = await supabase.storage
-        .from(BUCKET)
-        .upload(rutaJPG, fileJPG, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
+    const subirJPG = supabase.storage.from(BUCKET).upload(rutaJPG, bufferJPG, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
+    const { error: errJPG } = await Promise.race([subirJPG, antiCuelgue(15000)]);
     if (errJPG) throw new Error(errJPG.message || 'Error JPG');
 
     if (onProgreso) onProgreso(100, '¡Imagen subida exitosamente!');
@@ -149,13 +150,14 @@ export async function subirImagen(file, keyNorm, tipoIcono, onProgreso) {
     return `${STORAGE_URL}/${rutaPNG}?v=${Date.now()}`;
 }
 
-function convertirAFormatos(file) {
+// Transformación SÍNCRONA a memoria pura (Base64 -> Uint8Array -> ArrayBuffer)
+function convertirABuffers(file) {
     return new Promise((resolve, reject) => {
-        const reader = new FileReader(); // Usar FileReader es más seguro contra pestañas suspendidas
+        const reader = new FileReader();
         
         reader.onload = (event) => {
             const img = new Image();
-            img.onload = async () => {
+            img.onload = () => {
                 try {
                     const canvas = document.createElement('canvas');
                     const MAX_SIZE = 512; 
@@ -172,11 +174,11 @@ function convertirAFormatos(file) {
                     canvas.height = height;
                     const ctx = canvas.getContext('2d');
                     
-                    // Generar PNG (Esperamos a que termine con Promesas)
+                    // 1. Dibuja y extrae PNG de forma síncrona
                     ctx.drawImage(img, 0, 0, width, height);
-                    const blobPNG = await new Promise(res => canvas.toBlob(res, 'image/png'));
+                    const b64PNG = canvas.toDataURL('image/png').split(',')[1];
                     
-                    // Generar JPG (Esperamos a que termine con Promesas)
+                    // 2. Dibuja y extrae JPG de forma síncrona
                     const canvasJPG = document.createElement('canvas');
                     canvasJPG.width = width;
                     canvasJPG.height = height;
@@ -184,10 +186,13 @@ function convertirAFormatos(file) {
                     ctxJPG.fillStyle = '#05000a'; 
                     ctxJPG.fillRect(0, 0, width, height);
                     ctxJPG.drawImage(img, 0, 0, width, height);
-                    
-                    const blobJPG = await new Promise(res => canvasJPG.toBlob(res, 'image/jpeg', 0.9));
+                    const b64JPG = canvasJPG.toDataURL('image/jpeg', 0.9).split(',')[1];
 
-                    resolve({ blobPNG, blobJPG });
+                    // Convertimos la cadena de texto a un Buffer de bytes reales inmunes a la suspensión
+                    resolve({
+                        bufferPNG: Uint8Array.from(atob(b64PNG), c => c.charCodeAt(0)).buffer,
+                        bufferJPG: Uint8Array.from(atob(b64JPG), c => c.charCodeAt(0)).buffer
+                    });
                 } catch (err) {
                     reject(err);
                 }
@@ -196,7 +201,7 @@ function convertirAFormatos(file) {
             img.src = event.target.result;
         };
         
-        reader.onerror = () => reject(new Error("Error leyendo el archivo."));
-        reader.readAsDataURL(file); // Ejecuta la lectura inmediatamente en memoria
+        reader.onerror = () => reject(new Error("Error leyendo el archivo original."));
+        reader.readAsDataURL(file); 
     });
 }
