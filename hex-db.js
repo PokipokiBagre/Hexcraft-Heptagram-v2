@@ -117,13 +117,22 @@ export const db = {
             return data || [];
         },
 
-        async upsertObjeto(obj) {
+       async upsertObjeto(obj) {
             const { error } = await supabase
                 .from('objetos')
                 .upsert(obj, { onConflict: 'nombre' });
             return !error;
         },
 
+        // 👇 NUEVA FUNCIÓN AÑADIDA 👇
+        async eliminarObjeto(nombre) {
+            const { error } = await supabase
+                .from('objetos')
+                .delete()
+                .eq('nombre', nombre);
+            return !error;
+        },
+        
         async actualizarCantidad(personajeNombre, objetoNombre, nuevaCantidad) {
             if (nuevaCantidad <= 0) {
                 await supabase
