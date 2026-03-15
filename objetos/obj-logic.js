@@ -1,21 +1,16 @@
 // ============================================================
-// obj-logic.js — LÓGICA Y MODIFICACIONES
+// obj-logic.js — LÓGICA Y MODIFICACIONES (VERSIÓN SUPABASE)
 // ============================================================
 
 import { invGlobal, objGlobal, historial, estadoUI, guardar } from './obj-state.js';
 
 export function encolarCambioObjeto(nombreObj) {
-    let duenos = []; let cants = [];
-    Object.keys(invGlobal).forEach(j => {
-        if (invGlobal[j][nombreObj] > 0) {
-            duenos.push(j); cants.push(invGlobal[j][nombreObj]);
-        }
-    });
-
-    const info = objGlobal[nombreObj] || { tipo: '-', mat: '-', eff: 'Sin descripción', rar: 'Común' };
+    // 🔥 SUPABASE: Ya no guardamos textos separados por comas.
+    // Solo marcamos que el objeto requiere actualización.
+    if (!estadoUI.colaCambios) estadoUI.colaCambios = {};
     estadoUI.colaCambios[nombreObj] = {
-        objeto: nombreObj, tipo: info.tipo, mat: info.mat, eff: info.eff, rar: info.rar,
-        duenos: duenos.join(", "), cantidades: cants.join(", ") 
+        objeto: nombreObj,
+        __modificado: true 
     };
 }
 
@@ -111,14 +106,11 @@ export function descargarEstadoExcel() {
     }
 }
 
-// 💥 NUEVAS FUNCIONES DE BORRADO Y EDICIÓN
 export function eliminarObjetoCompletamente(nombreObj, callback) {
     if(!confirm(`⚠️ ¿Estás seguro de ELIMINAR COMPLETAMENTE "${nombreObj}"?\n\nDesaparecerá del catálogo y de los inventarios de todos los jugadores para siempre.`)) return;
 
-    // Encola la orden de matar el objeto en la BD
     estadoUI.colaCambios[nombreObj] = { objeto: nombreObj, __ELIMINAR_OBJETO__: true };
 
-    // Limpia la memoria local (Catálogo e Inventarios)
     delete objGlobal[nombreObj];
     Object.keys(invGlobal).forEach(j => {
         if (invGlobal[j][nombreObj] !== undefined) {
@@ -137,14 +129,11 @@ export function editarObjetoCatalogo(nombreViejo, newData, callback) {
     if (nombreViejo !== nuevoNombre) {
         if (objGlobal[nuevoNombre]) return alert(`Ya existe un objeto llamado "${nuevoNombre}".`);
         
-        // 1. Mandar orden de eliminar el viejo a Supabase
         estadoUI.colaCambios[nombreViejo] = { objeto: nombreViejo, __ELIMINAR_OBJETO__: true };
         
-        // 2. Transmutar objeto en el Catálogo local
         objGlobal[nuevoNombre] = { tipo: newData.tipo, mat: newData.mat, eff: newData.eff, rar: newData.rar };
         delete objGlobal[nombreViejo];
 
-        // 3. Transmutar objeto en los Inventarios de la Party
         Object.keys(invGlobal).forEach(j => {
             if (invGlobal[j][nombreViejo] !== undefined) {
                 if (invGlobal[j][nombreViejo] > 0) {
@@ -154,10 +143,8 @@ export function editarObjetoCatalogo(nombreViejo, newData, callback) {
             }
         });
 
-        // 4. Mandar a guardar el nuevo objeto
         encolarCambioObjeto(nuevoNombre);
     } else {
-        // Si el nombre no cambió, solo pisamos las estadísticas
         objGlobal[nombreViejo] = { tipo: newData.tipo, mat: newData.mat, eff: newData.eff, rar: newData.rar };
         encolarCambioObjeto(nombreViejo);
     }
