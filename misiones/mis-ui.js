@@ -1,7 +1,11 @@
 import { misGlobal, jugadoresActivos, estadoUI, RECOMPENSAS_CLASE } from './mis-state.js';
 import { removerJugador, guardarMision, eliminarPersonalizada } from './mis-logic.js';
+import { db } from '../hex-db.js';
 
 const normalizar = (str) => str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/\s+/g,'_').replace(/[^a-z0-9ñ_]/g,'');
+
+// Ruta única del fallback — igual que en el resto del proyecto
+const NO_ENCONTRADO = () => `${db.storage.urlBase}/imginterfaz/no_encontrado.png`;
 
 function getAfColor(af) {
     const colors = { 'Física': '#e2a673', 'Energética': '#f3b67a', 'Espiritual': '#7df0a7', 'Mando': '#a4d3f2', 'Psíquica': '#dcb1f0', 'Oscura': '#c285ff' };
@@ -13,13 +17,13 @@ export function dibujarRoster() {
     let html = '';
     jugadoresActivos.forEach(j => {
         const color = getAfColor(j.afinidad);
-        html += `<img src="../img/imgpersonajes/${normalizar(j.icon)}icon.png" 
+        html += `<img src="${db.storage.urlBase}/imgpersonajes/${normalizar(j.icon)}icon.png" 
                       class="drag-char" 
                       style="border-color:${color};"
                       title="${j.nombre} (Af. Primaria: ${j.afinidad})" 
                       draggable="true" 
                       ondragstart="window.dragStart(event, '${j.nombre}', 'roster')" 
-                      onerror="this.src='../img/imgobjetos/no_encontrado.png'">`;
+                      onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'">`;
     });
     container.innerHTML = html;
 }
@@ -48,7 +52,7 @@ function generarHTMLMision(m) {
         const color = getAfColor(targetJug?.afinidad);
         
         htmlJugadores += `<div class="assigned-char" title="Clic o arrastrar fuera para quitar a ${j}" draggable="true" ondragstart="window.dragStart(event, '${j}', '${safeId}')" onclick="window.quitarJugador('${safeId}', '${j}')">
-                            <img src="../img/imgpersonajes/${normalizar(icon)}icon.png" style="border-color:${color}" onerror="this.src='../img/imgobjetos/no_encontrado.png'">
+                            <img src="${db.storage.urlBase}/imgpersonajes/${normalizar(icon)}icon.png" style="border-color:${color}" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'">
                           </div>`;
     });
 
