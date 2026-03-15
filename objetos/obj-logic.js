@@ -147,4 +147,28 @@ export function descargarEstadoExcel() {
         link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
         link.download = `HEX_OBJ_ESTADO.csv`; link.click();
     }
+
+export function eliminarObjetoCompletamente(nombreObj, callback) {
+    if(!confirm(`⚠️ ¿Estás seguro de ELIMINAR COMPLETAMENTE "${nombreObj}"?\n\nDesaparecerá del catálogo y de los inventarios de todos los jugadores para siempre.`)) return;
+
+    // Lo marcamos en la cola para que el data.js lo borre de Supabase
+    estadoUI.colaCambios[nombreObj] = {
+        objeto: nombreObj,
+        __ELIMINAR_OBJETO__: true
+    };
+
+    // Lo borramos de la memoria local para que la UI se actualice al instante
+    delete objGlobal[nombreObj];
+    Object.keys(invGlobal).forEach(j => {
+        if (invGlobal[j][nombreObj] !== undefined) {
+            delete invGlobal[j][nombreObj];
+        }
+    });
+
+    // Limpiamos el caché de orden para que no intente renderizar un objeto borrado
+    estadoUI.resetCacheOrder = true;
+
+    guardar();
+    if(callback) callback();
+} 
 }
