@@ -12,7 +12,7 @@ const norm = (str) => str ? str.toString().trim().toLowerCase()
     .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
     .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n')
     .replace(/\s+/g,'_')
-    .replace(/[^a-z0-9_\-]/g,'') : ''; // <-- Acepta guiones y guiones bajos
+    .replace(/[^a-z0-9_\-]/g,'') : '';
 
 export async function asegurarBucket() {
     try {
@@ -23,9 +23,7 @@ export async function asegurarBucket() {
         if (!existe) {
             await supabase.storage.createBucket(BUCKET, { public: true });
         }
-    } catch(e) {
-        // Ignoramos silenciosamente si falla por permisos
-    }
+    } catch(e) {}
 }
 
 export async function cargarDatos() {
@@ -70,7 +68,7 @@ export async function cargarDatos() {
         });
     });
 
-    // 3. Interfaz (Escaneo de HTML en Tiempo Real RESTAURADO Y MEJORADO)
+    // 3. Interfaz
     const rutasHTML = [
         '../index.html',
         '../objetos/index.html',
@@ -82,8 +80,6 @@ export async function cargarDatos() {
     ];
 
     const imgEncontradas = new Set();
-    
-    // Forzamos manualmente el icono y la imagen de no encontrado por seguridad
     imgEncontradas.add('icon.png');
     imgEncontradas.add('no_encontrado.png');
 
@@ -95,32 +91,27 @@ export async function cargarDatos() {
             if (!req.ok) continue;
             const text = await req.text();
 
-            // NUEVO: Ahora busca 'data-img' además de los clásicos 'src', 'url' y 'href'
             const regexSrc = /src=["'](?:\.\.\/)?img\/([^"']+)["']/gi;
             const regexUrl = /url\(['"]?(?:\.\.\/)?img\/([^)"']+)['"]?\)/gi;
-            const regexDataImg = /data-img=["']([^"']+)["']/gi; // ¡Atrapa data-img="objetos.jpg"!
-            const regexHref = /href=["'](?:\.\.\/)?(?:img\/)?([^"']+)["']/gi; // Atrapa el favicon
+            const regexDataImg = /data-img=["']([^"']+)["']/gi;
+            const regexHref = /href=["'](?:\.\.\/)?(?:img\/)?([^"']+)["']/gi;
 
             let match;
             while ((match = regexSrc.exec(text)) !== null) imgEncontradas.add(match[1]);
             while ((match = regexUrl.exec(text)) !== null) imgEncontradas.add(match[1]);
             while ((match = regexDataImg.exec(text)) !== null) imgEncontradas.add(match[1]);
-            
             while ((match = regexHref.exec(text)) !== null) {
                 if(match[1].endsWith('.png') || match[1].endsWith('.jpg') || match[1].endsWith('.ico')) {
                     imgEncontradas.add(match[1]);
                 }
             }
-        } catch(e) {
-            console.warn('No se pudo leer la ruta HTML:', ruta);
-        }
+        } catch(e) {}
     }
 
     imgEncontradas.forEach(archivo => {
         const nombreLimpio = archivo.replace(/\.(png|jpg|jpeg|webp|gif|ico)$/i, '');
         const key = norm(nombreLimpio);
         
-        // Evitamos subir basura si el regex atrapó algo raro
         if(!key || key.includes('/') || key.length < 2) return;
 
         itemsInterfaz.push({
@@ -136,26 +127,21 @@ export async function cargarDatos() {
 
 export async function subirImagen(file, keyNorm, tipoIcono, onProgreso) {
     const rutaPNG = `${tipoIcono}/${keyNorm}.png`;
-    const rutaJPG = `${tipoIcono}/${keyNorm}.jpg`;
 
     if (onProgreso) onProgreso(30, 'Procesando imagen...');
-
-    // Convertir cualquier formato a PNG via canvas
     const blob = await convertirAPNG(file);
 
     if (onProgreso) onProgreso(60, 'Subiendo al servidor...');
 
-    // Subir PNG
-    const { error: errPNG } = await supabase.storage
+    // SUBIMOS ÚNICAMENTE EL PNG PARA EVITAR ERROR DE MIME-TYPE EN SUPABASE
+    const { error } = await supabase.storage
         .from(BUCKET)
         .upload(rutaPNG, blob, { upsert: true, contentType: 'image/png' });
 
-    if (errPNG) throw errPNG;
-
-    // Subir también como JPG (mismo blob PNG, ambos nombres quedan registrados)
-    await supabase.storage
-        .from(BUCKET)
-        .upload(rutaJPG, blob, { upsert: true, contentType: 'image/png' });
+    if (error) {
+        console.error("Error de Supabase:", error);
+        throw new Error(error.message || 'Error al guardar en el servidor.');
+    }
 
     if (onProgreso) onProgreso(100, '¡Imagen subida exitosamente!');
 
@@ -168,13 +154,10 @@ function convertirAPNG(file) {
         const url = URL.createObjectURL(file);
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            
-            // Definir un tamaño máximo para evitar archivos gigantes
             const MAX_SIZE = 512; 
             let width = img.naturalWidth;
             let height = img.naturalHeight;
 
-            // Redimensionar si excede el límite
             if (width > MAX_SIZE || height > MAX_SIZE) {
                 const ratio = Math.min(MAX_SIZE / width, MAX_SIZE / height);
                 width = Math.round(width * ratio);
