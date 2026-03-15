@@ -6,7 +6,6 @@ import { supabase } from '../hex-auth.js';
 import { db }       from '../hex-db.js';
 import { BUCKET, STORAGE_URL, itemsPersonajes, itemsObjetos, itemsInterfaz } from './extra-state.js';
 
-// ¡GUION \- RECUPERADO PARA ACEPTAR HEX-002 Y MET-004!
 const norm = (str) => str ? str.toString().trim().toLowerCase()
     .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
     .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
@@ -27,7 +26,6 @@ export async function asegurarBucket() {
 }
 
 export async function cargarDatos() {
-    // Listar archivos existentes en el bucket
     const [resP, resO, resI] = await Promise.all([
         supabase.storage.from(BUCKET).list('imgpersonajes', { limit: 1000 }),
         supabase.storage.from(BUCKET).list('imgobjetos',    { limit: 1000 }),
@@ -38,7 +36,6 @@ export async function cargarDatos() {
     const setObjetos    = new Set((resO.data || []).map(f => f.name.replace(/\.(png|jpg|jpeg|webp)$/i, '').toLowerCase()));
     const setInterfaz   = new Set((resI.data || []).map(f => f.name.replace(/\.(png|jpg|jpeg|webp)$/i, '').toLowerCase()));
 
-    // 1. Personajes
     const personajes = await db.personajes.getAll();
     itemsPersonajes.length = 0;
     personajes.forEach(p => {
@@ -53,7 +50,6 @@ export async function cargarDatos() {
         });
     });
 
-    // 2. Objetos
     const catalogo = await db.objetos.getCatalogo();
     itemsObjetos.length = 0;
     catalogo.forEach(o => {
@@ -68,7 +64,6 @@ export async function cargarDatos() {
         });
     });
 
-    // 3. Interfaz
     const rutasHTML = [
         '../index.html',
         '../objetos/index.html',
@@ -130,20 +125,22 @@ export async function subirImagen(file, keyNorm, tipoIcono, onProgreso) {
     const rutaJPG = `${tipoIcono}/${keyNorm}.jpg`;
 
     if (onProgreso) onProgreso(30, 'Procesando formatos...');
-    
-    // RESTAURADO: Ahora generamos ambos archivos físicamente
     const { blobPNG, blobJPG } = await convertirAFormatos(file);
+
+    // CONVERSIÓN CRÍTICA: De Blob a File nativo para que el navegador no se trabe en subidas consecutivas
+    const filePNG = new File([blobPNG], `${keyNorm}.png`, { type: 'image/png' });
+    const fileJPG = new File([blobJPG], `${keyNorm}.jpg`, { type: 'image/jpeg' });
 
     if (onProgreso) onProgreso(50, 'Subiendo versión PNG...');
     const { error: errPNG } = await supabase.storage
         .from(BUCKET)
-        .upload(rutaPNG, blobPNG, { upsert: true, contentType: 'image/png' });
+        .upload(rutaPNG, filePNG, { upsert: true, contentType: 'image/png', cacheControl: '3600' });
     if (errPNG) throw new Error(errPNG.message || 'Error PNG');
 
     if (onProgreso) onProgreso(80, 'Subiendo versión JPG...');
     const { error: errJPG } = await supabase.storage
         .from(BUCKET)
-        .upload(rutaJPG, blobJPG, { upsert: true, contentType: 'image/jpeg' });
+        .upload(rutaJPG, fileJPG, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
     if (errJPG) throw new Error(errJPG.message || 'Error JPG');
 
     if (onProgreso) onProgreso(100, '¡Imagen subida exitosamente!');
@@ -152,9 +149,10 @@ export async function subirImagen(file, keyNorm, tipoIcono, onProgreso) {
 }
 
 function convertirAFormatos(file) {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
         const img = new Image();
         const url = URL.createObjectURL(file);
+        
         img.onload = () => {
             const canvas = document.createElement('canvas');
             const MAX_SIZE = 512; 
@@ -171,12 +169,11 @@ function convertirAFormatos(file) {
             canvas.height = height;
             const ctx = canvas.getContext('2d');
             
-            // 1. Generar el PNG puro
+            // Generar PNG
             ctx.drawImage(img, 0, 0, width, height);
-            
             canvas.toBlob((blobPNG) => {
                 
-                // 2. Generar el JPG (rellenamos de negro por si tenía fondo transparente)
+                // Generar JPG
                 const canvasJPG = document.createElement('canvas');
                 canvasJPG.width = width;
                 canvasJPG.height = height;
@@ -192,6 +189,12 @@ function convertirAFormatos(file) {
 
             }, 'image/png');
         };
+        
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error("Formato de imagen inválido o corrupto."));
+        };
+        
         img.src = url;
     });
 }
