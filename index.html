@@ -79,6 +79,11 @@
         import { db } from './hex-db.js';
 
         async function iniciar() {
+            // --- NUEVO: Inyectar el icono de la pestaña principal ---
+            const favicon = document.querySelector("link[rel='icon']");
+            if (favicon) favicon.href = db.storage.getUrlInterfaz('icon.png');
+            // --------------------------------------------------------
+
             await hexAuth.init();
 
             // 1. Renderizar badge de sesión
