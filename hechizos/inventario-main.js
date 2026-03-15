@@ -1,5 +1,5 @@
 import { estadoUI, db } from './inventario-state.js';
-import { inicializarDatos, sincronizarColaBD, exportarCSVPersonajes } from './inventario-data.js';
+import { inicializarDatos, sincronizarColaBD } from './inventario-data.js';
 import { dibujarCatalogo, renderHeaders, dibujarGrimorioGrid, dibujarGestionGrid, dibujarAprendizajeGrid, dibujarCatalogoHechizos, getValInfo } from './inventario-ui.js';
 import { getInventarioCombinado } from './inventario-logic.js';
 import { db as hexDB } from '../hex-db.js';
