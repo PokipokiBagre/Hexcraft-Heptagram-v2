@@ -18,14 +18,15 @@ function drawnHEXPreserveFocus(containerId, html) {
 const raridadValor = { "Legendario": 3, "Raro": 2, "Común": 1, "-": 0 };
 const normalizarNombre = (str) => str ? str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/\s+/g,'_').replace(/[^a-z0-9ñ_]/g,'') : "";
 
-// BUSCADOR INTELIGENTE: Soluciona el problema de mayúsculas (Ej: LINDA vs Linda)
+// RUTA ÚNICA del fallback — se usa en TODOS los onerror
+const NO_ENCONTRADO = () => `${db.storage.urlBase}/imginterfaz/no_encontrado.png`;
+
 const getPjStats = (nombre) => {
     const key = Object.keys(statsGlobal).find(k => k.toLowerCase() === nombre.toLowerCase());
     return key ? statsGlobal[key] : { isPlayer: false, isActive: true, iconoOverride: "" };
 };
 
 export function refrescarUI() { 
-    // CONGELADOR DE ORDEN GENERAL (Se activa al cambiar de pestaña)
     if (estadoUI.resetCacheOrder) {
         estadoUI.cachedSortKeys = Object.keys(objGlobal).sort((a, b) => (invGlobal[estadoUI.jugadorInv]?.[b]||0) - (invGlobal[estadoUI.jugadorInv]?.[a]||0) || a.localeCompare(b));
         estadoUI.cachedInvOrders = {};
@@ -108,7 +109,7 @@ export function dibujarGrillaPersonajes() {
 
         html += `
         <div class="char-card player-card ${claseInactiva}" style="${borderStyle} ${bgStyle} padding: 15px; border-radius: 12px; transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'" onclick="window.abrirInventario('${jSafe}')">
-            <img src="${db.storage.urlBase}/imgpersonajes/${iconoMuestra}icon.png" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.2); margin-bottom: 10px;" onerror="this.src='${db.storage.urlBase}/imgobjetos/no_encontrado.png'">
+            <img src="${db.storage.urlBase}/imgpersonajes/${iconoMuestra}icon.png" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.2); margin-bottom: 10px;" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'">
             <h3 style="margin: 0 0 10px 0; font-family: 'Cinzel', serif; font-size: 1.2em; text-transform: uppercase;">${j}</h3>
             <div style="background: rgba(0,0,0,0.5); padding: 8px; border-radius: 6px;">
                 <p style="margin: 0; font-size: 0.85em; color: #ddd;">Comunes: <strong style="color: white;">${countComun}</strong></p>
@@ -128,7 +129,6 @@ export function dibujarResumenVisual() {
     Object.keys(invGlobal).sort().forEach(j => {
         let itemsHtml = '';
         
-        // Usamos el caché de orden. Añadimos objetos nuevos si recibieron stock en esta vista.
         let frozenKeys = estadoUI.cachedInvOrders[j] || [];
         Object.keys(invGlobal[j]).forEach(k => { if (invGlobal[j][k] > 0 && !frozenKeys.includes(k)) frozenKeys.push(k); });
 
@@ -139,7 +139,6 @@ export function dibujarResumenVisual() {
                 const imgFile = normalizarNombre(o);
                 const tooltipText = `<span>${o}</span>Tipo: ${info.tipo}<br>Rareza: ${info.rar}<br><br>${info.eff}`;
                 
-                // Botones +/- en modo OP
                 let badgeHTML = '';
                 if(estadoUI.esAdmin) {
                     badgeHTML = `
@@ -154,7 +153,7 @@ export function dibujarResumenVisual() {
 
                 itemsHtml += `
                 <div class="hex-tooltip img-stack" onclick="window.verImagen('${db.storage.urlBase}/imgobjetos/${imgFile}.png')">
-                    <img src="${db.storage.urlBase}/imgobjetos/${imgFile}.png" onerror="this.src='${db.storage.urlBase}/imgobjetos/no_encontrado.png'" alt="${o}">
+                    <img src="${db.storage.urlBase}/imgobjetos/${imgFile}.png" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'" alt="${o}">
                     ${badgeHTML}
                     <div class="tooltiptext">${tooltipText}</div>
                 </div>`;
@@ -165,7 +164,7 @@ export function dibujarResumenVisual() {
             html += `
             <div class="resumen-row">
                 <div class="resumen-left">
-                    <img src="${db.storage.urlBase}/imgpersonajes/${normalizarNombre(j)}icon.png" onerror="this.src='${db.storage.urlBase}/imgobjetos/no_encontrado.png'" style="width:75px; height:75px; border-radius:50%; border:2px solid var(--gold); object-fit:cover;">
+                    <img src="${db.storage.urlBase}/imgpersonajes/${normalizarNombre(j)}icon.png" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'" style="width:75px; height:75px; border-radius:50%; border:2px solid var(--gold); object-fit:cover;">
                     <h3 style="margin:8px 0 0 0; font-size:1em; color:var(--gold);">${j.toUpperCase()}</h3>
                 </div>
                 <div class="resumen-right">
@@ -189,7 +188,7 @@ export function dibujarInventarios() {
     <button onclick="window.volverAGrilla()" style="background:#444; margin-bottom: 20px;">⬅ Volver a Inventarios</button>
     <div class="player-header">
         <a href="${linkStats}" target="_blank" title="Ver ficha de estado de ${j}" style="display:flex;">
-            <img src="${db.storage.urlBase}/imgpersonajes/${normalizarNombre(j)}icon.png" class="player-icon" onerror="this.src='${db.storage.urlBase}/imgobjetos/no_encontrado.png'">
+            <img src="${db.storage.urlBase}/imgpersonajes/${normalizarNombre(j)}icon.png" class="player-icon" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'">
         </a>
         <div style="text-align:left; flex:1;">
             <a href="${linkStats}" target="_blank" style="text-decoration:none;" title="Ver ficha de estado de ${j}">
@@ -216,7 +215,7 @@ export function dibujarInventarios() {
             const oSafe = o.replace(/'/g, "\\'");
             html += `
             <div class="top-item-card ${rarClase}">
-                <img src="${db.storage.urlBase}/imgobjetos/${imgFile}.png" onclick="window.verImagen(this.src)" onerror="this.src='${db.storage.urlBase}/imgobjetos/no_encontrado.png'">
+                <img src="${db.storage.urlBase}/imgobjetos/${imgFile}.png" onclick="window.verImagen(this.src)" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'">
                 <span style="font-size:0.65em; display:block; height:2.4em; overflow:hidden; color:#d4af37; cursor:pointer;" onclick="window.verImagenByName('${oSafe}')">${o}</span>
             </div>`;
         });
@@ -237,7 +236,7 @@ export function dibujarInventarios() {
                 : `<b style="font-size:1.2em">${invGlobal[j][o]}</b>`;
 
             html += `<tr>
-                <td><img src="${db.storage.urlBase}/imgobjetos/${normalizarNombre(o)}.png" class="cat-img" onclick="window.verImagen(this.src)" onerror="this.src='${db.storage.urlBase}/imgobjetos/no_encontrado.png'"></td>
+                <td><img src="${db.storage.urlBase}/imgobjetos/${normalizarNombre(o)}.png" class="cat-img" onclick="window.verImagen(this.src)" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'"></td>
                 <td style="font-weight:bold; color:#d4af37; cursor:pointer;" onclick="window.verImagenByName('${oSafe}')">${o}</td>
                 <td style="text-align:left; font-size:0.85em;">${objGlobal[o]?.eff || ''}</td>
                 <td>${cantHTML}</td>
@@ -276,13 +275,12 @@ export function dibujarCatalogo() {
                 <button onclick="window.eliminarObjetoBD('${oSafe}')" style="background:rgba(255,0,0,0.8); color:white; border:1px solid #f00; border-radius:3px; cursor:pointer; padding:2px 6px; font-size:0.8em;" title="Eliminar">🗑️</button>
             ` : '';
             html += `<tr>
-                <td><img src="${db.storage.urlBase}/imgobjetos/${normalizarNombre(o)}.png" class="cat-img" onclick="window.verImagen(this.src)" onerror="this.onerror=null; this.src='${db.storage.urlBase}/imginterfaz/no_encontrado.png'"></td>
+                <td><img src="${db.storage.urlBase}/imgobjetos/${normalizarNombre(o)}.png" class="cat-img" onclick="window.verImagen(this.src)" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'"></td>
                 <td style="font-weight:bold; color:#d4af37; cursor:pointer;" onclick="window.verImagenByName('${oSafe}')">${o} ${btnAdmin}</td>
                 <td style="font-size:0.85em; color:#aaa;">${item.tipo}</td>
                 <td style="text-align:left; font-size:0.85em;">${item.eff}</td>
                 <td style="font-size:0.85em;">${item.rar}</td>
             </tr>`;
-
         }
     });
     drawnHEXPreserveFocus('tabla-todos-objetos', html + "</table></div>");
@@ -359,7 +357,7 @@ export function dibujarControl() {
                              onclick="window.hexMod('${j}','${oSafe}', ${estadoUI.editMult * estadoUI.editModo})" 
                              style="width:80px; height:80px; object-fit:cover; cursor:pointer; border-radius:8px; border:2px solid ${actionColor}; transition:0.2s; box-shadow:0 0 10px ${actionColor};"
                              onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'"
-                             onerror="this.src='${db.storage.urlBase}/imgobjetos/no_encontrado.png'" title="Click para aplicar">
+                             onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'" title="Click para aplicar">
                         <span class="item-name" style="margin-top:10px;">${o}</span>
                      </div>`;
         }
@@ -419,7 +417,7 @@ export function dibujarTransferencia() {
                                      onclick="window.ejecutarTransfer('${oSafe}', ${cantToPass})" 
                                      style="width:80px; height:80px; object-fit:cover; cursor:pointer; border-radius:8px; border:2px solid #00ff00; transition:0.2s; box-shadow:0 0 10px #00ff00;"
                                      onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'"
-                                     onerror="this.src='${db.storage.urlBase}/imgobjetos/no_encontrado.png'" title="Clic para Transferir ${cantToPass}">
+                                     onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'" title="Clic para Transferir ${cantToPass}">
                                 <span class="item-name" style="margin-top:10px;">${o}</span>
                                 <span style="font-size:1.1em; color:white;">Stock: <b>${c}</b></span>
                              </div>`;
@@ -460,7 +458,7 @@ export function dibujarPartyLoot() {
 
         html += `<label style="background:#000; padding:10px; border:1px solid #444; border-radius:4px; cursor:pointer; color:${colorTexto};">
                     <input type="checkbox" ${isChecked} onchange="window.togglePartyLoot('${j}', this.checked)"> 
-                    <img src="${db.storage.urlBase}/imgpersonajes/${normalizarNombre(p.iconoOverride || j)}icon.png" style="width:24px; height:24px; border-radius:50%; vertical-align:middle; margin-right:5px;" onerror="this.src='${db.storage.urlBase}/imgobjetos/no_encontrado.png'">
+                    <img src="${db.storage.urlBase}/imgpersonajes/${normalizarNombre(p.iconoOverride || j)}icon.png" style="width:24px; height:24px; border-radius:50%; vertical-align:middle; margin-right:5px;" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'">
                     ${j}
                  </label>`;
     });
@@ -492,7 +490,7 @@ export function dibujarPartyLoot() {
                              onclick="window.giveLootToParty('${o.replace(/'/g, "\\'")}')" 
                              style="width:80px; height:80px; object-fit:cover; border:2px solid var(--gold); border-radius:8px; background:#000; cursor:pointer; transition:0.2s;" 
                              onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'"
-                             onerror="this.src='${db.storage.urlBase}/imgobjetos/no_encontrado.png'">
+                             onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'">
                         <span class="item-name" style="margin-top:10px; color:#fff;">${o}</span>
                      </div>`;
         }
@@ -578,7 +576,7 @@ export function dibujarCreacionMulti() {
             </select>
         </div>
         
-        <div id="multi-creation-container">`; // El CSS se encarga de las 3 columnas ahora
+        <div id="multi-creation-container">`;
     
     for(let i=1; i<=6; i++) {
         html += `
