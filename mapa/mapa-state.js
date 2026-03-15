@@ -27,18 +27,18 @@ window.mapaColores = {}; // Se llenará dinámicamente desde Google Sheets
 export const COLOR_AFINIDAD = window.mapaColores;
 
 export const ESTETICA = {
-    lineaDescubierta: 'rgba(210, 190, 230, 0.4)', 
-    lineaMostaza: 'rgba(212, 175, 55, 0.5)',       
+    lineaDescubierta: 'rgba(210, 190, 230, 0.3)', 
+    lineaMostaza: 'rgba(212, 175, 55, 0.4)',       
     lineaRosa: 'rgba(200, 60, 100, 0.35)',         
-    lineaPrecedente: 'rgba(177, 156, 217, 0.65)',   
-    lineaSaliente: 'rgba(236, 213, 154, 0.65)'      
+    lineaPrecedente: 'rgba(177, 156, 217, 0.45)',   
+    lineaSaliente: 'rgba(236, 213, 154, 0.45)'      
 };
 
 export const COLORES_JUGADOR = {
-    posesionMorada: 'rgba(150, 131, 200, 0.6)', 
-    doradoInmediato: 'rgba(236, 213, 154, 0.7)', 
-    doradoMedio: 'rgba(212, 196, 146, 0.5)',     
+    posesionMorada: 'rgba(150, 131, 200, 0.5)', 
+    doradoInmediato: 'rgba(236, 213, 154, 0.6)', 
+    doradoMedio: 'rgba(212, 196, 146, 0.3)',     
     doradoTenue: 'rgba(188, 180, 156, 0.5)',     
-    doradoRastreo: 'rgba(160, 150, 130, 0.4)',   
-    fondoNeutro: 'rgba(60, 60, 65, 0.3)'        
+    doradoRastreo: 'rgba(160, 150, 130, 0.2)',   
+    fondoNeutro: 'rgba(60, 60, 65, 0.2)'        
 };
