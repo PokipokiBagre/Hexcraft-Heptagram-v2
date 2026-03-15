@@ -4,7 +4,7 @@
 
 export let invGlobal = {}; 
 export let objGlobal = {}; 
-export let statsGlobal = {}; // Para guardar si son Jugadores/Activos
+export let statsGlobal = {}; 
 export let historial = []; 
 
 export let estadoUI = {
@@ -12,8 +12,8 @@ export let estadoUI = {
     jugadorInv: null, 
     filtroRar: 'Todos', 
     filtroMat: 'Todos',
-    filtroRol: 'Jugadores', // Valor por defecto
-    filtroAct: 'Activos',   // Valor por defecto
+    filtroRol: 'Jugadores', 
+    filtroAct: 'Activos',   
     busquedaOP: "", 
     busquedaCat: "", 
     busquedaInv: "", 
@@ -37,10 +37,6 @@ export let estadoUI = {
 
 export function guardar() { 
     localStorage.setItem('hex_obj_v4', JSON.stringify({ 
-        inv: invGlobal, 
-        obj: objGlobal, 
-        his: historial, 
-        modoSync: estadoUI.modoSincronizado, 
-        colaCambios: estadoUI.colaCambios 
+        inv: invGlobal, obj: objGlobal, his: historial, modoSync: estadoUI.modoSincronizado, colaCambios: estadoUI.colaCambios 
     })); 
 }
