@@ -1,21 +1,22 @@
 import { estadoUI, db } from './inventario-state.js';
-import { inicializarDatos, sincronizarColaBD } from './inventario-data.js'; // Se quitó exportarCSVPersonajes
+import { inicializarDatos, sincronizarColaBD } from './inventario-data.js'; 
 import { dibujarCatalogo, renderHeaders, dibujarGrimorioGrid, dibujarGestionGrid, dibujarAprendizajeGrid, dibujarCatalogoHechizos, getValInfo } from './inventario-ui.js';
 import { getInventarioCombinado } from './inventario-logic.js';
 import { db as hexDB } from '../hex-db.js';
-import { hexAuth } from '../hex-auth.js'; // Importamos la autenticación de Supabase
+import { hexAuth } from '../hex-auth.js'; 
 
 estadoUI.colaCambios.hexCasts = estadoUI.colaCambios.hexCasts || [];
 
+// Utilidad local para normalizar textos en búsquedas
+const textNorm = (str) => str ? str.toString().trim().toLowerCase() : '';
+
 window.onload = async () => {
-    // Buscar el favicon o crearlo si no existe
     let favicon = document.querySelector("link[rel='icon']");
     if (!favicon) {
         favicon = document.createElement("link");
         favicon.rel = "icon";
         document.head.appendChild(favicon);
     }
-    // Asignar la ruta de Supabase (Corregido para usar hexDB)
     favicon.href = `${hexDB.storage.urlBase}/imginterfaz/icon.png`;
 
     const perf = performance.getEntriesByType("navigation")[0];
@@ -23,15 +24,12 @@ window.onload = async () => {
         localStorage.removeItem('hex_hechizos_cache');
     }
 
-    // --- INICIALIZAR SESIÓN DE SUPABASE ---
     await hexAuth.init();
     estadoUI.esAdmin = hexAuth.esAdmin();
-    // --------------------------------------
 
     const loader = document.getElementById('loader');
     const barra = document.getElementById('carga-progreso');
 
-    // Función para atrapar URL dinámica (?pj=Linda)
     const enrutarPorURL = () => {
         const urlParams = new URLSearchParams(window.location.search);
         const pjQuery = urlParams.get('pj');
@@ -54,13 +52,13 @@ window.onload = async () => {
     if(cacheData) {
         try {
             const parsed = JSON.parse(cacheData);
-            db.personajes = parsed.personajes; db.hechizos = parsed.hechizos; db.csvHeadersPersonajes = parsed.headers;
+            db.personajes = parsed.personajes; db.hechizos = parsed.hechizos;
             if(loader) loader.style.display = 'none'; 
             
             enrutarPorURL(); 
             
             await inicializarDatos(null);
-            localStorage.setItem('hex_hechizos_cache', JSON.stringify({ personajes: db.personajes, hechizos: db.hechizos, headers: db.csvHeadersPersonajes }));
+            localStorage.setItem('hex_hechizos_cache', JSON.stringify({ personajes: db.personajes, hechizos: db.hechizos }));
             if (estadoUI.vistaActual !== 'catalogo') window.cambiarVista(estadoUI.vistaActual); 
             return; 
         } catch(e) { console.warn("Caché obsoleto, recargando..."); }
@@ -68,7 +66,7 @@ window.onload = async () => {
 
     const ok = await inicializarDatos(barra);
     if(!ok) { if(loader) loader.innerHTML = "<span style='color:red'>Fallo Crítico al cargar Servidores.</span>"; return; }
-    localStorage.setItem('hex_hechizos_cache', JSON.stringify({ personajes: db.personajes, hechizos: db.hechizos, headers: db.csvHeadersPersonajes }));
+    localStorage.setItem('hex_hechizos_cache', JSON.stringify({ personajes: db.personajes, hechizos: db.hechizos }));
     setTimeout(() => { 
         if(loader) loader.style.display = 'none'; 
         enrutarPorURL(); 
@@ -101,7 +99,6 @@ window.cambiarVista = (vista) => {
 
 window.abrirGrimorio = (pj) => { estadoUI.personajeSeleccionado = pj; estadoUI.filtrosGrimorio = { afinidad: 'Todos', busqueda: '' }; window.cambiarVista('grimorio'); window.scrollTo(0,0); };
 
-// --- NUEVA LÓGICA DE LOGIN OP ---
 window.abrirMenuOP = () => {
     if (hexAuth.esAdmin()) {
         estadoUI.esAdmin = !estadoUI.esAdmin;
@@ -115,7 +112,6 @@ window.abrirMenuOP = () => {
     }
     hexAuth._mostrarModalLogin();
 };
-// --------------------------------
 
 window.setFiltro = (tipo, valor) => {
     if(tipo === 'rol') { estadoUI.filtroRol = valor; ['Todos','Jugador','NPC'].forEach(k => document.getElementById('btn-rol-'+k)?.classList.remove('btn-active')); document.getElementById('btn-rol-'+valor)?.classList.add('btn-active'); }
@@ -129,14 +125,11 @@ window.aplicarFiltrosAprendizaje = () => { estadoUI.filtrosAprendizaje.afinidad 
 window.aplicarFiltrosAll = () => { estadoUI.filtrosAll.afinidad = document.getElementById('f-all-afinidad').value; estadoUI.filtrosAll.clase = document.getElementById('f-all-clase').value; estadoUI.filtrosAll.estado = document.getElementById('f-all-estado').value; estadoUI.filtrosAll.busqueda = document.getElementById('f-all-texto').value; dibujarCatalogoHechizos(); };
 
 window.toggleRestarHex = (c) => { estadoUI.restarHexAsignacion = c; };
-
-// Exportación CSV deshabilitada en la nube
 window.descargarCSVHex = () => { alert("La exportación a CSV está deshabilitada en la versión de la base de datos en la nube."); };
-
-// Guardado de configuración de checkboxes para que no se reseteen
 window.toggleCastConsumo = (val) => { estadoUI.consumoCast = val; };
 window.toggleCastEfectos = (val) => { estadoUI.efectosCast = val; };
 
+// 👉 REPARACIÓN: Recálculo de Estadísticas Nativo para Supabase
 function recalcularEstadisticasPersonaje(pj) {
     const charData = db.personajes[pj];
     if (!charData) return;
@@ -146,45 +139,43 @@ function recalcularEstadisticasPersonaje(pj) {
     
     const conteo = { 'Física': 0, 'Energética': 0, 'Espiritual': 0, 'Mando': 0, 'Psíquica': 0, 'Oscura': 0 };
     inv.forEach(item => {
-        const itemNorm = item.Hechizo.trim().toLowerCase();
-        const info = todosNodos.find(n => (n.Nombre||"").trim().toLowerCase() === itemNorm || (n.ID||"").trim().toLowerCase() === itemNorm) || {};
+        const itemNorm = textNorm(item.Hechizo);
+        const info = todosNodos.find(n => textNorm(n.Nombre) === itemNorm || textNorm(n.ID) === itemNorm) || {};
         const af = item["Hechizo Afinidad"] || info.Afinidad;
         if (conteo[af] !== undefined) conteo[af]++;
     });
 
-    const mapAfinCSV = { 'Física': 3, 'Energética': 4, 'Espiritual': 5, 'Mando': 6, 'Psíquica': 7, 'Oscura': 8 };
-    const mapAfinHoja = { 'Física': 'Fisica', 'Energética': 'Energetica', 'Espiritual': 'Espiritual', 'Mando': 'Mando', 'Psíquica': 'Psiquica', 'Oscura': 'Oscura' };
-
     if(!estadoUI.colaCambios.stats) estadoUI.colaCambios.stats = {};
     if(!estadoUI.colaCambios.stats[pj]) estadoUI.colaCambios.stats[pj] = {};
 
+    const mapAfinBaseDatos = { 
+        'Física': 'hz_fisica', 
+        'Energética': 'hz_energetica', 
+        'Espiritual': 'hz_espiritual', 
+        'Mando': 'hz_mando', 
+        'Psíquica': 'hz_psiquica', 
+        'Oscura': 'hz_oscura' 
+    };
+
     for (const [af, count] of Object.entries(conteo)) {
-        const idx = mapAfinCSV[af];
-        if (idx !== undefined && charData.rawRow[idx]) {
-            let cell = charData.rawRow[idx];
-            if (!cell.includes('_')) cell = `${cell}_0_0_0_0`;
-            let parts = cell.split('_');
-            
-            parts[2] = count.toString();
-            const newVal = parts.join('_');
-            
-            charData.rawRow[idx] = newVal;
-            estadoUI.colaCambios.stats[pj][mapAfinHoja[af]] = newVal; 
+        const dbKey = mapAfinBaseDatos[af];
+        if (dbKey) {
+            estadoUI.colaCambios.stats[pj][dbKey] = count;
         }
     }
 }
 
+// 👉 REPARACIÓN: Resta de Hex Nativa para Supabase sin rawRows
 function restarHexPersonaje(pj, hex) {
     const charObj = db.personajes[pj];
-    charObj.hex = Math.max(0, charObj.hex - hex); 
-    const hexParts = charObj.rawRow[1].split('_'); 
-    hexParts[0] = charObj.hex.toString(); 
-    const newHex = hexParts.join('_');
-    charObj.rawRow[1] = newHex;
+    if(!charObj) return;
+    
+    charObj.hex = Math.max(0, (charObj.hex || 0) - hex); 
     
     if(!estadoUI.colaCambios.stats) estadoUI.colaCambios.stats = {};
     if(!estadoUI.colaCambios.stats[pj]) estadoUI.colaCambios.stats[pj] = {};
-    estadoUI.colaCambios.stats[pj]['Hex'] = newHex;
+    
+    estadoUI.colaCambios.stats[pj].hex = charObj.hex;
 }
 
 function actualizarTextoLogOP() {
@@ -294,10 +285,6 @@ window.ejecutarSincronizacion = async () => {
         btn.disabled = false;
     }
 };
-
-// =========================================================================
-// MOTOR DE CASTEO DE HECHIZOS (VEX/HEX)
-// =========================================================================
 
 window.copiarLogCasteo = () => { 
     const t = document.getElementById('log-casteo-textarea'); 
@@ -433,11 +420,22 @@ window.actualizarAfinidadCasteo = (idx) => {
     
     if (info && info.Afinidad) {
         label.innerText = info.Afinidad.toUpperCase();
-        const mapAfin = { 'Física': 3, 'Energética': 4, 'Espiritual': 5, 'Mando': 6, 'Psíquica': 7, 'Oscura': 8 };
-        const colIdx = mapAfin[info.Afinidad];
+        
+        // 👉 REPARACIÓN: Extraer afinidad en casteo
         let afiVal = 0;
-        if (colIdx && charData.rawRow) {
-            afiVal = parseInt((charData.rawRow[colIdx] || '0').split('_')[0]) || 0;
+        if(charData && charData.afinidades) {
+            const keyAfMap = {
+                'Física': 'fisica',
+                'Energética': 'energetica',
+                'Espiritual': 'espiritual',
+                'Mando': 'mando',
+                'Psíquica': 'psiquica',
+                'Oscura': 'oscura'
+            };
+            const keyReal = keyAfMap[info.Afinidad];
+            if(keyReal && charData.afinidades[keyReal]) {
+                afiVal = charData.afinidades[keyReal];
+            }
         }
         input.value = afiVal;
     } else {
@@ -472,7 +470,7 @@ window.conjurarHechizos = () => {
     const charData = db.personajes[pj];
     const todosNodos = [...(db.hechizos.nodos || []), ...(db.hechizos.nodosOcultos || [])];
     
-    const afOscura = charData.rawRow ? (parseInt((charData.rawRow[8] || '0').split('_')[0]) || 0) : 0;
+    const afOscura = charData.afinidades?.oscura || 0;
     const maxVex = Math.round(((afOscura * 300) / 4) / 50) * 50;
     
     let availableVex = maxVex;
@@ -617,14 +615,11 @@ window.conjurarHechizos = () => {
         const toggleLog = document.getElementById('toggle-cast-consumo');
         if (toggleLog && toggleLog.checked && (totalVexConsumed > 0 || totalHexConsumed > 0)) {
             charData.hex = availableHex;
-            const hexParts = charData.rawRow[1].split('_'); 
-            hexParts[0] = charData.hex.toString(); 
-            const newHex = hexParts.join('_');
-            charData.rawRow[1] = newHex;
             
+            // 👉 REPARACIÓN: Actualización Nativa
             if(!estadoUI.colaCambios.stats) estadoUI.colaCambios.stats = {};
             if(!estadoUI.colaCambios.stats[pj]) estadoUI.colaCambios.stats[pj] = {};
-            estadoUI.colaCambios.stats[pj]['Hex'] = newHex;
+            estadoUI.colaCambios.stats[pj].hex = availableHex;
 
             estadoUI.colaCambios.hexCasts.push(1); 
             actualizarBotonSync();
