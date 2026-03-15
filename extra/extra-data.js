@@ -125,9 +125,10 @@ export async function subirImagen(file, keyNorm, tipoIcono, onProgreso) {
     const rutaJPG = `${tipoIcono}/${keyNorm}.jpg`;
 
     if (onProgreso) onProgreso(30, 'Procesando formatos...');
+    
+    // Al usar await aquí, garantizamos que no avance hasta tener ambos archivos listos
     const { blobPNG, blobJPG } = await convertirAFormatos(file);
 
-    // CONVERSIÓN CRÍTICA: De Blob a File nativo para que el navegador no se trabe en subidas consecutivas
     const filePNG = new File([blobPNG], `${keyNorm}.png`, { type: 'image/png' });
     const fileJPG = new File([blobJPG], `${keyNorm}.jpg`, { type: 'image/jpeg' });
 
@@ -150,51 +151,52 @@ export async function subirImagen(file, keyNorm, tipoIcono, onProgreso) {
 
 function convertirAFormatos(file) {
     return new Promise((resolve, reject) => {
-        const img = new Image();
-        const url = URL.createObjectURL(file);
+        const reader = new FileReader(); // Usar FileReader es más seguro contra pestañas suspendidas
         
-        img.onload = () => {
-            const canvas = document.createElement('canvas');
-            const MAX_SIZE = 512; 
-            let width = img.naturalWidth;
-            let height = img.naturalHeight;
+        reader.onload = (event) => {
+            const img = new Image();
+            img.onload = async () => {
+                try {
+                    const canvas = document.createElement('canvas');
+                    const MAX_SIZE = 512; 
+                    let width = img.naturalWidth;
+                    let height = img.naturalHeight;
 
-            if (width > MAX_SIZE || height > MAX_SIZE) {
-                const ratio = Math.min(MAX_SIZE / width, MAX_SIZE / height);
-                width = Math.round(width * ratio);
-                height = Math.round(height * ratio);
-            }
+                    if (width > MAX_SIZE || height > MAX_SIZE) {
+                        const ratio = Math.min(MAX_SIZE / width, MAX_SIZE / height);
+                        width = Math.round(width * ratio);
+                        height = Math.round(height * ratio);
+                    }
 
-            canvas.width  = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            
-            // Generar PNG
-            ctx.drawImage(img, 0, 0, width, height);
-            canvas.toBlob((blobPNG) => {
-                
-                // Generar JPG
-                const canvasJPG = document.createElement('canvas');
-                canvasJPG.width = width;
-                canvasJPG.height = height;
-                const ctxJPG = canvasJPG.getContext('2d');
-                ctxJPG.fillStyle = '#05000a'; 
-                ctxJPG.fillRect(0, 0, width, height);
-                ctxJPG.drawImage(img, 0, 0, width, height);
+                    canvas.width  = width;
+                    canvas.height = height;
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Generar PNG (Esperamos a que termine con Promesas)
+                    ctx.drawImage(img, 0, 0, width, height);
+                    const blobPNG = await new Promise(res => canvas.toBlob(res, 'image/png'));
+                    
+                    // Generar JPG (Esperamos a que termine con Promesas)
+                    const canvasJPG = document.createElement('canvas');
+                    canvasJPG.width = width;
+                    canvasJPG.height = height;
+                    const ctxJPG = canvasJPG.getContext('2d');
+                    ctxJPG.fillStyle = '#05000a'; 
+                    ctxJPG.fillRect(0, 0, width, height);
+                    ctxJPG.drawImage(img, 0, 0, width, height);
+                    
+                    const blobJPG = await new Promise(res => canvasJPG.toBlob(res, 'image/jpeg', 0.9));
 
-                canvasJPG.toBlob((blobJPG) => {
-                    URL.revokeObjectURL(url);
                     resolve({ blobPNG, blobJPG });
-                }, 'image/jpeg', 0.9);
-
-            }, 'image/png');
+                } catch (err) {
+                    reject(err);
+                }
+            };
+            img.onerror = () => reject(new Error("Formato de imagen inválido."));
+            img.src = event.target.result;
         };
         
-        img.onerror = () => {
-            URL.revokeObjectURL(url);
-            reject(new Error("Formato de imagen inválido o corrupto."));
-        };
-        
-        img.src = url;
+        reader.onerror = () => reject(new Error("Error leyendo el archivo."));
+        reader.readAsDataURL(file); // Ejecuta la lectura inmediatamente en memoria
     });
 }
