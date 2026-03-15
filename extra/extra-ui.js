@@ -4,6 +4,7 @@
 
 import { estadoUI, STORAGE_URL } from './extra-state.js';
 import { getItemsFiltrados, getEstadisticas } from './extra-logic.js';
+import { hexAuth } from '../hex-auth.js'; // <-- IMPORTANTE: Importamos para verificar permisos
 
 // ── Stats ────────────────────────────────────────────────────
 export function renderStats() {
@@ -34,7 +35,6 @@ export function renderGrid() {
     const filtrados = getItemsFiltrados();
     let html = '';
 
-    // URL Mágica apuntando directo a Supabase
     const imgFallback = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 
     filtrados.forEach(item => {
@@ -43,22 +43,23 @@ export function renderGrid() {
             ? `<div class="badge-ok">✓</div>`
             : `<div class="badge-falta">!</div>`;
             
-        // Si no existe, ni siquiera intentamos cargar una rota, ponemos el fallback directo
         const imgSrc    = item.existe ? item.urlStorage : imgFallback;
-        
         const btnTxt    = item.existe ? '🔄 Cambiar' : '📤 Subir';
         const btnColor  = item.existe ? '#004a00' : '#4a0000';
         const btnBorder = item.existe ? '#00ff00' : '#ff4444';
         const safeNombre = item.nombre.replace(/'/g, "\\'");
 
-        html += `
-        <div class="img-card ${claseCard}" title="${item.nombre}">
-            ${badge}
-            <img src="${imgSrc}"
-                 onerror="this.onerror=null; this.src='${imgFallback}'"
-                 style="cursor:pointer;"
-                 onclick="window.abrirUpload('${item.keyNorm}','${item.tipoIcono}','${safeNombre}')">
-            <div class="nombre">${item.nombre}</div>
+        // LÓGICA DE PERMISOS: Puede editar si está logueado, o si es la categoría de objetos
+        const puedeEditar = hexAuth.estaLogueado() || item.tipoIcono === 'imgobjetos';
+
+        // Desactivar el click en la imagen si no tiene permisos
+        const clickAction = puedeEditar ? `onclick="window.abrirUpload('${item.keyNorm}','${item.tipoIcono}','${safeNombre}')"` : '';
+        const cursorStyle = puedeEditar ? 'cursor:pointer;' : '';
+
+        // Dibujar botones o texto de "Solo lectura"
+        let btnHtml = '';
+        if (puedeEditar) {
+            btnHtml = `
             <div style="margin-top:6px;">
                 <button onclick="window.abrirUpload('${item.keyNorm}','${item.tipoIcono}','${safeNombre}')"
                     style="background:${btnColor}; border:1px solid ${btnBorder};
@@ -66,7 +67,23 @@ export function renderGrid() {
                            font-size:0.7em; cursor:pointer; font-family:sans-serif;">
                     ${btnTxt}
                 </button>
-            </div>
+            </div>`;
+        } else {
+            btnHtml = `
+            <div style="margin-top:6px; font-size:0.7em; color:#666; font-style:italic;">
+                Solo lectura
+            </div>`;
+        }
+
+        html += `
+        <div class="img-card ${claseCard}" title="${item.nombre}">
+            ${badge}
+            <img src="${imgSrc}"
+                 onerror="this.onerror=null; this.src='${imgFallback}'"
+                 style="${cursorStyle}"
+                 ${clickAction}>
+            <div class="nombre">${item.nombre}</div>
+            ${btnHtml}
         </div>`;
     });
 
