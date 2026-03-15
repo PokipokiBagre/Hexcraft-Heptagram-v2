@@ -35,6 +35,16 @@ export async function cargarDatos(barra) {
             });
         }
 
+estadoMapa.inventario = {};
+        if (hechizosData.inventario) {
+            hechizosData.inventario.forEach(item => {
+                const pj = item.Personaje;
+                if (!estadoMapa.inventario[pj]) estadoMapa.inventario[pj] = new Set();
+                // Guardamos el nombre del hechizo en minúsculas para que el buscador lo encuentre fácil
+                estadoMapa.inventario[pj].add(item.Hechizo.trim().toLowerCase());
+            });
+        }
+        
         // LIMPIAR ARRAYS POR SEGURIDAD
         estadoMapa.nodos = [];
         estadoMapa.enlaces = [];
