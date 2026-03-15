@@ -6,7 +6,7 @@ import { hexAuth, supabase } from '../hex-auth.js';
 import { db } from '../hex-db.js';
 
 // ============================================================
-// stats-main.js — VERSIÓN SUPABASE
+// stats-main.js — VERSIÓN SUPABASE (OPTIMIZADA LOTE)
 // ============================================================
 
 if (!estadoUI.colaCambios) estadoUI.colaCambios = { stats: {} };
@@ -52,7 +52,6 @@ window.sincronizarUI = () => {
         }
     }
 
-    // Actualizar badge de sesión
     const _badge = document.getElementById('hex-session-badge');
     if (_badge) {
         if (hexAuth.esAdmin()) {
@@ -103,33 +102,25 @@ function recalcularVidas(p, accionMutadora) {
 window.recalcularBases = () => {
     const n = estadoUI.personajeSeleccionado; const p = statsGlobal[n]; if(!p) return;
     if(confirm(`¿Recalcular Corazones Óptimos de ${n.toUpperCase()}?`)) {
-        
-        // 1. Límite Rojo = 10 + (Física Base / 2)
         const fisBase = p.afinidadesBase?.fisica || 0;
         p.baseVidaRojaMax = 10 + Math.floor(fisBase / 2);
-        
-        // Curamos al tope respetando la suma total (incluyendo extras)
         p.vidaRojaActual = calcularVidaRojaMax(p); 
-        
-        // 2. Vida Azul Base = Magias Base / 4 (No se meten los buffs aquí)
         const magBase = (p.afinidadesBase?.energetica||0) + (p.afinidadesBase?.espiritual||0) + (p.afinidadesBase?.mando||0) + (p.afinidadesBase?.psiquica||0);
         p.baseVidaAzul = Math.floor(magBase / 4);
-        p.vidaAzul = p.baseVidaAzul; // Solo un respaldo, visualmente se suma con los buffs
-        
-        window.encolarCambio(n); 
-        window.sincronizarUI();
+        p.vidaAzul = p.baseVidaAzul; 
+        window.encolarCambio(n); window.sincronizarUI();
     }
 };
 
-window.modificarBuff      = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; recalcularVidas(p,()=>p.buffs[s]=(p.buffs[s]||0)+c); window.encolarCambio(n); window.sincronizarUI(); };
-window.modBaseTop         = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; recalcularVidas(p,()=>{ const pr=`base${s.charAt(0).toUpperCase()+s.slice(1)}`; p[pr]=Math.max(0,(p[pr]||0)+c); }); window.encolarCambio(n); window.sincronizarUI(); };
-window.modBaseAfin        = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; recalcularVidas(p,()=>p.afinidadesBase[s]=Math.max(0,(p.afinidadesBase[s]||0)+c)); window.encolarCambio(n); window.sincronizarUI(); };
-window.modSpellEffTop     = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; recalcularVidas(p,()=>p.hechizosEfecto[s]=(p.hechizosEfecto[s]||0)+c); window.encolarCambio(n); window.sincronizarUI(); };
-window.modSpellEffAfin    = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; recalcularVidas(p,()=>p.hechizosEfecto[s]=(p.hechizosEfecto[s]||0)+c); window.encolarCambio(n); window.sincronizarUI(); };
-window.modLibre           = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; p[s]=Math.max(0,(p[s]||0)+c); window.encolarCambio(n); window.sincronizarUI(); };
-window.modEstado          = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; p.estados[s]=Math.max(0,(p.estados[s]||0)+c); window.encolarCambio(n); window.sincronizarUI(); };
-window.toggleEstado       = (s)   => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; p.estados[s]=!p.estados[s]; window.encolarCambio(n); window.sincronizarUI(); };
-window.toggleIdentidad    = (pr)  => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; p[pr]=!p[pr]; if(pr==='isPlayer') p.isNPC=!p.isPlayer; window.encolarCambio(n); window.sincronizarUI(); };
+window.modificarBuff       = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; recalcularVidas(p,()=>p.buffs[s]=(p.buffs[s]||0)+c); window.encolarCambio(n); window.sincronizarUI(); };
+window.modBaseTop          = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; recalcularVidas(p,()=>{ const pr=`base${s.charAt(0).toUpperCase()+s.slice(1)}`; p[pr]=Math.max(0,(p[pr]||0)+c); }); window.encolarCambio(n); window.sincronizarUI(); };
+window.modBaseAfin         = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; recalcularVidas(p,()=>p.afinidadesBase[s]=Math.max(0,(p.afinidadesBase[s]||0)+c)); window.encolarCambio(n); window.sincronizarUI(); };
+window.modSpellEffTop      = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; recalcularVidas(p,()=>p.hechizosEfecto[s]=(p.hechizosEfecto[s]||0)+c); window.encolarCambio(n); window.sincronizarUI(); };
+window.modSpellEffAfin     = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; recalcularVidas(p,()=>p.hechizosEfecto[s]=(p.hechizosEfecto[s]||0)+c); window.encolarCambio(n); window.sincronizarUI(); };
+window.modLibre            = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; p[s]=Math.max(0,(p[s]||0)+c); window.encolarCambio(n); window.sincronizarUI(); };
+window.modEstado           = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; p.estados[s]=Math.max(0,(p.estados[s]||0)+c); window.encolarCambio(n); window.sincronizarUI(); };
+window.toggleEstado        = (s)   => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; p.estados[s]=!p.estados[s]; window.encolarCambio(n); window.sincronizarUI(); };
+window.toggleIdentidad     = (pr)  => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; p[pr]=!p[pr]; if(pr==='isPlayer') p.isNPC=!p.isPlayer; window.encolarCambio(n); window.sincronizarUI(); };
 
 window.ejecutarClonacion = (tipo) => {
     const s = document.getElementById('clon-source'); if(!s) return; const sn = s.value; if(!sn) return alert("Selecciona origen.");
@@ -274,7 +265,6 @@ window.mostrarCatalogo = () => { estadoUI.vistaActual = 'catalogo'; refrescarVis
 window.mostrarResumen  = () => { estadoUI.vistaActual = 'resumen';  refrescarVistas(); window.scrollTo(0,0); };
 window.abrirDetalle    = (nombre) => { estadoUI.personajeSeleccionado = nombre; estadoUI.vistaActual = 'detalle'; refrescarVistas(); window.scrollTo(0,0); };
 
-// ── El panel OP se activa automáticamente si eres admin ──
 window.abrirMenuOP = () => {
     if (estadoUI.esAdmin) {
         if (estadoUI.vistaActual !== 'detalle') estadoUI.vistaActual = 'hex';
@@ -286,28 +276,13 @@ window.mostrarPaginaOP = (subvista) => { estadoUI.vistaActual = subvista; refres
 window.setFiltro = (tipo, valor) => { if(tipo==='rol') estadoUI.filtroRol=valor; if(tipo==='act') estadoUI.filtroAct=valor; window.sincronizarUI(); };
 
 // ============================================================================
-// 5. SINCRONIZACIÓN CON SUPABASE
+// 5. SINCRONIZACIÓN CON SUPABASE (GUARDADO MASIVO RÁPIDO)
 // ============================================================================
+// 👉 LIMPIO Y DIRECTO: Marcamos quién cambió sin ensuciar la memoria
 window.encolarCambio = (nombre) => {
     try {
         if (!estadoUI.colaCambios.stats[nombre]) estadoUI.colaCambios.stats[nombre] = {};
-        const p = statsGlobal[nombre];
-        const fStr = (b,s,se,bf) => `${(b||0)+(s||0)+(se||0)+(bf||0)}_${b||0}_${s||0}_${se||0}_${bf||0}`;
-        const s = estadoUI.colaCambios.stats[nombre];
-        s['Hex'] = `${p.hex||0}_${p.asistencia||1}`;
-        s['Vex'] = p.isPlayer ? 0 : (p.vex || 0);
-        ['fisica','energetica','espiritual','mando','psiquica','oscura'].forEach(af => {
-            s[af.charAt(0).toUpperCase()+af.slice(1)] = fStr(p.afinidadesBase[af],p.hechizos[af],p.hechizosEfecto[af],p.buffs[af]);
-        });
-        s['Corazones Rojo']     = p.vidaRojaActual || 0;
-        s['Corazones Rojos Max']= fStr(p.baseVidaRojaMax, p.hechizos.vidaRojaMaxExtra, p.hechizosEfecto.vidaRojaMaxExtra, p.buffs.vidaRojaMaxExtra);
-        s['Corazones Azules']   = fStr(p.baseVidaAzul, p.hechizos.vidaAzulExtra, p.hechizosEfecto.vidaAzulExtra, p.buffs.vidaAzulExtra);
-        s['Guarda Dorada']      = fStr(p.baseGuardaDorada, p.hechizos.guardaDoradaExtra, p.hechizosEfecto.guardaDoradaExtra, p.buffs.guardaDoradaExtra);
-        s['Daño Rojo']          = fStr(p.baseDanoRojo, p.hechizos.danoRojo, p.hechizosEfecto.danoRojo, p.buffs.danoRojo);
-        s['Daño Azul']          = fStr(p.baseDanoAzul, p.hechizos.danoAzul, p.hechizosEfecto.danoAzul, p.buffs.danoAzul);
-        s['Eliminacion Dorada'] = fStr(p.baseElimDorada, p.hechizos.elimDorada, p.hechizosEfecto.elimDorada, p.buffs.elimDorada);
-        s['Estado']             = listaEstados.map(e => e.tipo==='booleano' ? (p.estados[e.id]?'1':'0') : (p.estados[e.id]||'0')).join('-');
-        s['Jugador_Activo']     = `${p.isPlayer?1:0}_${p.isActive?1:0}`;
+        estadoUI.colaCambios.stats[nombre].__modificado = true;
     } catch(e) { console.error("Error al encolar:", e); }
 };
 
@@ -322,13 +297,16 @@ window.actualizarBotonSync = () => {
     }
 };
 
+// 👉 NUEVO GUARDADO POR LOTES: 1 Sola llamada a base de datos
 window.ejecutarSincronizacion = async () => {
     const btn = document.getElementById('btn-sync-global');
-    btn.innerText = "Guardando..."; btn.disabled = true;
+    btn.innerText = "Guardando por Lote..."; btn.disabled = true;
 
     try {
+        const personajesParaUpsert = [];
+
         for (const [nombre, campos] of Object.entries(estadoUI.colaCambios.stats)) {
-            // Borrado
+            // Si hay comando de borrado, lo hacemos individual (es muy raro borrar a muchos a la vez)
             if (campos.__ELIMINAR_PERSONAJE__) {
                 await db.personajes.eliminar(nombre);
                 continue;
@@ -337,8 +315,8 @@ window.ejecutarSincronizacion = async () => {
             const p = statsGlobal[nombre];
             if (!p) continue;
 
-            // Construir el objeto para Supabase
-            await db.personajes.upsert({
+            // Preparamos los datos del personaje para el paquete
+            personajesParaUpsert.push({
                 nombre,
                 is_player:  p.isPlayer,
                 is_active:  p.isActive,
@@ -410,15 +388,22 @@ window.ejecutarSincronizacion = async () => {
             });
         }
 
+        // Enviamos todo el bloque de una sola vez
+        if (personajesParaUpsert.length > 0) {
+            const exito = await db.personajes.upsertBatch(personajesParaUpsert);
+            if (!exito) throw new Error("Fallo en la actualización masiva.");
+        }
+
         estadoUI.colaCambios.stats = {};
         const alertBox = document.createElement('div');
-        alertBox.innerHTML = "¡Guardado Exitoso! ✅";
+        alertBox.innerHTML = "¡Actualización Masiva Exitosa! ✅";
         alertBox.style.cssText = "position:fixed; top:30px; left:50%; transform:translateX(-50%); background:var(--gold); color:#000; padding:15px 40px; border-radius:8px; font-weight:bold; font-size:1.2em; z-index:99999; box-shadow:0 0 20px var(--gold);";
         document.body.appendChild(alertBox);
-        setTimeout(() => window.location.reload(), 1200);
+        setTimeout(() => window.location.reload(), 1000);
 
     } catch(e) {
-        alert("Error de conexión con Supabase.");
+        alert("Error de red con Supabase al intentar guardar los cambios.");
+        console.error(e);
         btn.disabled = false;
         window.sincronizarUI();
     }
@@ -465,7 +450,6 @@ window.toggleCrearAct = () => { const btn=document.getElementById('btn-crear-act
 window.updateCreationAfinitySum = () => { const s=['fis','ene','esp','man','psi','osc'].reduce((acc,id)=>acc+(parseInt(document.getElementById('npc-'+id)?.value)||0),0); const d=document.getElementById('creation-affinity-sum-display'); if(d) d.innerText=`Total Afinidades: ${s}`; };
 window.modForm = (inputId, cantidad) => { const input=document.getElementById(inputId); if(input){input.value=Math.max(0,(parseInt(input.value)||0)+cantidad); if(inputId.startsWith('npc-')) window.updateCreationAfinitySum();} };
 
-// 👉 NUEVA FORJA: Conectada directamente a Supabase con los IDs correctos
 window.ejecutarCreacionNPC = async () => {
     const btn = document.querySelector('button[onclick="window.ejecutarCreacionNPC()"]');
     const txtOriginal = btn ? btn.innerText : 'FORJAR';
@@ -482,7 +466,6 @@ window.ejecutarCreacionNPC = async () => {
         const isPlayer = document.getElementById('btn-crear-rol').dataset.val === 'jugador';
         const isActive = document.getElementById('btn-crear-act').dataset.val === 'activo';
 
-        // Estructura idéntica a la tabla de base de datos
         const nuevoPJ = {
             nombre: nombre,
             is_player: isPlayer,
@@ -491,46 +474,38 @@ window.ejecutarCreacionNPC = async () => {
             hex: pV('npc-hex'),
             asistencia: 1,
             vex: pV('npc-vex'),
-
             vida_roja_actual: pV('npc-vra'),
             base_vida_roja_max: pV('npc-vrm'),
             base_vida_azul: pV('npc-va'),
             base_guarda_dorada: pV('npc-gd'),
-            
             base_dano_rojo: pV('npc-dr'),
             base_dano_azul: pV('npc-da'),
             base_elim_dorada: pV('npc-ed'),
-
             af_fisica: pV('npc-fis'),
             af_energetica: pV('npc-ene'),
             af_espiritual: pV('npc-esp'),
             af_mando: pV('npc-man'),
             af_psiquica: pV('npc-psi'),
             af_oscura: pV('npc-osc'),
-
             estados: stInit
         };
 
-        // Inserción Atómica
         const exito = await db.personajes.upsert(nuevoPJ);
 
         if (exito) {
-            alert('¡Personaje forjado con éxito! El sistema se recargará para mostrarlo en tu catálogo.');
+            alert('¡Personaje forjado con éxito!');
             window.location.reload(); 
         } else {
-            throw new Error("Conexión rechazada por Supabase al intentar insertar.");
+            throw new Error("Conexión rechazada por Supabase.");
         }
     } catch (error) {
-        console.error("Error forjando personaje:", error);
         alert("Error al forjar: " + error.message);
         if(btn) { btn.innerText = txtOriginal; btn.disabled = false; }
     }
 };
 
-// 👉 NUEVA ELIMINACIÓN: Borra de raíz en Supabase al instante
 window.borrarPersonaje = async (nombre, event) => {
     if(event) event.stopPropagation();
-    
     if(confirm(`⚠️ ADVERTENCIA CRÍTICA ⚠️\n\n¿Estás absolutamente seguro de que deseas DESTRUIR a [${nombre.toUpperCase()}] de la base de datos?\n\nEsta acción es irreversible y borrará sus stats de la existencia.`)) {
         try {
             const exito = await db.personajes.eliminar(nombre);
@@ -554,21 +529,15 @@ async function iniciar() {
         const favicon = document.querySelector("link[rel='icon']");
         if (favicon) favicon.href = `${db.storage.urlBase}/imginterfaz/icon.png`;
 
-
         if (performance.getEntriesByType("navigation")[0]?.type === "reload") localStorage.removeItem('hex_stats_v2');
 
         await hexAuth.init();
 
-        // Si está logueado pero el perfil no cargó (RLS timing), forzar carga manual
         if (hexAuth.estaLogueado() && !hexAuth.esAdmin()) {
             try {
                 const { data: { user } } = await supabase.auth.getUser();
                 if (user) {
-                    const { data: perfil } = await supabase
-                        .from('perfiles_usuario')
-                        .select('rol, personaje_nombre')
-                        .eq('id', user.id)
-                        .single();
+                    const { data: perfil } = await supabase.from('perfiles_usuario').select('rol, personaje_nombre').eq('id', user.id).single();
                     if (perfil) hexAuth._perfil = perfil;
                 }
             } catch(e) { console.warn('No se pudo cargar perfil:', e); }
@@ -576,7 +545,6 @@ async function iniciar() {
 
         estadoUI.esAdmin = hexAuth.esAdmin();
 
-        // Badge de sesión
         const badge = document.getElementById('hex-session-badge');
         const actualizarBadge = () => {
             if (!badge) return;
@@ -600,12 +568,11 @@ async function iniciar() {
             const parsed = JSON.parse(cache);
             Object.assign(statsGlobal, parsed.stats);
             if(parsed.party) estadoUI.party = parsed.party;
-            cargarTodoDesdeCSV(barra); // recarga en background
+            cargarTodoDesdeCSV(barra); 
         }
 
         if (loader) setTimeout(() => loader.classList.add('oculto'), 500);
 
-        // Re-verificar admin después de que Supabase termine de cargar el perfil
         setTimeout(() => {
             const wasAdmin = estadoUI.esAdmin;
             estadoUI.esAdmin = hexAuth.esAdmin();
@@ -626,7 +593,6 @@ async function iniciar() {
 
 iniciar();
 
-// Función que faltaba — llamada desde stats-ui.js (dibujarHexOP)
 window.copiarHexLog = (event) => {
     const textarea = document.getElementById('hex-log-textarea');
     if (!textarea) return;
