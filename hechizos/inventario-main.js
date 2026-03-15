@@ -111,7 +111,7 @@ window.aplicarFiltrosAprendizaje = () => { estadoUI.filtrosAprendizaje.afinidad 
 window.aplicarFiltrosAll = () => { estadoUI.filtrosAll.afinidad = document.getElementById('f-all-afinidad').value; estadoUI.filtrosAll.clase = document.getElementById('f-all-clase').value; estadoUI.filtrosAll.estado = document.getElementById('f-all-estado').value; estadoUI.filtrosAll.busqueda = document.getElementById('f-all-texto').value; dibujarCatalogoHechizos(); };
 
 window.toggleRestarHex = (c) => { estadoUI.restarHexAsignacion = c; };
-window.descargarCSVHex = () => { exportarCSVPersonajes(); };
+window.descargarCSVHex = () => { alert("La exportación a CSV está deshabilitada en la versión de la base de datos en la nube."); };
 
 // Guardado de configuración de checkboxes para que no se reseteen
 window.toggleCastConsumo = (val) => { estadoUI.consumoCast = val; };
