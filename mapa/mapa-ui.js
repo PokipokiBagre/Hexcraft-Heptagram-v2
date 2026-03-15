@@ -395,6 +395,9 @@ export function dibujarFrame() {
             ctx.fillText(textoADibujar, nodo.x, textY);
         }
 
+    }); // cierra nodos.forEach
+} // cierra dibujarFrame
+
 export function actualizarPanelInfo() {
     const panel = document.getElementById('panel-info');
     if(!panel) return;

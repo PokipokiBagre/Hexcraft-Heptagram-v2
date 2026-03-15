@@ -6,6 +6,10 @@ import { db }      from '../hex-db.js';
 
 window.onload = async () => {
     try {
+        // Favicon desde Supabase Storage
+        const favicon = document.querySelector("link[rel='icon']");
+        if (favicon) favicon.href = `${db.storage.urlBase}/imginterfaz/icon.png`;
+
         inicializarCanvas();
         const barra = document.getElementById('carga-progreso');
         const loadScreen = document.getElementById('loader');
