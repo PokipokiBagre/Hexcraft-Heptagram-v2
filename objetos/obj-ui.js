@@ -131,56 +131,80 @@ export function dibujarGrillaPersonajes() {
 }
 
 export function dibujarResumenVisual() {
-    let html = `<h2 style="margin-top:0;">Resumen del Equipo del Grupo</h2>`;
-    
-    Object.keys(invGlobal).sort().forEach(j => {
+    let html = `<h2 style="margin-top:0; color:var(--gold); font-family:'Cinzel'; text-align:center;">Resumen del Equipo del Grupo</h2>`;
+
+    // Jugadores activos primero, luego NPCs
+    const ordenJugadores = Object.keys(invGlobal).sort((a, b) => {
+        const pa = statsGlobal[a] || {}; const pb = statsGlobal[b] || {};
+        if (pa.isPlayer && !pb.isPlayer) return -1;
+        if (!pa.isPlayer && pb.isPlayer) return 1;
+        return a.localeCompare(b);
+    });
+
+    ordenJugadores.forEach(j => {
         let itemsHtml = '';
         let frozenKeys = estadoUI.cachedInvOrders[j] || [];
-        Object.keys(invGlobal[j]).forEach(k => { if (invGlobal[j][k] > 0 && !frozenKeys.includes(k)) frozenKeys.push(k); });
+        Object.keys(invGlobal[j] || {}).forEach(k => {
+            if (invGlobal[j][k] > 0 && !frozenKeys.includes(k)) frozenKeys.push(k);
+        });
 
         frozenKeys.forEach(o => {
             const count = invGlobal[j][o];
-            if (count > 0) {
-                const info = objGlobal[o] || {};
-                const imgFile = normalizarNombre(o);
-                const tooltipText = `<span>${o}</span>Tipo: ${info.tipo}<br>Rareza: ${info.rar}<br><br>${info.eff}`;
-                
-                let badgeHTML = '';
-                if(estadoUI.esAdmin) {
-                    badgeHTML = `
-                    <div class="badge-op">
-                        <button class="minus" onclick="window.hexMod('${j}','${o.replace(/'/g, "\\'")}',-1); event.stopPropagation();">-</button>
-                        <span>${count}</span>
-                        <button class="plus" onclick="window.hexMod('${j}','${o.replace(/'/g, "\\'")}',1); event.stopPropagation();">+</button>
-                    </div>`;
-                } else {
-                    badgeHTML = `<div class="badge-normal">${count}</div>`;
-                }
+            if (count <= 0) return;
+            const info = objGlobal[o] || {};
+            const imgFile = normalizarNombre(o);
+            const oSafe = o.replace(/'/g, "\\'");
+            const rarColor = info.rar === 'Legendario' ? 'var(--gold)' : info.rar === 'Raro' ? '#8a2be2' : '#ccc';
 
-                itemsHtml += `
-                <div class="hex-tooltip img-stack" onclick="window.verImagen('${db.storage.urlBase}/imgobjetos/${imgFile}.png')">
-                    <img src="${db.storage.urlBase}/imgobjetos/${imgFile}.png" onerror="${imgErrorObj}" alt="${o}">
-                    ${badgeHTML}
-                    <div class="tooltiptext">${tooltipText}</div>
+            let badgeHTML = '';
+            if (estadoUI.esAdmin) {
+                badgeHTML = `<div style="position:absolute; bottom:0; left:0; right:0; display:flex; justify-content:center; align-items:center; gap:2px; background:rgba(0,0,0,0.85); border-radius:0 0 5px 5px; padding:2px 0;">
+                    <button onclick="window.hexMod('${j}','${oSafe}',-1); event.stopPropagation();" style="background:#8b0000; border:none; color:#fff; width:20px; height:20px; border-radius:3px; cursor:pointer; font-size:0.85em; padding:0; font-weight:bold;">-</button>
+                    <span style="color:#fff; font-weight:bold; font-size:0.85em; min-width:18px; text-align:center;">${count}</span>
+                    <button onclick="window.hexMod('${j}','${oSafe}',1); event.stopPropagation();" style="background:#006400; border:none; color:#fff; width:20px; height:20px; border-radius:3px; cursor:pointer; font-size:0.85em; padding:0; font-weight:bold;">+</button>
                 </div>`;
+            } else {
+                badgeHTML = `<div style="position:absolute; top:3px; right:3px; background:rgba(212,175,55,0.9); color:#000; font-weight:bold; font-size:0.75em; min-width:18px; height:18px; border-radius:9px; display:flex; align-items:center; justify-content:center; padding:0 3px;">${count}</div>`;
             }
+
+            itemsHtml += `
+            <div style="position:relative; flex-shrink:0; cursor:pointer; width:62px;"
+                 onmouseenter="this.querySelector('.ott').style.display='block'"
+                 onmouseleave="this.querySelector('.ott').style.display='none'"
+                 onclick="window.verImagen('${db.storage.urlBase}/imgobjetos/${imgFile}.png')">
+                <img src="${db.storage.urlBase}/imgobjetos/${imgFile}.png"
+                     onerror="${imgErrorObj}"
+                     style="width:62px; height:62px; object-fit:cover; border-radius:6px; border:1px solid #444; display:block;">
+                ${badgeHTML}
+                <div class="ott" style="display:none; position:absolute; bottom:110%; left:50%; transform:translateX(-50%); background:rgba(10,0,20,0.97); border:1px solid var(--gold); border-radius:6px; padding:8px 10px; min-width:180px; max-width:220px; text-align:left; z-index:9999; pointer-events:none; font-family:sans-serif; font-size:0.78em; line-height:1.5; white-space:normal;">
+                    <b style="color:var(--gold);">${o}</b><br>
+                    <span style="color:#aaa;">Tipo:</span> ${info.tipo || '-'} &nbsp; <span style="color:#aaa;">Rar:</span> <span style="color:${rarColor}">${info.rar || '-'}</span><br>
+                    <span style="color:#bbb;">${info.eff || ''}</span>
+                </div>
+            </div>`;
         });
 
-        if(itemsHtml !== '') {
+        if (itemsHtml !== '') {
+            const p = statsGlobal[j] || {};
+            const iconoKey = normalizarNombre(p.iconoOverride || j);
+            const borderColor = p.isPlayer ? 'var(--gold)' : '#00ffff';
+            const bgColor = p.isPlayer ? 'rgba(21,0,41,0.85)' : 'rgba(6,11,25,0.85)';
             html += `
-            <div class="resumen-row">
-                <div class="resumen-left">
-                    <img src="${db.storage.urlBase}/imgpersonajes/${normalizarNombre(j)}icon.png" onerror="${imgErrorPj}" style="width:75px; height:75px; border-radius:50%; border:2px solid var(--gold); object-fit:cover;">
-                    <h3 style="margin:8px 0 0 0; font-size:1em; color:var(--gold);">${j.toUpperCase()}</h3>
+            <div style="display:flex; align-items:flex-start; border:1px solid ${borderColor}; border-radius:10px; background:${bgColor}; margin-bottom:12px; padding:14px 16px; gap:18px; box-shadow: 0 2px 10px rgba(0,0,0,0.4);">
+                <div style="min-width:85px; max-width:85px; text-align:center; flex-shrink:0;">
+                    <img src="${db.storage.urlBase}/imgpersonajes/${iconoKey}icon.png"
+                         onerror="${imgErrorPj}"
+                         style="width:65px; height:65px; border-radius:50%; border:2px solid ${borderColor}; object-fit:cover; box-shadow: 0 0 8px ${borderColor}40;">
+                    <div style="margin-top:6px; font-size:0.75em; color:${borderColor}; font-weight:bold; word-break:break-word; font-family:'Cinzel';">${j.toUpperCase()}</div>
                 </div>
-                <div class="resumen-right">
+                <div style="flex:1; display:flex; flex-wrap:wrap; gap:8px; align-content:flex-start; padding-top:2px;">
                     ${itemsHtml}
                 </div>
             </div>`;
         }
     });
-    
-    drawnHEXPreserveFocus('contenedor-resumen', html || '<p style="text-align:center; color:#aaa;">Nadie tiene objetos todavía.</p>');
+
+    drawnHEXPreserveFocus('contenedor-resumen', html || '<p style="text-align:center; color:#aaa; padding:40px;">Nadie tiene objetos todavía.</p>');
 }
 
 export function dibujarInventarios() {
@@ -298,20 +322,24 @@ items.forEach(o => {
                 </div>`;
             }
 
-            // Construcción del HTML (Versión compacta para 7 columnas)
             html += `
-                <div class="item-card ${rClass}" style="position:relative;">
+                <div class="item-card ${rClass}" style="position:relative; display:flex; flex-direction:column; align-items:center; padding:10px; background:rgba(15,0,30,0.85); border-radius:8px; transition:0.2s;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">
                     ${btnOpciones}
-                    <div class="item-image-wrapper">
-                        <img src="${db.storage.urlBase}/imgobjetos/${nomNorm}.png" 
-                             alt="${o}" 
-                             onerror="${imgErrorObj}" 
-                             style="cursor:pointer;" 
-                             onclick="window.verImagen(this.src)">
+                    <div style="width:100%; height:110px; overflow:hidden; border-radius:4px; margin-bottom:6px; cursor:pointer;" onclick="window.verImagen('${db.storage.urlBase}/imgobjetos/${nomNorm}.png')">
+                        <img src="${db.storage.urlBase}/imgobjetos/${nomNorm}.png"
+                             alt="${o}"
+                             onerror="${imgErrorObj}"
+                             style="width:100%; height:100%; object-fit:cover; border:1px solid rgba(212,175,55,0.3); border-radius:4px;">
                     </div>
-                    <h3 title="${o}">${o}</h3>
-                    <div style="font-size:0.6em; color:#888; margin-top:2px;">
-                        ${Object.keys(invGlobal).filter(j => invGlobal[j][o] > 0).length} Dueños
+                    <h3 title="${o}" style="font-size:0.8em; margin:2px 0 4px 0; color:var(--gold-light); text-align:center; width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${o}</h3>
+                    <div style="width:100%; font-size:0.65em; color:#aaa; text-align:center; line-height:1.4;">
+                        <span style="color:#888;">${info.tipo || '-'}</span> · <span style="color:${info.rar === 'Legendario' ? 'var(--gold)' : info.rar === 'Raro' ? '#8a2be2' : '#999'}">${info.rar || '-'}</span>
+                    </div>
+                    <div style="width:100%; font-size:0.6em; color:#777; margin-top:3px; text-align:center; overflow:hidden; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; line-height:1.3;" title="${info.eff || ''}">
+                        ${info.eff || 'Sin descripción'}
+                    </div>
+                    <div style="margin-top:6px; font-size:0.6em; color:#555; width:100%; text-align:center; border-top:1px solid #222; padding-top:4px;">
+                        ${propText}
                     </div>
                 </div>`;
             
