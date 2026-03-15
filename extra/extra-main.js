@@ -16,25 +16,31 @@ async function iniciar() {
     await hexAuth.init();
 
     const badge = document.getElementById('hex-session-badge');
+    let esColaborador = false;
+
     if (badge) {
         if (hexAuth.esAdmin()) {
             badge.innerHTML = `<span style="background:#4a004a; color:#d4af37; border:1px dashed #d4af37; padding:8px 14px; border-radius:4px; font-weight:bold; font-family:'Cinzel'; cursor:pointer; font-size:0.85em;">⚙️ MÁSTER</span>`;
         } else if (hexAuth.estaLogueado()) {
             badge.innerHTML = hexAuth.renderStatusBadge();
         } else {
-            // NUEVO: Letrero para los ayudantes que no tienen cuenta
             badge.innerHTML = `<span style="background:#222; color:#00ff00; border:1px solid #00ff00; padding:8px 14px; border-radius:4px; font-size:0.85em; font-weight:bold;">🤝 COLABORADOR</span>`;
+            esColaborador = true;
         }
     }
 
-    // ELIMINAMOS la validación "!hexAuth.estaLogueado()" 
-    // Ahora todo el mundo pasa directo a intentar cargar los datos.
+    if (esColaborador) {
+        estadoUI.tab = 'objetos'; // Iniciar en objetos por comodidad
+    }
 
     try {
         await asegurarBucket();
         await cargarDatos();
         document.getElementById('loader-msg').style.display = 'none';
         document.getElementById('main-content').style.display = 'block';
+        
+        if (esColaborador) actualizarTabs(); 
+        
         renderGrid();
     } catch(e) {
         document.getElementById('loader-msg').innerHTML =
@@ -46,6 +52,10 @@ async function iniciar() {
 // ── Cambiar tab ──────────────────────────────────────────────
 window.cambiarTab = (tab) => {
     estadoUI.tab = tab;
+    // Si es colaborador y cambia de pestaña, cerramos el panel de subida por si estaba abierto
+    if (!hexAuth.estaLogueado() && tab !== 'objetos') {
+        window.cerrarUpload();
+    }
     actualizarTabs();
     renderGrid();
 };
@@ -64,6 +74,9 @@ window.setBusqueda = (v) => {
 
 // ── Upload ───────────────────────────────────────────────────
 window.abrirUpload = (keyNorm, tipoIcono, nombre) => {
+    // Bloqueo de seguridad: No puede abrir el panel de upload si no es admin/jugador y la categoría no es objetos
+    if (!hexAuth.estaLogueado() && tipoIcono !== 'imgobjetos') return;
+
     estadoUI.uploadTarget = { keyNorm, tipoIcono, nombre };
     mostrarPanelUpload(nombre, keyNorm, tipoIcono);
 };
@@ -89,6 +102,12 @@ window.handleFileSelect = (e) => {
 async function ejecutarSubida(file) {
     if (!estadoUI.uploadTarget) return;
     const { keyNorm, tipoIcono } = estadoUI.uploadTarget;
+
+    // Bloqueo de seguridad final a nivel de ejecución
+    if (!hexAuth.estaLogueado() && tipoIcono !== 'imgobjetos') {
+        actualizarProgreso(0, '❌ Permiso denegado para esta categoría.', true);
+        return;
+    }
 
     try {
         const nuevaUrl = await subirImagen(file, keyNorm, tipoIcono, (pct, msg) => {
