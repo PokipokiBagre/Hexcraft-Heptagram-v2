@@ -394,4 +394,3 @@ export const db = {
             return data.publicUrl;
         }
     }
-}; 
