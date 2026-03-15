@@ -1,17 +1,15 @@
 // ============================================================
-// mapa-data.js — VERSIÓN SUPABASE (BLINDADA)
+// mapa-data.js — VERSIÓN SUPABASE
 // ============================================================
 
 import { estadoMapa, ESTETICA } from './mapa-state.js';
 import { supabase } from '../hex-auth.js';
 import { db }       from '../hex-db.js';
 
-// ── Carga inicial ─────────────────────────────────────────────
 export async function cargarDatos(barra) {
     try {
         if (barra) barra.style.width = '10%';
 
-        // Carga paralela: jugadores activos + datos de hechizos
         const [personajesArr, hechizosData] = await Promise.all([
             db.personajes.getJugadoresActivos(),
             db.hechizos.getDataCompleta()
@@ -19,10 +17,10 @@ export async function cargarDatos(barra) {
 
         if (barra) barra.style.width = '60%';
 
-        // ── JUGADORES → sidebar ────────────────────────────────
+        // ── JUGADORES ──────────────────────────────────────────
         estadoMapa.jugadores = personajesArr.map(p => p.nombre);
 
-        // ── COLORES DE AFINIDAD desde la tabla hechizos_afinidades ──
+        // ── COLORES DE AFINIDAD ────────────────────────────────
         window.mapaColores = {};
         if (hechizosData.afinidades) {
             hechizosData.afinidades.forEach(row => {
@@ -35,25 +33,24 @@ export async function cargarDatos(barra) {
             });
         }
 
-estadoMapa.inventario = {};
+        // ── CONSTRUIR INVENTARIO (NUEVO Y BLINDADO) ────────────
+        estadoMapa.inventario = {};
         if (hechizosData.inventario) {
             hechizosData.inventario.forEach(item => {
                 const pj = item.Personaje;
                 if (!estadoMapa.inventario[pj]) estadoMapa.inventario[pj] = new Set();
-                // Guardamos el nombre del hechizo en minúsculas para que el buscador lo encuentre fácil
                 estadoMapa.inventario[pj].add(item.Hechizo.trim().toLowerCase());
             });
         }
-        
-        // LIMPIAR ARRAYS POR SEGURIDAD
+
+        // ── NODOS ──────────────────────────────────────────────
         estadoMapa.nodos = [];
         estadoMapa.enlaces = [];
         
-        // UNIR NODOS Y FILTRAR FANTASMAS (Evita el error 'reading x')
         const todosLosNodos = [...(hechizosData.nodos || []), ...(hechizosData.nodosOcultos || [])];
         
         todosLosNodos.forEach(n => {
-            if (!n) return; // ¡Filtro de seguridad contra undefined!
+            if (!n) return;
             
             estadoMapa.nodos.push({
                 id: n.ID,
@@ -78,7 +75,7 @@ estadoMapa.inventario = {};
             });
         });
 
-        // ── ENLACES ───────────────────────────────────────────
+        // ── ENLACES ────────────────────────────────────────────
         const findNode = (str) => {
             if (!str) return null;
             const strNorm = String(str).trim().toLowerCase();
@@ -99,7 +96,6 @@ estadoMapa.inventario = {};
                 const sourceNode = findNode(rel.Source);
                 const targetNode = findNode(rel.Target);
 
-                // Solo creamos la flecha si AMBOS nodos existen realmente
                 if (sourceNode && targetNode && sourceNode !== targetNode) {
                     estadoMapa.enlaces.push({ source: sourceNode, target: targetNode });
                     targetNode.incomingSources.push(sourceNode);
@@ -108,7 +104,6 @@ estadoMapa.inventario = {};
         }
 
         actualizarColoresFlechas();
-        
         if (barra) barra.style.width = '100%';
     } catch (e) {
         console.error("Error en cargarDatos:", e);
@@ -139,14 +134,11 @@ export async function guardarEdicionCompleta(payload) {
     try {
         const nodosParaUpsert = [];
         
-        // ── 1. PREPARAR NODOS ──────────────────────────────────
         for (const item of payload.nodos) {
             if (item.eliminado) {
-                const { error } = await supabase.from('hechizos_nodos').delete().eq('hechizo_id', item.idOriginal);
-                if (error) throw error;
+                await supabase.from('hechizos_nodos').delete().eq('hechizo_id', item.idOriginal);
             } else {
                 const d = item.datos; 
-                
                 nodosParaUpsert.push({
                     hechizo_id:  d.ID,
                     nombre:      d.Nombre   || d.ID,
@@ -163,71 +155,47 @@ export async function guardarEdicionCompleta(payload) {
                     es_conocido: d.Conocido === 'si'
                 });
 
-                // Limpiar viejo ID si fue renombrado
                 if (item.idOriginal && item.idOriginal !== d.ID) {
                     await supabase.from('hechizos_nodos').delete().eq('hechizo_id', item.idOriginal);
                 }
             }
         }
 
-        // Guardado masivo por lotes (Batch)
         if (nodosParaUpsert.length > 0) {
             for (let i = 0; i < nodosParaUpsert.length; i += 50) {
-                const lote = nodosParaUpsert.slice(i, i + 50);
-                const { error } = await supabase.from('hechizos_nodos').upsert(lote, { onConflict: 'hechizo_id' });
-                if (error) throw error;
+                await supabase.from('hechizos_nodos').upsert(nodosParaUpsert.slice(i, i + 50), { onConflict: 'hechizo_id' });
             }
         }
 
-        // ── 2. PREPARAR ENLACES ────────────────────────────────
         const enlacesParaUpsert = [];
         for (const enlace of payload.enlaces) {
             if (enlace.eliminado) {
-                const { error } = await supabase.from('hechizos_strings')
-                    .delete()
-                    .eq('source_id', enlace.source)
-                    .eq('target_id', enlace.target);
-                if (error) throw error;
+                await supabase.from('hechizos_strings').delete().eq('source_id', enlace.source).eq('target_id', enlace.target);
             } else {
-                enlacesParaUpsert.push({
-                    source_id: enlace.source,
-                    target_id: enlace.target
-                });
+                enlacesParaUpsert.push({ source_id: enlace.source, target_id: enlace.target });
             }
         }
 
         if (enlacesParaUpsert.length > 0) {
             for (let i = 0; i < enlacesParaUpsert.length; i += 50) {
-                const lote = enlacesParaUpsert.slice(i, i + 50);
-                const { error } = await supabase.from('hechizos_strings').upsert(lote, { onConflict: 'source_id,target_id' });
-                if (error) throw error;
+                await supabase.from('hechizos_strings').upsert(enlacesParaUpsert.slice(i, i + 50), { onConflict: 'source_id,target_id' });
             }
         }
 
-        // ── 3. COLORES DE AFINIDAD ─────────────────────────────
         const afinidadesParaUpsert = [];
         for (const [afinidad, colores] of Object.entries(payload.afinidades || {})) {
-            afinidadesParaUpsert.push({
-                afinidad,
-                color_t: colores.t,
-                color_b: colores.b
-            });
+            afinidadesParaUpsert.push({ afinidad, color_t: colores.t, color_b: colores.b });
         }
         
         if (afinidadesParaUpsert.length > 0) {
-            const { error } = await supabase.from('hechizos_afinidades').upsert(afinidadesParaUpsert, { onConflict: 'afinidad' });
-            if (error) throw error;
+            await supabase.from('hechizos_afinidades').upsert(afinidadesParaUpsert, { onConflict: 'afinidad' });
         }
 
         return true;
-        
     } catch (e) {
         console.error("Error crítico guardando en Supabase:", e);
         return false;
     }
 }
 
-// Para evitar errores si algún archivo viejo todavía intenta llamarla
-export async function guardarPosicionesYVisibilidad() {
-    return true; 
-}
+export async function guardarPosicionesYVisibilidad() { return true; }
