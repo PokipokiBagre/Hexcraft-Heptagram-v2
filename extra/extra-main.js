@@ -13,10 +13,8 @@ import {
 
 // ── Iniciar ──────────────────────────────────────────────────
 async function iniciar() {
-    // --- NUEVO: Inyectar el icono de la pestaña desde Supabase ---
     const favicon = document.querySelector("link[rel='icon']");
     if (favicon) favicon.href = `${STORAGE_URL}/imginterfaz/icon.png`;
-    // -------------------------------------------------------------
 
     await hexAuth.init();
 
@@ -35,7 +33,7 @@ async function iniciar() {
     }
 
     if (esColaborador) {
-        estadoUI.tab = 'objetos'; // Iniciar en objetos por comodidad
+        estadoUI.tab = 'objetos'; 
     }
 
     try {
@@ -57,7 +55,6 @@ async function iniciar() {
 // ── Cambiar tab ──────────────────────────────────────────────
 window.cambiarTab = (tab) => {
     estadoUI.tab = tab;
-    // Si es colaborador y cambia de pestaña, cerramos el panel de subida por si estaba abierto
     if (!hexAuth.estaLogueado() && tab !== 'objetos') {
         window.cerrarUpload();
     }
@@ -79,7 +76,6 @@ window.setBusqueda = (v) => {
 
 // ── Upload ───────────────────────────────────────────────────
 window.abrirUpload = (keyNorm, tipoIcono, nombre) => {
-    // Bloqueo de seguridad: No puede abrir el panel de upload si no es admin/jugador y la categoría no es objetos
     if (!hexAuth.estaLogueado() && tipoIcono !== 'imgobjetos') return;
 
     estadoUI.uploadTarget = { keyNorm, tipoIcono, nombre };
@@ -100,17 +96,17 @@ window.handleDrop = (e) => {
 
 window.handleFileSelect = (e) => {
     const file = e.target.files[0];
-    if (file) ejecutarSubida(file);
-    e.target.value = '';
+    // Mandamos el 'input' para limpiarlo de forma segura SOLO cuando termine
+    if (file) ejecutarSubida(file, e.target); 
 };
 
-async function ejecutarSubida(file) {
+async function ejecutarSubida(file, inputTarget = null) {
     if (!estadoUI.uploadTarget) return;
     const { keyNorm, tipoIcono } = estadoUI.uploadTarget;
 
-    // Bloqueo de seguridad final a nivel de ejecución
     if (!hexAuth.estaLogueado() && tipoIcono !== 'imgobjetos') {
         actualizarProgreso(0, '❌ Permiso denegado para esta categoría.', true);
+        if (inputTarget) inputTarget.value = '';
         return;
     }
 
@@ -124,11 +120,14 @@ async function ejecutarSubida(file) {
         setTimeout(() => {
             window.cerrarUpload();
             renderGrid();
+            // Limpiamos el input ahora sí de forma segura
+            if (inputTarget) inputTarget.value = ''; 
         }, 1500);
 
     } catch(e) {
         console.error('Error subiendo imagen:', e);
         actualizarProgreso(0, '❌ Error: ' + (e.message || 'fallo al subir'), true);
+        if (inputTarget) inputTarget.value = ''; 
     }
 }
 
