@@ -1,11 +1,12 @@
 // ============================================================
-// obj-main.js — VERSIÓN SUPABASE (Completa)
+// obj-main.js — VERSIÓN SUPABASE
 // ============================================================
 
 import { invGlobal, objGlobal, statsGlobal, historial, estadoUI, guardar } from './obj-state.js';
 import { cargarTodoDesdeCSV, sincronizarObjetosBD } from './obj-data.js';
-import { modificar, modificarMulti, transferir, descargarLogExcel, descargarEstadoExcel, agregarObjetoManual, agregarObjetosMulti } from './obj-logic.js';
-import { refrescarUI, dibujarMenuOP, dibujarInventarios, dibujarCatalogo, dibujarControl, dibujarCreacionObjeto, dibujarCreacionMulti, dibujarGrillaPersonajes, dibujarPartyLoot, dibujarTransferencia, dibujarResumenVisual } from './obj-ui.js';
+// 👇 Importamos las 2 nuevas funciones 👇
+import { modificar, modificarMulti, transferir, descargarLogExcel, descargarEstadoExcel, agregarObjetoManual, agregarObjetosMulti, eliminarObjetoCompletamente, editarObjetoCatalogo } from './obj-logic.js';
+import { refrescarUI, dibujarMenuOP, dibujarInventarios, dibujarCatalogo, dibujarControl, dibujarCreacionObjeto, dibujarCreacionMulti, dibujarGrillaPersonajes, dibujarPartyLoot, dibujarTransferencia, dibujarResumenVisual, dibujarModalEdicionObjeto } from './obj-ui.js';
 import { hexAuth } from '../hex-auth.js';
 import { db } from '../hex-db.js';
 
@@ -53,7 +54,6 @@ window.descargarInventariosJPG = async () => {
 };
 
 async function iniciar() {
-    // 1. INYECTAR EL FAVICON DESDE SUPABASE
     const favicon = document.querySelector("link[rel='icon']");
     if (favicon) favicon.href = `${db.storage.urlBase}/imginterfaz/icon.png`;
 
@@ -61,7 +61,6 @@ async function iniciar() {
     const cache = localStorage.getItem('hex_obj_v4');
     const loader = document.getElementById('loader');
 
-    // 2. INICIALIZAR AUTENTICACIÓN
     await hexAuth.init();
     estadoUI.esAdmin = hexAuth.esAdmin();
 
@@ -79,7 +78,6 @@ async function iniciar() {
     estadoUI.cambiosSesion = {};
     estadoUI.vistaActual = 'grilla';
 
-    // MODAL DE VISUALIZACIÓN DE IMÁGENES
     const modal = document.createElement('div');
     modal.id = 'hex-modal-view'; modal.className = 'hex-modal';
     modal.innerHTML = `<img id="hex-modal-img" src="" draggable="false">`;
@@ -98,7 +96,6 @@ async function iniciar() {
     window.onmousemove = (e) => { if (!isDragging) return; modalImg.style.left = (e.clientX - offsetX) + 'px'; modalImg.style.top = (e.clientY - offsetY) + 'px'; };
     window.onmouseup = () => { isDragging = false; modalImg.style.cursor = 'grab'; };
 
-    // AHORA LAS IMÁGENES DEL MODAL CARGAN DESDE SUPABASE Y SOPORTAN LA "Ñ"
     window.verImagen = (url) => { modalImg.src = url; modalImg.style.left = '50%'; modalImg.style.top = '50%'; modalImg.style.transform = 'translate(-50%, -50%)'; modalImg.style.margin = 'auto'; modal.style.display = 'flex'; };
     window.verImagenByName = (name) => {
         const norm = name.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n').replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
@@ -122,7 +119,6 @@ async function iniciar() {
     window.limpiarLog = () => { estadoUI.cambiosSesion = {}; estadoUI.logCopy = ""; refrescarUI(); };
     window.copyToClipboard = (id) => { const area = document.getElementById(id); area.select(); document.execCommand('copy'); };
     
-    // Al cambiar la página se RECONGELA el orden de todo
     window.mostrarPagina = (id) => { 
         estadoUI.vistaActual = id;
         estadoUI.resetCacheOrder = true; 
@@ -135,13 +131,11 @@ async function iniciar() {
         window.actualizarBotonSyncObj();
     };
 
-    // LA AUTENTICACIÓN AHORA USA EL MÓDULO HEX-AUTH EN LUGAR DE LA CONTRASEÑA EN BASE64
     window.ejecutarSyncLog = async () => { 
         if (estadoUI.esAdmin) { 
             window.mostrarPagina('op-menu'); 
         } else {
             await hexAuth._mostrarModalLogin();
-            // Re-verificamos al cerrar el modal
             estadoUI.esAdmin = hexAuth.esAdmin();
             if (estadoUI.esAdmin) refrescarUI();
         }
@@ -159,7 +153,6 @@ async function iniciar() {
         modificar(j, o, c, () => { refrescarUI(); window.actualizarBotonSyncObj(); });
     };
 
-    // CONTROLES DE PARTY LOOT
     window.togglePartyLoot = (player, isChecked) => {
         if (isChecked && !estadoUI.partyLoot.includes(player)) estadoUI.partyLoot.push(player);
         if (!isChecked) estadoUI.partyLoot = estadoUI.partyLoot.filter(p => p !== player);
@@ -177,30 +170,10 @@ async function iniciar() {
         modificarMulti(estadoUI.partyLoot, item, cant, () => { refrescarUI(); window.actualizarBotonSyncObj(); });
     };
 
-    window.toggleMostrarNPCsLoot = () => { 
-        estadoUI.mostrarNPCsLoot = !estadoUI.mostrarNPCsLoot; 
-        refrescarUI(); 
-    };
+    window.toggleMostrarNPCsLoot = () => { estadoUI.mostrarNPCsLoot = !estadoUI.mostrarNPCsLoot; refrescarUI(); };
+    window.seleccionarTodosJugadores = () => { Object.keys(invGlobal).forEach(j => { const p = getPjStats(j); if(p && p.isPlayer && !estadoUI.partyLoot.includes(j)) estadoUI.partyLoot.push(j); }); refrescarUI(); };
+    window.seleccionarTodosNPCs = () => { Object.keys(invGlobal).forEach(j => { const p = getPjStats(j); if((!p || !p.isPlayer) && !estadoUI.partyLoot.includes(j)) estadoUI.partyLoot.push(j); }); refrescarUI(); };
 
-    window.seleccionarTodosJugadores = () => {
-        Object.keys(invGlobal).forEach(j => {
-            const key = Object.keys(statsGlobal).find(k => k.toLowerCase() === j.toLowerCase());
-            const p = key ? statsGlobal[key] : null;
-            if(p && p.isPlayer && !estadoUI.partyLoot.includes(j)) estadoUI.partyLoot.push(j);
-        });
-        refrescarUI();
-    };
-
-    window.seleccionarTodosNPCs = () => {
-        Object.keys(invGlobal).forEach(j => {
-            const key = Object.keys(statsGlobal).find(k => k.toLowerCase() === j.toLowerCase());
-            const p = key ? statsGlobal[key] : null;
-            if((!p || !p.isPlayer) && !estadoUI.partyLoot.includes(j)) estadoUI.partyLoot.push(j);
-        });
-        refrescarUI();
-    };
-
-    // CONTROLES DE MERCADO DE TRANSFERENCIAS
     window.setTransOrigen = (val) => { estadoUI.transOrigen = val; refrescarUI(); };
     window.setTransDestino = (val) => { estadoUI.transDestino = val; refrescarUI(); };
     window.setTransMult = (val) => { estadoUI.transMult = val; refrescarUI(); };
@@ -208,18 +181,14 @@ async function iniciar() {
         const origen = estadoUI.transOrigen; const dest = estadoUI.transDestino;
         if (!origen || !dest || origen === dest) return;
         if (cantToPass <= 0) return;
-        
         if (!estadoUI.cambiosSesion[origen]) estadoUI.cambiosSesion[origen] = {};
         estadoUI.cambiosSesion[origen][item] = (estadoUI.cambiosSesion[origen][item] || 0) - cantToPass;
-        
         if (!estadoUI.cambiosSesion[dest]) estadoUI.cambiosSesion[dest] = {};
         estadoUI.cambiosSesion[dest][item] = (estadoUI.cambiosSesion[dest][item] || 0) + cantToPass;
-        
         actualizarLogSesion();
         transferir(origen, dest, item, cantToPass, () => { refrescarUI(); window.actualizarBotonSyncObj(); });
     };
 
-    // FILTROS Y BÚSQUEDAS
     window.setRar = (r) => { estadoUI.filtroRar = r; dibujarCatalogo(); };
     window.setMat = (m) => { estadoUI.filtroMat = m; dibujarCatalogo(); };
     window.setFiltro = (tipo, valor) => { if(tipo === 'rol') estadoUI.filtroRol = valor; if(tipo === 'act') estadoUI.filtroAct = valor; refrescarUI(); };
@@ -227,15 +196,9 @@ async function iniciar() {
     window.setBusquedaCat = (v) => { estadoUI.busquedaCat = v; dibujarCatalogo(); };
     window.setBusquedaOP = (v) => { estadoUI.busquedaOP = v; refrescarUI(); };
     
-    // RUTAS PARA AMBAS CREACIONES
     window.mostrarCreacionObjeto = () => { window.mostrarPagina('crear'); };
     window.mostrarCreacionMulti = () => { window.mostrarPagina('crear-multi'); };
-    
-    // LÓGICA DE CREACIÓN INDIVIDUAL
-    window.toggleMostrarNPCs = () => {
-        estadoUI.mostrarNPCsCrea = !estadoUI.mostrarNPCsCrea;
-        refrescarUI();
-    };
+    window.toggleMostrarNPCs = () => { estadoUI.mostrarNPCsCrea = !estadoUI.mostrarNPCsCrea; refrescarUI(); };
 
     window.updateCreationLog = () => {
         const n = document.getElementById('new-obj-name').value || "Objeto"; const e = document.getElementById('new-obj-eff').value || "Efecto";
@@ -252,46 +215,54 @@ async function iniciar() {
         agregarObjetoManual(d, rep, () => { window.mostrarPagina('op-menu'); window.actualizarBotonSyncObj(); });
     };
 
-    // LÓGICA DE CREACIÓN MÚLTIPLE (6 OBJETOS)
     window.updateCreationMultiLog = () => {
-        const destPlayer = document.getElementById('multi-player-dest').value;
-        let l = [];
+        const destPlayer = document.getElementById('multi-player-dest').value; let l = [];
         for(let i=1; i<=6; i++) { 
-            const n = document.getElementById(`new-obj-name-${i}`)?.value.trim();
-            const e = document.getElementById(`new-obj-eff-${i}`)?.value.trim();
-            const c = parseInt(document.getElementById(`new-obj-cant-${i}`)?.value) || 0;
+            const n = document.getElementById(`new-obj-name-${i}`)?.value.trim(); const e = document.getElementById(`new-obj-eff-${i}`)?.value.trim(); const c = parseInt(document.getElementById(`new-obj-cant-${i}`)?.value) || 0;
             if(n && c > 0) {
                 if (destPlayer) l.push(`<${destPlayer} | OO: ${n}${c > 1 ? ' x'+c : ''} | ${e || "Sin descripción"}>`);
                 else l.push(`<OO: ${n}${c > 1 ? ' x'+c : ''} | ${e || "Sin descripción"}>`);
             }
         }
-        const out = document.getElementById('copy-log-crea-multi');
-        if (out) out.value = l.join('\n');
+        const out = document.getElementById('copy-log-crea-multi'); if (out) out.value = l.join('\n');
     };
 
     window.ejecutarAgregarMulti = () => {
-        const destPlayer = document.getElementById('multi-player-dest').value;
-        let listaNuevos = [];
+        const destPlayer = document.getElementById('multi-player-dest').value; let listaNuevos = [];
         for(let i=1; i<=6; i++) { 
-            const nombre = document.getElementById(`new-obj-name-${i}`).value.trim();
-            if(!nombre) continue;
-            const tipo = document.getElementById(`new-obj-tipo-${i}`).value;
-            const mat = document.getElementById(`new-obj-mat-${i}`).value;
-            const rar = document.getElementById(`new-obj-rar-${i}`).value;
-            const eff = document.getElementById(`new-obj-eff-${i}`).value.trim();
-            const cant = parseInt(document.getElementById(`new-obj-cant-${i}`).value) || 1;
+            const nombre = document.getElementById(`new-obj-name-${i}`).value.trim(); if(!nombre) continue;
+            const tipo = document.getElementById(`new-obj-tipo-${i}`).value; const mat = document.getElementById(`new-obj-mat-${i}`).value; const rar = document.getElementById(`new-obj-rar-${i}`).value; const eff = document.getElementById(`new-obj-eff-${i}`).value.trim(); const cant = parseInt(document.getElementById(`new-obj-cant-${i}`).value) || 1;
             listaNuevos.push({ nombre, tipo, mat, eff, rar, cant });
         }
-        agregarObjetosMulti(listaNuevos, destPlayer, (creados) => {
-            window.mostrarPagina('op-menu');
-            window.actualizarBotonSyncObj();
-        });
+        agregarObjetosMulti(listaNuevos, destPlayer, (creados) => { window.mostrarPagina('op-menu'); window.actualizarBotonSyncObj(); });
     };
 
     window.descargarEstadoExcel = descargarEstadoExcel; 
     window.descargarLogExcel = descargarLogExcel;
+
+    // 💥 NUEVAS ACCIONES EXPUESTAS: BORRAR Y EDITAR OBJETOS
+    window.eliminarObjetoBD = (nombre) => eliminarObjetoCompletamente(nombre, () => { refrescarUI(); window.actualizarBotonSyncObj(); });
+    window.abrirEdicionObjeto = (nombre) => { dibujarModalEdicionObjeto(nombre); };
+    window.cerrarModalEdicion = () => { const m = document.getElementById('modal-edit-obj'); if(m) m.remove(); };
+    window.guardarEdicionObjeto = (nombreAntiguo) => {
+        const newData = {
+            nombre: document.getElementById('edit-obj-name').value.trim(),
+            tipo: document.getElementById('edit-obj-tipo').value,
+            mat: document.getElementById('edit-obj-mat').value,
+            eff: document.getElementById('edit-obj-eff').value.trim(),
+            rar: document.getElementById('edit-obj-rar').value
+        };
+        if(!newData.nombre) return alert("El nombre no puede estar vacío");
+        
+        editarObjetoCatalogo(nombreAntiguo, newData, () => {
+            window.cerrarModalEdicion();
+            refrescarUI();
+            window.actualizarBotonSyncObj();
+        });
+    };
     
     // --- LÓGICA DE LECTURA DE URL ---
+    const getPjStats = (nombre) => { const key = Object.keys(statsGlobal).find(k => k.toLowerCase() === nombre.toLowerCase()); return key ? statsGlobal[key] : { isPlayer: false, isActive: true, iconoOverride: "" }; };
     const urlParams = new URLSearchParams(window.location.search);
     const pjQuery = urlParams.get('pj');
     let hashQuery = window.location.hash.replace('#inventario-', '');
@@ -300,14 +271,11 @@ async function iniciar() {
     const target = pjQuery || hashQuery;
 
     if (target) {
-        // Busca al jugador ignorando mayúsculas/minúsculas
         const exactMatch = Object.keys(invGlobal).find(k => k.toLowerCase() === target.toLowerCase());
         if (exactMatch) {
             estadoUI.jugadorInv = exactMatch;
             window.mostrarPagina('inventario');
-        } else {
-            window.mostrarPagina('grilla');
-        }
+        } else { window.mostrarPagina('grilla'); }
     } else {
         window.mostrarPagina('grilla'); 
     }
