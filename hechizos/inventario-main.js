@@ -14,8 +14,8 @@ window.onload = async () => {
         favicon.rel = "icon";
         document.head.appendChild(favicon);
     }
-    // Asignar la ruta de Supabase
-    favicon.href = `${db.storage.urlBase}/imginterfaz/icon.png`;
+// Asignar la ruta de Supabase
+    favicon.href = `${hexDB.storage.urlBase}/imginterfaz/icon.png`;
 
     const perf = performance.getEntriesByType("navigation")[0];
     if (perf && perf.type === "reload") {
