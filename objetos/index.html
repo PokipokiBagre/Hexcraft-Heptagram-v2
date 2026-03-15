@@ -6,10 +6,26 @@
     <title>HEX - GESTIÓN DE OBJETOS</title>
     <link rel="icon" type="image/png" href="../img/icon.png"> 
     <link rel="stylesheet" href="../styleobjetos.css?v=8.3"> 
+    <style>
+        /* Estilos rápidos para el modal de edición si no están en tu CSS */
+        .hex-modal {
+            display: none;
+            position: fixed;
+            z-index: 10000;
+            left: 0; top: 0;
+            width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.9);
+            align-items: center;
+            justify-content: center;
+            backdrop-filter: blur(5px);
+        }
+    </style>
 </head>
 <body>
     <div class="container-hex">
-        <div style="text-align: left; margin-bottom: 10px;"><a href="../index.html" style="color: #d4af37; text-decoration: none; font-size: 0.8em;">⬅ Volver al Inicio</a></div>
+        <div style="text-align: left; margin-bottom: 10px;">
+            <a href="../index.html" style="color: #d4af37; text-decoration: none; font-size: 0.8em;">⬅ Volver al Inicio</a>
+        </div>
         <h1>SISTEMA DE OBJETOS</h1>
         <nav>
             <button onclick="window.mostrarPagina('grilla')">Inventarios</button>
