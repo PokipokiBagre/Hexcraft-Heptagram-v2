@@ -1,5 +1,5 @@
 import { estadoMapa } from './mapa-state.js';
-import { API_HECHIZOS, actualizarColoresFlechas } from './mapa-data.js';
+import { actualizarColoresFlechas, guardarEdicionCompleta } from './mapa-data.js';
 
 const editor = {
     activa: false,
@@ -97,9 +97,8 @@ window.guardarCambiosMapa = async () => {
     estadoMapa.nodos.forEach(n => { if(n.modificado) registrarCambioNodo(n); });
 
     const payload = {
-        accion: 'guardar_edicion_completa',
-        nodos: Object.values(editor.cambiosPendientes.nodos),
-        enlaces: editor.cambiosPendientes.enlaces,
+        nodos:      Object.values(editor.cambiosPendientes.nodos),
+        enlaces:    editor.cambiosPendientes.enlaces,
         afinidades: window.mapaColores 
     };
 
@@ -111,19 +110,15 @@ window.guardarCambiosMapa = async () => {
     const textoOriginal = btn.innerText;
     btn.innerText = "Guardando Red..."; btn.disabled = true;
 
-    try {
-        const res = await fetch(API_HECHIZOS, { method: 'POST', body: JSON.stringify(payload) });
-        const data = await res.json();
-        if (data.status === 'success') {
-            alert("¡Cambios guardados en Google Sheets!");
-            editor.cambiosPendientes = { nodos: {}, enlaces: [] };
-            estadoMapa.nodos.forEach(n => { n.modificado = false; n._esNuevo = false; n._oldId = n.id; });
-            btn.classList.add('oculto'); // Se oculta tras guardar
-        } else {
-            alert("Fallo del servidor: " + data.message);
-        }
-    } catch(e) { alert("Error de Red."); }
-    
+    if (await guardarEdicionCompleta(payload)) {
+        alert("¡Cambios guardados en Supabase!");
+        editor.cambiosPendientes = { nodos: {}, enlaces: [] };
+        estadoMapa.nodos.forEach(n => { n.modificado = false; n._esNuevo = false; n._oldId = n.id; });
+        btn.classList.add('oculto');
+    } else {
+        alert("Error al guardar. Revisa la consola.");
+    }
+
     btn.innerText = textoOriginal; btn.disabled = false;
 };
 

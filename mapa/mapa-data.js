@@ -1,71 +1,53 @@
+// ============================================================
+// mapa-data.js — VERSIÓN SUPABASE
+// ============================================================
+
 import { estadoMapa, ESTETICA } from './mapa-state.js';
+import { supabase } from '../hex-auth.js';
+import { db }       from '../hex-db.js';
 
-export const API_HECHIZOS = 'https://script.google.com/macros/s/AKfycby1jLgF-2bGWv0QW0Eg8u7msZ-ab2eQa--olIWQHsin8Kyz0y0xHevK7YyGyMyzq1BWKw/exec';
-const CSV_ESTADISTICAS = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQOl-ENpkVGioSaquRc1pkuNUyk-vCEQGGSAN3MMtzwcP5AjlLTLbjsc4wAdy3fcQgRhzQAZ2CtRWbx/pub?output=csv';
-
+// ── Carga inicial ─────────────────────────────────────────────
 export async function cargarDatos(barra) {
     try {
-        if(barra) barra.style.width = '10%';
-        
-        // 1. CARGAMOS A LOS JUGADORES DESDE EL CSV DE ESTADÍSTICAS
-        const csvRes = await fetch(CSV_ESTADISTICAS);
-        const csvText = await csvRes.text();
-        procesarCSVJugadores(csvText);
-        
-        if(barra) barra.style.width = '25%';
+        if (barra) barra.style.width = '10%';
 
-        // 2. CARGAMOS LA API PRINCIPAL (NODOS, INVENTARIO Y AFINIDADES)
-        const res = await fetch(API_HECHIZOS);
-        if(barra) barra.style.width = '60%';
+        // Carga paralela: jugadores activos + datos de hechizos
+        const [personajesArr, hechizosData] = await Promise.all([
+            db.personajes.getJugadoresActivos(),
+            db.hechizos.getDataCompleta()
+        ]);
 
-        const jsonText = await res.text();
-        const json = JSON.parse(decodeURIComponent(escape(window.atob(jsonText))));
-        
-        // --- NUEVO: PROCESAR COLORES DESDE EL EXCEL ---
+        if (barra) barra.style.width = '60%';
+
+        // ── JUGADORES → sidebar ────────────────────────────────
+        estadoMapa.jugadores = personajesArr.map(p => p.nombre);
+
+        // ── COLORES DE AFINIDAD desde la tabla hechizos_afinidades ──
         window.mapaColores = {};
-        if (json.afinidades && json.afinidades.length > 0) {
-            json.afinidades.forEach(row => {
+        if (hechizosData.afinidades) {
+            hechizosData.afinidades.forEach(row => {
+                // row = [afinidad, color_t, color_b]
                 if (row[0]) {
-                    // row[0] es el nombre de afinidad, row[1] el color hex principal, row[2] el color de borde (opcional)
-                    window.mapaColores[row[0].trim()] = { 
-                        t: row[1] ? row[1].toString().trim() : '#ffffff', 
-                        b: row[2] ? row[2].toString().trim() : '#555555' 
+                    window.mapaColores[row[0].trim()] = {
+                        t: row[1] ? row[1].toString().trim() : '#ffffff',
+                        b: row[2] ? row[2].toString().trim() : '#555555'
                     };
                 }
             });
         }
-        // ----------------------------------------------
-        
-        procesarInventario(json);
-        procesarNodos(json);
-        procesarEnlaces(json.String || json.string || json.Strings || []);
-        
-        if(barra) barra.style.width = '100%';
+
+        // ── PROCESAR NODOS Y ENLACES ───────────────────────────
+        // getDataCompleta() devuelve datos en formato PascalCase que el motor ya espera
+        procesarInventario(hechizosData);
+        procesarNodos(hechizosData);
+        procesarEnlaces(hechizosData.string || []);
+
+        if (barra) barra.style.width = '100%';
         return true;
-    } catch(e) {
+
+    } catch (e) {
         console.error("Error cargando mapa:", e);
         return false;
-    }
-}
-
-function procesarCSVJugadores(csvText) {
-    const lines = csvText.split('\n');
-    if(lines.length < 1) return;
-    const headers = lines[0].split(',').map(h => h.trim().replace(/\r/g, ''));
-    const pIdx = headers.indexOf('Personaje');
-    const jIdx = headers.indexOf('Jugador_Activo');
-    
-    estadoMapa.jugadores = [];
-    if (pIdx > -1 && jIdx > -1) {
-        for(let i = 1; i < lines.length; i++) {
-            let row = lines[i].split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/);
-            if(row.length > jIdx) {
-                let jActivo = row[jIdx].trim().replace(/\r/g, '');
-                if(jActivo === '1_1') {
-                    estadoMapa.jugadores.push(row[pIdx].trim().replace(/^"|"$/g, ''));
-                }
-            }
-        }
     }
 }
 
@@ -73,121 +55,92 @@ function procesarInventario(json) {
     estadoMapa.inventario = {};
     if (json.inventario) {
         json.inventario.forEach(row => {
-            let pj = row.Personaje ? row.Personaje.trim() : '';
-            let he = row.Hechizo ? row.Hechizo.trim() : '';
-            if(pj && he) {
-                if(!estadoMapa.inventario[pj]) estadoMapa.inventario[pj] = new Set();
+            const pj = row.Personaje ? row.Personaje.trim() : '';
+            const he = row.Hechizo   ? row.Hechizo.trim()   : '';
+            if (pj && he) {
+                if (!estadoMapa.inventario[pj]) estadoMapa.inventario[pj] = new Set();
                 estadoMapa.inventario[pj].add(he.replace(/\s*\(\d+\)$/, '').trim().toLowerCase());
             }
         });
     }
 }
 
-function parseGephiCoord(val) {
+function parseCoord(val) {
     if (val === undefined || val === null || val === '') return null;
-    let str = String(val).trim().replace(/,/g, '.').replace(/[^0-9\.\-]/g, '');
-    let num = parseFloat(str);
+    const num = parseFloat(String(val).trim().replace(/,/g, '.').replace(/[^0-9.\-]/g, ''));
     return isNaN(num) ? null : num;
 }
 
 function procesarNodos(json) {
     const todos = [].concat(json.nodos || []).concat(json.nodosOcultos || []);
     estadoMapa.nodos = [];
-    const nodosProcesados = new Set();
-    
-    // Primero, encontramos el máximo valor absoluto para saber si necesitamos achicar coordenadas de Gephi gigantes
+    const procesados = new Set();
+
+    // Detectar si las coords son Gephi raw (>15000) y necesitan escalar
     let maxVal = 0;
-
     todos.forEach(n => {
-        if (!n.ID && !n.Nombre) return;
-        const keyX = Object.keys(n).find(k => k.trim().toLowerCase() === 'x');
-        const keyY = Object.keys(n).find(k => k.trim().toLowerCase() === 'y');
-        
-        let rawX = keyX ? parseGephiCoord(n[keyX]) : null;
-        let rawY = keyY ? parseGephiCoord(n[keyY]) : null;
-        
-        if (rawX !== null && Math.abs(rawX) > maxVal) maxVal = Math.abs(rawX);
-        if (rawY !== null && Math.abs(rawY) > maxVal) maxVal = Math.abs(rawY);
+        const x = parseCoord(n.X); const y = parseCoord(n.Y);
+        if (x !== null && Math.abs(x) > maxVal) maxVal = Math.abs(x);
+        if (y !== null && Math.abs(y) > maxVal) maxVal = Math.abs(y);
     });
-
-    // Si los números son mayores a 10,000, asumimos que viene en formato bruto de Gephi y lo achicamos.
-    // Si no, asumimos que son coordenadas de pantalla ya guardadas y las dejamos intactas.
-    const isGephiRaw = maxVal > 15000;
-    const scaleFactor = isGephiRaw ? (3500 / maxVal) : 1;
+    const isGephiRaw   = maxVal > 15000;
+    const scaleFactor  = isGephiRaw ? (3500 / maxVal) : 1;
 
     todos.forEach(n => {
         if (!n.ID && !n.Nombre) return;
 
-        const idReal = n.ID ? n.ID.toString().trim() : '';
-        const nombreReal = n.Nombre && n.Nombre.trim() !== "" ? n.Nombre.trim() : idReal;
-        const idUnico = (idReal || nombreReal).toLowerCase();
-        
-        if (nodosProcesados.has(idUnico)) return;
-        nodosProcesados.add(idUnico);
+        const idReal      = n.ID     ? n.ID.toString().trim()     : '';
+        const nombreReal  = n.Nombre && n.Nombre.trim() !== '' ? n.Nombre.trim() : idReal;
+        const idUnico     = (idReal || nombreReal).toLowerCase();
+        if (procesados.has(idUnico)) return;
+        procesados.add(idUnico);
 
-        const esConocido = n.Conocido && n.Conocido.toString().trim().toLowerCase() === 'si';
-        const hexCost = parseInt(n.HEX) || 0;
-        const isHexNode = (idUnico === 'hex' || idUnico === 'hechizo hex');
+        const esConocido  = n.Conocido && n.Conocido.toString().trim().toLowerCase() === 'si';
+        const hexCost     = parseInt(n.HEX) || 0;
+        const isHexNode   = (idUnico === 'hex' || idUnico === 'hechizo hex');
 
-        let baseName = nombreReal.replace(/\s*\(\d+\)$/, '').trim(); 
-        let nombreMostrar = (esConocido || isHexNode) ? 
-            (isHexNode ? "HEX" : `${baseName} (${hexCost})`) : 
-            `${idReal.toLowerCase().includes('hechizo') ? idReal : `Hechizo ${idReal}`} (${hexCost})`;
+        const baseName    = nombreReal.replace(/\s*\(\d+\)$/, '').trim();
+        const nombreMostrar = (esConocido || isHexNode)
+            ? (isHexNode ? "HEX" : `${baseName} (${hexCost})`)
+            : `${idReal.toLowerCase().includes('hechizo') ? idReal : `Hechizo ${idReal}`} (${hexCost})`;
 
-        const keyX = Object.keys(n).find(k => k.trim().toLowerCase() === 'x');
-        const keyY = Object.keys(n).find(k => k.trim().toLowerCase() === 'y');
-        
-        let rawX = keyX ? parseGephiCoord(n[keyX]) : null;
-        let rawY = keyY ? parseGephiCoord(n[keyY]) : null;
-
-        // Si no hay coordenadas, le damos una posición aleatoria central
+        let rawX = parseCoord(n.X); let rawY = parseCoord(n.Y);
         if (rawX === null) rawX = (Math.random() * 800) - 400;
         if (rawY === null) rawY = (Math.random() * 800) - 400;
 
-        let finalX = rawX * scaleFactor;
-        let finalY = rawY * scaleFactor;
-
-        let radio = isHexNode ? 65 : (esConocido ? 35 : 28);
-
-        const extData = (key) => {
-            const foundKey = Object.keys(n).find(k => k.trim().toLowerCase().includes(key));
-            return foundKey ? n[foundKey] : '';
-        };
-
         estadoMapa.nodos.push({
-            id: idReal,
+            id:             idReal,
             nombreOriginal: nombreReal,
-            nombre: nombreMostrar,
-            afinidad: n.Afinidad || 'Desconocida', 
-            clase: n.Clase || '-',
-            hex: hexCost,
-            resumen: n.Resumen || 'Sin descripción',
-            efecto: n.Efecto || '',
-            overcast: extData('overcast'), 
-            undercast: extData('undercast'), 
-            especial: extData('especial'),
-            esConocido: esConocido,
-            isHexNode: isHexNode,
-            x: finalX,
-            y: finalY,
-            radio: radio,
+            nombre:         nombreMostrar,
+            afinidad:       n.Afinidad || 'Desconocida',
+            clase:          n.Clase    || '-',
+            hex:            hexCost,
+            resumen:        n.Resumen  || 'Sin descripción',
+            efecto:         n.Efecto   || '',
+            overcast:       n['Overcast 100%'] || n.overcast || '',
+            undercast:      n['Undercast 50%'] || n.undercast || '',
+            especial:       n.Especial || '',
+            esConocido,
+            isHexNode,
+            x:              rawX * scaleFactor,
+            y:              rawY * scaleFactor,
+            radio:          isHexNode ? 65 : (esConocido ? 35 : 28),
             incomingSources: [],
-            // Si el mapa era de Gephi, forzamos que se marque como modificado para que el usuario pueda guardarlo arreglado.
-            modificado: isGephiRaw 
+            modificado:     isGephiRaw
         });
     });
 }
 
 function procesarEnlaces(arrayStrings) {
     estadoMapa.enlaces = [];
+
     const findNode = (val) => {
         if (!val) return null;
-        const str = String(val).trim().toLowerCase();
+        const str    = String(val).trim().toLowerCase();
         const strNum = str.replace(/^hechizo\s+/i, '').trim();
-
         return estadoMapa.nodos.find(n => {
-            const nid = String(n.id).trim().toLowerCase();
-            const nnom = String(n.nombreOriginal).trim().toLowerCase();
+            const nid    = String(n.id).trim().toLowerCase();
+            const nnom   = String(n.nombreOriginal).trim().toLowerCase();
             const nidNum = nid.replace(/^hechizo\s+/i, '').trim();
             const nnomNum = nnom.replace(/^hechizo\s+/i, '').trim();
             return nid === str || nnom === str || nidNum === strNum || nnomNum === strNum;
@@ -196,12 +149,11 @@ function procesarEnlaces(arrayStrings) {
 
     arrayStrings.forEach(rel => {
         if (!rel) return;
-        const vals = Object.values(rel).map(v => String(v).trim());
-        if (vals.length < 2) return;
-
-        const sourceNode = findNode(vals[0]);
-        const targetNode = findNode(vals[1]);
-
+        // getDataCompleta devuelve { Source, Target }
+        const src = rel.Source || Object.values(rel)[0];
+        const tgt = rel.Target || Object.values(rel)[1];
+        const sourceNode = findNode(src);
+        const targetNode = findNode(tgt);
         if (sourceNode && targetNode && sourceNode !== targetNode) {
             estadoMapa.enlaces.push({ source: sourceNode, target: targetNode });
             targetNode.incomingSources.push(sourceNode);
@@ -212,19 +164,96 @@ function procesarEnlaces(arrayStrings) {
 
 export function actualizarColoresFlechas() {
     estadoMapa.nodos.forEach(nodo => {
-        if (nodo.incomingSources.length === 0) {
-            nodo.arrowColor = ESTETICA.lineaDescubierta; 
-            return;
-        }
-        const total = nodo.incomingSources.length;
+        if (nodo.incomingSources.length === 0) { nodo.arrowColor = ESTETICA.lineaDescubierta; return; }
+        const total    = nodo.incomingSources.length;
         const conocidos = nodo.incomingSources.filter(n => n.esConocido).length;
-        
-        if (conocidos === total) {
-            nodo.arrowColor = ESTETICA.lineaDescubierta; 
-        } else if (conocidos > 0) {
-            nodo.arrowColor = ESTETICA.lineaMostaza; 
-        } else {
-            nodo.arrowColor = ESTETICA.lineaRosa; 
-        }
+        if (conocidos === total)     nodo.arrowColor = ESTETICA.lineaDescubierta;
+        else if (conocidos > 0)     nodo.arrowColor = ESTETICA.lineaMostaza;
+        else                        nodo.arrowColor = ESTETICA.lineaRosa;
     });
+}
+
+// ── Guardar posiciones + visibilidad (desde mapa-main) ────────
+// Usado cuando solo se arrastran nodos o se cambia si/no en el panel info
+export async function guardarPosicionesYVisibilidad(cambios) {
+    // cambios = [{ id, x, y, conocido: 'si'/'no' }]
+    try {
+        // 1. Batch de posiciones
+        const posiciones = cambios.map(c => ({ hechizo_id: c.id, pos_x: c.x, pos_y: c.y }));
+        await db.hechizos.guardarPosicionesBatch(posiciones);
+
+        // 2. Visibilidad nodo a nodo
+        for (const c of cambios) {
+            await db.hechizos.toggleConocido(c.id, c.conocido === 'si');
+        }
+        return true;
+    } catch (e) {
+        console.error("Error en guardarPosicionesYVisibilidad:", e);
+        return false;
+    }
+}
+
+// ── Guardar edición completa (desde mapa-edicion) ─────────────
+// Maneja nodos (upsert/delete), enlaces (insert/delete) y colores de afinidad
+export async function guardarEdicionCompleta(payload) {
+    // payload = { nodos: [...], enlaces: [...], afinidades: {...} }
+    try {
+        // ── NODOS ─────────────────────────────────────────────
+        for (const nodo of payload.nodos) {
+            if (nodo.eliminado) {
+                await supabase.from('hechizos_nodos').delete().eq('hechizo_id', nodo.idOriginal);
+            } else {
+                const d = nodo.datos;
+                await supabase.from('hechizos_nodos').upsert({
+                    hechizo_id:  d.ID,
+                    nombre:      d.Nombre,
+                    hex_cost:    d.HEX      || 0,
+                    clase:       d.Clase    || '-',
+                    afinidad:    d.Afinidad || '',
+                    resumen:     d.Resumen  || '',
+                    efecto:      d.Efecto   || '',
+                    overcast:    d['Overcast 100%'] || '',
+                    undercast:   d['Undercast 50%'] || '',
+                    especial:    d.Especial || '',
+                    pos_x:       d.X        || 0,
+                    pos_y:       d.Y        || 0,
+                    es_conocido: d.Conocido === 'si'
+                }, { onConflict: 'hechizo_id' });
+
+                // Si el ID cambió, borrar el registro viejo
+                if (nodo.idOriginal && nodo.idOriginal !== d.ID) {
+                    await supabase.from('hechizos_nodos').delete().eq('hechizo_id', nodo.idOriginal);
+                }
+            }
+        }
+
+        // ── ENLACES ───────────────────────────────────────────
+        for (const enlace of payload.enlaces) {
+            if (enlace.eliminado) {
+                await supabase.from('hechizos_strings')
+                    .delete()
+                    .eq('source_id', enlace.source)
+                    .eq('target_id', enlace.target);
+            } else {
+                await supabase.from('hechizos_strings').upsert({
+                    source_id: enlace.source,
+                    target_id: enlace.target
+                }, { onConflict: 'source_id,target_id' });
+            }
+        }
+
+        // ── COLORES DE AFINIDAD ───────────────────────────────
+        for (const [afinidad, colores] of Object.entries(payload.afinidades || {})) {
+            await supabase.from('hechizos_afinidades').upsert({
+                afinidad,
+                color_t: colores.t,
+                color_b: colores.b
+            }, { onConflict: 'afinidad' });
+        }
+
+        return true;
+    } catch (e) {
+        console.error("Error en guardarEdicionCompleta:", e);
+        return false;
+    }
 }

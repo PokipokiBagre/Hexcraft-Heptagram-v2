@@ -1,6 +1,8 @@
 import { estadoMapa } from './mapa-state.js';
-import { cargarDatos, actualizarColoresFlechas, API_HECHIZOS } from './mapa-data.js';
+import { cargarDatos, actualizarColoresFlechas, guardarPosicionesYVisibilidad } from './mapa-data.js';
 import { inicializarCanvas, dibujarFrame, actualizarPanelInfo, resetearPosicionPanel } from './mapa-ui.js';
+import { hexAuth } from '../hex-auth.js';
+import { db }      from '../hex-db.js';
 
 window.onload = async () => {
     try {
@@ -48,8 +50,8 @@ function inicializarSidebar() {
         btn.id = 'btn-jug-' + jug.replace(/\s+/g, '-');
         
         btn.innerHTML = `
-            <img src="../img/imgpersonajes/${normalizarNombre(jug)}icon.png" 
-                 onerror="this.src='../img/imgobjetos/no_encontrado.png'" 
+            <img src="${db.storage.urlBase}/imgpersonajes/${normalizarNombre(jug)}icon.png" 
+                 onerror="this.onerror=null; this.src='${db.storage.urlBase}/imginterfaz/no_encontrado.png'" 
                  style="width:24px; height:24px; border-radius:50%; object-fit:cover; border:1px solid var(--gold);">
             <span>${jug}</span>`;
             
@@ -107,30 +109,25 @@ window.seleccionarJugador = (nombre) => {
     window.cerrarPanelInfo(); 
 };
 
-window.abrirMenuOP = () => { 
+window.abrirMenuOP = async () => { 
     if (estadoMapa.esAdmin) { 
         estadoMapa.esAdmin = false; 
         alert("Modo OP Desactivado."); 
         document.getElementById('btn-save-map').classList.add('oculto');
         document.getElementById('btn-ordenar').classList.add('oculto');
-        
-        // APAGA EL EDITOR
         document.getElementById('btn-editar-mapa').classList.add('oculto');
         if (window.mapaEditor) window.mapaEditor.desactivar(); 
-        
         estadoMapa.interaccion.selectedNode = null;
         actualizarPanelInfo(); 
     } else { 
-        if (prompt("Contraseña MÁSTER:") === atob('Y2FuZXk=')) { 
-            estadoMapa.esAdmin = true; 
+        await hexAuth._mostrarModalLogin();
+        estadoMapa.esAdmin = hexAuth.esAdmin();
+        if (estadoMapa.esAdmin) {
             document.getElementById('btn-ordenar').classList.remove('oculto');
-            
-            // ENCIENDE EL EDITOR
             document.getElementById('btn-editar-mapa').classList.remove('oculto'); 
-            
             alert("Modo OP Activado.\n- TOCA un nodo para fijar su menú.\n- Usa 'Auto-Ordenar' para organizar el mapa.");
             actualizarPanelInfo(); 
-        } 
+        }
     } 
 };
 
@@ -256,42 +253,28 @@ window.guardarCambiosMapa = async () => {
     const btn = document.getElementById('btn-save-map');
     btn.innerText = "Guardando..."; btn.disabled = true;
 
-    // AHORA MANDAMOS LA X E Y REAL DIRECTAMENTE.
     const cambios = estadoMapa.nodos.filter(n => n.modificado).map(n => ({
-        id: n.id || n.nombreOriginal, 
-        x: n.x, 
-        y: n.y, 
+        id:      n.id || n.nombreOriginal,
+        x:       n.x,
+        y:       n.y,
         conocido: n.esConocido ? 'si' : 'no'
     }));
 
-    if(cambios.length === 0) {
+    if (cambios.length === 0) {
         alert("No hay cambios para guardar.");
-        btn.classList.add('oculto');
-        btn.disabled = false;
+        btn.classList.add('oculto'); btn.disabled = false;
         return;
     }
 
-    try {
-        const res = await fetch(API_HECHIZOS, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({ accion: 'guardar_mapa', cambios: cambios }) 
-        });
-        const data = await res.json();
-        
-        if (data.status === 'success') {
-            alert("¡Éxito! Posiciones guardadas permanentemente.");
-            estadoMapa.nodos.forEach(n => n.modificado = false);
-            btn.classList.add('oculto');
-        } else {
-            alert("El servidor falló: " + (data.message || 'Error desconocido'));
-        }
-    } catch(e) {
-        alert("Fallo de red al intentar guardar en el servidor.");
+    if (await guardarPosicionesYVisibilidad(cambios)) {
+        alert("¡Éxito! Posiciones guardadas permanentemente.");
+        estadoMapa.nodos.forEach(n => n.modificado = false);
+        btn.classList.add('oculto');
+    } else {
+        alert("Fallo de conexión al intentar guardar.");
     }
 
-    btn.innerText = "💾 Guardar Cambios";
-    btn.disabled = false;
+    btn.innerText = "💾 Guardar Cambios"; btn.disabled = false;
 };
 
 function centrarCamaraAuto() {
