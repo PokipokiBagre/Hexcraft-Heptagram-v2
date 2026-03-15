@@ -7,11 +7,16 @@ import { db as hexDB } from '../hex-db.js';
 estadoUI.colaCambios.hexCasts = estadoUI.colaCambios.hexCasts || [];
 
 window.onload = async () => {
-    // Favicon desde Supabase Storage
-    const favicon = document.querySelector("link[rel='icon']");
-    if (favicon) favicon.href = `${hexDB.storage.urlBase}/imginterfaz/icon.png`;
+    // Buscar el favicon o crearlo si no existe
+    let favicon = document.querySelector("link[rel='icon']");
+    if (!favicon) {
+        favicon = document.createElement("link");
+        favicon.rel = "icon";
+        document.head.appendChild(favicon);
+    }
+    // Asignar la ruta de Supabase
+    favicon.href = `${db.storage.urlBase}/imginterfaz/icon.png`;
 
-    // 1. Limpieza de caché si recarga con F5
     const perf = performance.getEntriesByType("navigation")[0];
     if (perf && perf.type === "reload") {
         localStorage.removeItem('hex_hechizos_cache');
