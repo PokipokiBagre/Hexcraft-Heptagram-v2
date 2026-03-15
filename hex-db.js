@@ -205,10 +205,10 @@ export const db = {
             });
 
             return {
-                nodos:       todosNodos.filter(n => n.es_conocido).map(mapNodo),
-                nodosOcultos:todosNodos.filter(n => !n.es_conocido).map(mapNodo),
-                string:      (strings.data || []).map(s => ({ Source: s.source_id, Target: s.target_id })),
-                inventario:  (inventario.data || []).map(i => ({
+                nodos:        todosNodos.filter(n => n.es_conocido).map(mapNodo),
+                nodosOcultos: todosNodos.filter(n => !n.es_conocido).map(mapNodo),
+                string:       (strings.data || []).map(s => ({ Source: s.source_id, Target: s.target_id })),
+                inventario:   (inventario.data || []).map(i => ({
                     Personaje:          i.personaje_nombre,
                     Hechizo:            i.hechizo_nombre,
                     'Hechizo Afinidad': i.hechizo_afinidad,
@@ -267,8 +267,7 @@ export const db = {
             return !error;
         },
 
-
-            async guardarPosicionesBatch(posiciones) {
+        async guardarPosicionesBatch(posiciones) {
             let hasError = false;
             // Procesamos las actualizaciones en bloques de 15 para no ahogar la base de datos
             for (let i = 0; i < posiciones.length; i += 15) {
@@ -283,13 +282,10 @@ export const db = {
                 
                 const resultados = await Promise.all(promesas);
                 if (resultados.some(r => r.error)) hasError = true;
-                        }
+            }
             return !hasError;
-        }
-    }, 
-
-    // ══════════════════════════════════════════════════════
-    // MISIONES
+        } // <-- AQUI ESTÁ LA LLAVE QUE FALTABA
+    },
 
     // ══════════════════════════════════════════════════════
     // MISIONES
@@ -398,3 +394,4 @@ export const db = {
             return data.publicUrl;
         }
     }
+};
