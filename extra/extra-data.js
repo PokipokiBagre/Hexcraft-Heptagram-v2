@@ -120,29 +120,38 @@ export async function cargarDatos() {
     });
 }
 
+// 👉 NUEVO: Envuelve la llamada a Supabase en una protección con Autodestrucción
+function uploadSeguro(ruta, file, tipoContenido) {
+    const solicitud = supabase.storage.from(BUCKET)
+        .upload(ruta, file, { upsert: true, contentType: tipoContenido, cacheControl: '3600' });
+    
+    let timerId;
+    const tiempoLimite = new Promise((_, reject) => {
+        timerId = setTimeout(() => reject(new Error("Conexión interrumpida por suspensión de pestaña.")), 25000);
+    });
+
+    // Promise.race compite entre la subida y el límite de 25 seg.
+    // El .finally() destruye el temporizador para que no afecte a subidas futuras
+    return Promise.race([solicitud, tiempoLimite]).finally(() => clearTimeout(timerId));
+}
+
 export async function subirImagen(file, keyNorm, tipoIcono, onProgreso) {
     const rutaPNG = `${tipoIcono}/${keyNorm}.png`;
     const rutaJPG = `${tipoIcono}/${keyNorm}.jpg`;
 
     if (onProgreso) onProgreso(30, 'Procesando formatos...');
-    
-    // Convertimos de forma segura
     const { blobPNG, blobJPG } = await convertirAFormatos(file);
 
     const filePNG = new File([blobPNG], `${keyNorm}.png`, { type: 'image/png' });
     const fileJPG = new File([blobJPG], `${keyNorm}.jpg`, { type: 'image/jpeg' });
 
     if (onProgreso) onProgreso(50, 'Subiendo versión PNG...');
-    const { error: errPNG } = await supabase.storage
-        .from(BUCKET)
-        .upload(rutaPNG, filePNG, { upsert: true, contentType: 'image/png', cacheControl: '3600' });
-    if (errPNG) throw new Error(errPNG.message || 'Error PNG');
+    const { error: errPNG } = await uploadSeguro(rutaPNG, filePNG, 'image/png');
+    if (errPNG) throw new Error(errPNG.message || 'Error en red PNG');
 
     if (onProgreso) onProgreso(80, 'Subiendo versión JPG...');
-    const { error: errJPG } = await supabase.storage
-        .from(BUCKET)
-        .upload(rutaJPG, fileJPG, { upsert: true, contentType: 'image/jpeg', cacheControl: '3600' });
-    if (errJPG) throw new Error(errJPG.message || 'Error JPG');
+    const { error: errJPG } = await uploadSeguro(rutaJPG, fileJPG, 'image/jpeg');
+    if (errJPG) throw new Error(errJPG.message || 'Error en red JPG');
 
     if (onProgreso) onProgreso(100, '¡Imagen subida exitosamente!');
 
@@ -151,56 +160,55 @@ export async function subirImagen(file, keyNorm, tipoIcono, onProgreso) {
 
 function convertirAFormatos(file) {
     return new Promise((resolve, reject) => {
-        const reader = new FileReader();
+        const img = new Image();
+        const url = URL.createObjectURL(file);
         
-        reader.onload = (event) => {
-            const img = new Image();
-            img.onload = () => {
-                try {
-                    const canvas = document.createElement('canvas');
-                    const MAX_SIZE = 512; 
-                    let width = img.naturalWidth;
-                    let height = img.naturalHeight;
+        img.onload = () => {
+            try {
+                const canvas = document.createElement('canvas');
+                const MAX_SIZE = 512; 
+                let width = img.naturalWidth;
+                let height = img.naturalHeight;
 
-                    if (width > MAX_SIZE || height > MAX_SIZE) {
-                        const ratio = Math.min(MAX_SIZE / width, MAX_SIZE / height);
-                        width = Math.round(width * ratio);
-                        height = Math.round(height * ratio);
-                    }
-
-                    canvas.width  = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    
-                    // 1. Dibujar y generar PNG
-                    ctx.drawImage(img, 0, 0, width, height);
-                    canvas.toBlob((blobPNG) => {
-                        
-                        // 2. Dibujar fondo negro y generar JPG
-                        const canvasJPG = document.createElement('canvas');
-                        canvasJPG.width = width;
-                        canvasJPG.height = height;
-                        const ctxJPG = canvasJPG.getContext('2d');
-                        ctxJPG.fillStyle = '#05000a'; 
-                        ctxJPG.fillRect(0, 0, width, height);
-                        ctxJPG.drawImage(img, 0, 0, width, height);
-                        
-                        canvasJPG.toBlob((blobJPG) => {
-                            URL.revokeObjectURL(event.target.result);
-                            resolve({ blobPNG, blobJPG });
-                        }, 'image/jpeg', 0.9);
-
-                    }, 'image/png');
-
-                } catch (err) {
-                    reject(err);
+                if (width > MAX_SIZE || height > MAX_SIZE) {
+                    const ratio = Math.min(MAX_SIZE / width, MAX_SIZE / height);
+                    width = Math.round(width * ratio);
+                    height = Math.round(height * ratio);
                 }
-            };
-            img.onerror = () => reject(new Error("Formato de imagen inválido."));
-            img.src = event.target.result;
+
+                canvas.width  = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                
+                // 1. Dibujar PNG original
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                canvas.toBlob((blobPNG) => {
+                    // 2. Dibujar JPG con fondo negro
+                    const canvasJPG = document.createElement('canvas');
+                    canvasJPG.width = width;
+                    canvasJPG.height = height;
+                    const ctxJPG = canvasJPG.getContext('2d');
+                    
+                    ctxJPG.fillStyle = '#05000a'; 
+                    ctxJPG.fillRect(0, 0, width, height);
+                    ctxJPG.drawImage(img, 0, 0, width, height);
+
+                    canvasJPG.toBlob((blobJPG) => {
+                        URL.revokeObjectURL(url);
+                        resolve({ blobPNG, blobJPG });
+                    }, 'image/jpeg', 0.9);
+
+                }, 'image/png');
+            } catch (err) {
+                reject(new Error("Error procesando imagen localmente."));
+            }
         };
         
-        reader.onerror = () => reject(new Error("Error leyendo el archivo original."));
-        reader.readAsDataURL(file); 
+        img.onerror = () => {
+            URL.revokeObjectURL(url);
+            reject(new Error("Formato de imagen inválido o corrupto."));
+        };
+        img.src = url;
     });
 }
