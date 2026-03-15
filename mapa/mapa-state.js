@@ -27,10 +27,10 @@ window.mapaColores = {}; // Se llenará dinámicamente desde Google Sheets
 export const COLOR_AFINIDAD = window.mapaColores;
 
 export const ESTETICA = {
-    lineaDescubierta: 'rgba(210, 190, 230, 0.3)', 
-    lineaMostaza: 'rgba(212, 175, 55, 0.4)',       
-    lineaRosa: 'rgba(200, 60, 100, 0.35)',         
-    lineaPrecedente: 'rgba(177, 156, 217, 0.45)',   
+    lineaDescubierta: 'rgba(210, 190, 230, 0.2)', 
+    lineaMostaza: 'rgba(212, 175, 55, 0.3)',       
+    lineaRosa: 'rgba(200, 60, 100, 0.25)',         
+    lineaPrecedente: 'rgba(177, 156, 217, 0.5)', 
     lineaSaliente: 'rgba(236, 213, 154, 0.45)'      
 };
 
