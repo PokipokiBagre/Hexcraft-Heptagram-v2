@@ -380,7 +380,7 @@ export const db = {
                 .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
                 .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n')
                 .replace(/\s+/g,'_')
-                .replace(/[^a-z0-9_]/g,'');
+                .replace(/[^a-z0-9_\-]/g,'');
 
             // 2. Extraer el nombre sin la extensión y normalizarlo
             const nombreLimpio = nombreArchivo.replace(/\.(png|jpg|jpeg|webp|gif)$/i, '');
