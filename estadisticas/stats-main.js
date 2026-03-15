@@ -6,7 +6,7 @@ import { hexAuth, supabase } from '../hex-auth.js';
 import { db } from '../hex-db.js';
 
 // ============================================================
-// stats-main.js — VERSIÓN SUPABASE (OPTIMIZADA LOTE)
+// stats-main.js — VERSIÓN SUPABASE (ESTABILIDAD MÁXIMA)
 // ============================================================
 
 if (!estadoUI.colaCambios) estadoUI.colaCambios = { stats: {} };
@@ -276,9 +276,8 @@ window.mostrarPaginaOP = (subvista) => { estadoUI.vistaActual = subvista; refres
 window.setFiltro = (tipo, valor) => { if(tipo==='rol') estadoUI.filtroRol=valor; if(tipo==='act') estadoUI.filtroAct=valor; window.sincronizarUI(); };
 
 // ============================================================================
-// 5. SINCRONIZACIÓN CON SUPABASE (GUARDADO MASIVO RÁPIDO)
+// 5. SINCRONIZACIÓN DIRECTA (A PRUEBA DE FALLOS Y ARRAYS)
 // ============================================================================
-// 👉 LIMPIO Y DIRECTO: Marcamos quién cambió sin ensuciar la memoria
 window.encolarCambio = (nombre) => {
     try {
         if (!estadoUI.colaCambios.stats[nombre]) estadoUI.colaCambios.stats[nombre] = {};
@@ -297,16 +296,15 @@ window.actualizarBotonSync = () => {
     }
 };
 
-// 👉 NUEVO GUARDADO POR LOTES: 1 Sola llamada a base de datos
+// 👉 NUEVO GUARDADO SECUENCIAL: Elude los bugs de lotes y muestra qué falló
 window.ejecutarSincronizacion = async () => {
     const btn = document.getElementById('btn-sync-global');
-    btn.innerText = "Guardando por Lote..."; btn.disabled = true;
+    btn.innerText = "Guardando Datos..."; btn.disabled = true;
 
     try {
-        const personajesParaUpsert = [];
-
+        // Ejecutamos upserts uno a uno a la velocidad de la luz. 
+        // Esto es 100% compatible con Supabase sin importar el tamaño del paquete.
         for (const [nombre, campos] of Object.entries(estadoUI.colaCambios.stats)) {
-            // Si hay comando de borrado, lo hacemos individual (es muy raro borrar a muchos a la vez)
             if (campos.__ELIMINAR_PERSONAJE__) {
                 await db.personajes.eliminar(nombre);
                 continue;
@@ -315,8 +313,7 @@ window.ejecutarSincronizacion = async () => {
             const p = statsGlobal[nombre];
             if (!p) continue;
 
-            // Preparamos los datos del personaje para el paquete
-            personajesParaUpsert.push({
+            const payload = {
                 nombre,
                 is_player:  p.isPlayer,
                 is_active:  p.isActive,
@@ -385,25 +382,23 @@ window.ejecutarSincronizacion = async () => {
                 bf_oscura:     p.buffs?.oscura     || 0,
 
                 estados: p.estados || {}
-            });
-        }
+            };
 
-        // Enviamos todo el bloque de una sola vez
-        if (personajesParaUpsert.length > 0) {
-            const exito = await db.personajes.upsertBatch(personajesParaUpsert);
-            if (!exito) throw new Error("Fallo en la actualización masiva.");
+            const exito = await db.personajes.upsert(payload);
+            if (!exito) throw new Error(`Rechazo del servidor al guardar datos de: ${nombre}`);
         }
 
         estadoUI.colaCambios.stats = {};
         const alertBox = document.createElement('div');
-        alertBox.innerHTML = "¡Actualización Masiva Exitosa! ✅";
+        alertBox.innerHTML = "¡Guardado Exitoso! ✅";
         alertBox.style.cssText = "position:fixed; top:30px; left:50%; transform:translateX(-50%); background:var(--gold); color:#000; padding:15px 40px; border-radius:8px; font-weight:bold; font-size:1.2em; z-index:99999; box-shadow:0 0 20px var(--gold);";
         document.body.appendChild(alertBox);
         setTimeout(() => window.location.reload(), 1000);
 
     } catch(e) {
-        alert("Error de red con Supabase al intentar guardar los cambios.");
+        alert("Error crítico al guardar:\n" + e.message);
         console.error(e);
+        btn.innerText = "Reintentar Guardado";
         btn.disabled = false;
         window.sincronizarUI();
     }
