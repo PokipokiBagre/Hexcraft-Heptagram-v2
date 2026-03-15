@@ -103,12 +103,21 @@ function recalcularVidas(p, accionMutadora) {
 window.recalcularBases = () => {
     const n = estadoUI.personajeSeleccionado; const p = statsGlobal[n]; if(!p) return;
     if(confirm(`¿Recalcular Corazones Óptimos de ${n.toUpperCase()}?`)) {
-        const calcMagT = ['energetica','espiritual','mando','psiquica'].reduce((acc,k)=>acc+(p.afinidadesBase[k]||0)+(p.hechizos[k]||0)+(p.hechizosEfecto[k]||0)+(p.buffs[k]||0), 0);
-        p.baseVidaRojaMax = 10;
-        p.vidaRojaActual = calcularVidaRojaMax(p);
-        p.baseVidaAzul = Math.floor(calcMagT / 4);
-        p.vidaAzul = p.baseVidaAzul;
-        window.encolarCambio(n); window.sincronizarUI();
+        
+        // 1. Límite Rojo = 10 + (Física Base / 2)
+        const fisBase = p.afinidadesBase?.fisica || 0;
+        p.baseVidaRojaMax = 10 + Math.floor(fisBase / 2);
+        
+        // Curamos al tope respetando la suma total (incluyendo extras)
+        p.vidaRojaActual = calcularVidaRojaMax(p); 
+        
+        // 2. Vida Azul Base = Magias Base / 4 (No se meten los buffs aquí)
+        const magBase = (p.afinidadesBase?.energetica||0) + (p.afinidadesBase?.espiritual||0) + (p.afinidadesBase?.mando||0) + (p.afinidadesBase?.psiquica||0);
+        p.baseVidaAzul = Math.floor(magBase / 4);
+        p.vidaAzul = p.baseVidaAzul; // Solo un respaldo, visualmente se suma con los buffs
+        
+        window.encolarCambio(n); 
+        window.sincronizarUI();
     }
 };
 
