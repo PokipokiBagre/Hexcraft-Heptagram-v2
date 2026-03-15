@@ -3,15 +3,15 @@
 // ============================================================
 
 import { supabase } from '../hex-auth.js';
-import { db }       from '../hex-db.js';
 import { BUCKET, STORAGE_URL, itemsPersonajes, itemsObjetos, itemsInterfaz } from './extra-state.js';
 
+// 👉 ¡CORRECCIÓN CLAVE 1!: Agregamos \- al regex para NO borrar los guiones (hex-002)
 const norm = (str) => str ? str.toString().trim().toLowerCase()
     .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
     .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
     .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n')
     .replace(/\s+/g,'_')
-    .replace(/[^a-z0-9_]/g,'') : '';
+    .replace(/[^a-z0-9_\-]/g,'') : ''; // <-- AHORA ACEPTA GUIONES
 
 export async function asegurarBucket() {
     try {
@@ -22,20 +22,18 @@ export async function asegurarBucket() {
         if (!existe) {
             await supabase.storage.createBucket(BUCKET, { public: true });
         }
-    } catch(e) {
-        // Ignoramos silenciosamente si falla por permisos
-    }
+    } catch(e) {}
 }
 
 export async function cargarDatos() {
     try {
-        // 1. Obtener nombres desde la base de datos
-        const [personajesArr, objetosArr] = await Promise.all([
-            db.personajes.getAll(),
-            db.objetos.getCatalogo()
+        // 👉 CORRECCIÓN CLAVE 2: Restauramos tus llamadas directas a la DB
+        const [ {data: dbPersonajes}, {data: dbObjetos} ] = await Promise.all([
+            supabase.from('personajes').select('nombre, icono_override'),
+            supabase.from('objetos').select('nombre')
         ]);
 
-        // 2. Listar qué archivos existen REALMENTE en Supabase Storage
+        // Listar qué archivos existen REALMENTE en Supabase Storage
         const [ {data: filesPj}, {data: filesOb}, {data: filesInt} ] = await Promise.all([
             supabase.storage.from(BUCKET).list('imgpersonajes', { limit: 1000 }),
             supabase.storage.from(BUCKET).list('imgobjetos', { limit: 1000 }),
@@ -48,7 +46,7 @@ export async function cargarDatos() {
 
         // --- 1. PERSONAJES ---
         itemsPersonajes.length = 0;
-        personajesArr.forEach(p => {
+        (dbPersonajes || []).forEach(p => {
             const kn = norm(p.icono_override || p.nombre) + 'icon';
             itemsPersonajes.push({
                 nombre: p.nombre,
@@ -60,7 +58,7 @@ export async function cargarDatos() {
 
         // --- 2. OBJETOS ---
         itemsObjetos.length = 0;
-        objetosArr.forEach(o => {
+        (dbObjetos || []).forEach(o => {
             const kn = norm(o.nombre);
             itemsObjetos.push({
                 nombre: o.nombre,
@@ -70,7 +68,7 @@ export async function cargarDatos() {
             });
         });
 
-        // --- 3. INTERFAZ (LISTA MANUAL DE ARCHIVOS NECESARIOS) ---
+        // --- 3. INTERFAZ ---
         itemsInterfaz.length = 0;
         const listaRequeridaInterfaz = [
             { id: 'icon', nombre: 'Icono de la Pestaña (icon)' },
@@ -88,7 +86,7 @@ export async function cargarDatos() {
         listaRequeridaInterfaz.forEach(item => {
             itemsInterfaz.push({
                 nombre: item.nombre,
-                keyNorm: item.id, // El nombre exacto que usará el archivo
+                keyNorm: item.id, 
                 existe: setInt.has(item.id),
                 url: `${STORAGE_URL}/imginterfaz/${item.id}.png`
             });
@@ -113,7 +111,6 @@ export async function subirImagen(file, keyNorm, tipoIcono, onProgreso) {
 
     if (errPNG) throw errPNG;
 
-    // Subir también como JPG por si alguna etiqueta HTML vieja pide .jpg
     await supabase.storage
         .from(BUCKET)
         .upload(rutaJPG, blob, { upsert: true, contentType: 'image/png' });
@@ -130,12 +127,10 @@ function convertirAPNG(file) {
         img.onload = () => {
             const canvas = document.createElement('canvas');
             
-            // Definir un tamaño máximo para evitar archivos gigantes
             const MAX_SIZE = 512; 
             let width = img.naturalWidth;
             let height = img.naturalHeight;
 
-            // Redimensionar si excede el límite
             if (width > MAX_SIZE || height > MAX_SIZE) {
                 const ratio = Math.min(MAX_SIZE / width, MAX_SIZE / height);
                 width = Math.round(width * ratio);
