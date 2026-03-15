@@ -449,102 +449,91 @@ if (dragHeader && modalContent) {
 window.descargarAumentada = () => { descargarArchivoCSV(generarCSVExportacion(), "HEX_ESTADOS_AUMENTADO.csv"); };
 
 // ============================================================================
-// 7. CREACIÓN Y BORRADO DE PERSONAJES
+// 7. CREACIÓN Y BORRADO DIRECTO EN SUPABASE
 // ============================================================================
 window.toggleCrearRol = () => { const btn=document.getElementById('btn-crear-rol'); if(btn.dataset.val==='npc'){btn.dataset.val='jugador';btn.innerText='🎭 ROL: JUGADOR';btn.style.background='#003300';btn.style.borderColor='#00e676';}else{btn.dataset.val='npc';btn.innerText='🎭 ROL: NPC';btn.style.background='#330000';btn.style.borderColor='#ff1744';} };
 window.toggleCrearAct = () => { const btn=document.getElementById('btn-crear-act'); if(btn.dataset.val==='activo'){btn.dataset.val='inactivo';btn.innerText='🌟 ESTADO: INACTIVO';btn.style.background='#330000';btn.style.borderColor='#ff1744';}else{btn.dataset.val='activo';btn.innerText='🌟 ESTADO: ACTIVO';btn.style.background='#003300';btn.style.borderColor='#00e676';} };
 window.updateCreationAfinitySum = () => { const s=['fis','ene','esp','man','psi','osc'].reduce((acc,id)=>acc+(parseInt(document.getElementById('npc-'+id)?.value)||0),0); const d=document.getElementById('creation-affinity-sum-display'); if(d) d.innerText=`Total Afinidades: ${s}`; };
 window.modForm = (inputId, cantidad) => { const input=document.getElementById(inputId); if(input){input.value=Math.max(0,(parseInt(input.value)||0)+cantidad); if(inputId.startsWith('npc-')) window.updateCreationAfinitySum();} };
 
-// ============================================================================
-// FUNCIONES DE CREACIÓN Y DESTRUCCIÓN EN BASE DE DATOS (SUPABASE)
-// ============================================================================
-
+// 👉 NUEVA FORJA: Conectada directamente a Supabase con los IDs correctos
 window.ejecutarCreacionNPC = async () => {
-    const btn = event.target;
-    const txtOriginal = btn.innerHTML;
-    btn.innerHTML = '⏳ FORJANDO...';
-    btn.disabled = true;
+    const btn = document.querySelector('button[onclick="window.ejecutarCreacionNPC()"]');
+    const txtOriginal = btn ? btn.innerText : 'FORJAR';
+    if (btn) { btn.innerText = '⏳ FORJANDO EN SUPABASE...'; btn.disabled = true; }
 
     try {
-        const nombreVal = document.getElementById('create-pj-nombre')?.value.trim();
-        const iconVal   = document.getElementById('create-pj-icono')?.value.trim() || '';
-        const roleVal   = document.getElementById('create-pj-role')?.value || 'Todos';
+        const nombre = document.getElementById('npc-nombre').value.trim(); 
+        if(!nombre) { alert("Falta el nombre."); if(btn){btn.innerText=txtOriginal; btn.disabled=false;} return; }
+        if(statsGlobal[nombre]) { alert("Ya existe un personaje con ese nombre."); if(btn){btn.innerText=txtOriginal; btn.disabled=false;} return; }
+        
+        const pV = (id) => parseInt(document.getElementById(id)?.value) || 0;
+        let stInit = {}; listaEstados.forEach(e => { stInit[e.id] = (e.tipo==='numero') ? 0 : false; });
+        
+        const isPlayer = document.getElementById('btn-crear-rol').dataset.val === 'jugador';
+        const isActive = document.getElementById('btn-crear-act').dataset.val === 'activo';
 
-        if(!nombreVal) {
-            alert('El nombre es obligatorio.');
-            btn.innerHTML = txtOriginal; btn.disabled = false;
-            return;
-        }
-
+        // Estructura idéntica a la tabla de base de datos
         const nuevoPJ = {
-            nombre:            nombreVal,
-            icono_override:    iconVal,
-            rol:               roleVal,
-            is_player:         document.getElementById('create-pj-isPlayer')?.checked || false,
-            is_active:         document.getElementById('create-pj-isActive')?.checked || false,
-            hex:               parseInt(document.getElementById('create-pj-hex')?.value) || 0,
-            asistencia:        parseInt(document.getElementById('create-pj-asistencia')?.value) || 1,
-            vex:               0, 
-            vida_roja_actual:  parseInt(document.getElementById('create-pj-baseVidaRojaMax')?.value) || 20, 
-            base_vida_roja_max:parseInt(document.getElementById('create-pj-baseVidaRojaMax')?.value) || 20,
-            base_vida_azul:    parseInt(document.getElementById('create-pj-baseVidaAzul')?.value) || 0,
-            base_guarda_dorada:parseInt(document.getElementById('create-pj-baseGuardaDorada')?.value) || 0,
-            base_dano_rojo:    parseInt(document.getElementById('create-pj-baseDanoRojo')?.value) || 0,
-            base_dano_azul:    parseInt(document.getElementById('create-pj-baseDanoAzul')?.value) || 0,
-            base_elim_dorada:  parseInt(document.getElementById('create-pj-baseElimDorada')?.value) || 0,
-            afinidades_base: {
-                fisica:     parseInt(document.getElementById('create-af-fisica')?.value) || 0,
-                energetica: parseInt(document.getElementById('create-af-energetica')?.value) || 0,
-                espiritual: parseInt(document.getElementById('create-af-espiritual')?.value) || 0,
-                mando:      parseInt(document.getElementById('create-af-mando')?.value) || 0,
-                psiquica:   parseInt(document.getElementById('create-af-psiquica')?.value) || 0,
-                oscura:     parseInt(document.getElementById('create-af-oscura')?.value) || 0
-            },
-            estado: [],
-            identidad: [],
-            hechizos_extra: {},
-            hechizos_efecto_extra: {},
-            buffs_extra: {}
+            nombre: nombre,
+            is_player: isPlayer,
+            is_active: isActive,
+            icono_override: "",
+            hex: pV('npc-hex'),
+            asistencia: 1,
+            vex: pV('npc-vex'),
+
+            vida_roja_actual: pV('npc-vra'),
+            base_vida_roja_max: pV('npc-vrm'),
+            base_vida_azul: pV('npc-va'),
+            base_guarda_dorada: pV('npc-gd'),
+            
+            base_dano_rojo: pV('npc-dr'),
+            base_dano_azul: pV('npc-da'),
+            base_elim_dorada: pV('npc-ed'),
+
+            af_fisica: pV('npc-fis'),
+            af_energetica: pV('npc-ene'),
+            af_espiritual: pV('npc-esp'),
+            af_mando: pV('npc-man'),
+            af_psiquica: pV('npc-psi'),
+            af_oscura: pV('npc-osc'),
+
+            estados: stInit
         };
 
+        // Inserción Atómica
         const exito = await db.personajes.upsert(nuevoPJ);
 
         if (exito) {
-            alert('¡Personaje forjado con éxito! El sistema se recargará.');
+            alert('¡Personaje forjado con éxito! El sistema se recargará para mostrarlo en tu catálogo.');
             window.location.reload(); 
         } else {
-            throw new Error("No se pudo insertar en la base de datos.");
+            throw new Error("Conexión rechazada por Supabase al intentar insertar.");
         }
-
     } catch (error) {
-        console.error('Error forjando personaje:', error);
-        alert('Error al forjar: ' + error.message);
-        btn.innerHTML = txtOriginal; btn.disabled = false;
+        console.error("Error forjando personaje:", error);
+        alert("Error al forjar: " + error.message);
+        if(btn) { btn.innerText = txtOriginal; btn.disabled = false; }
     }
 };
 
-window.borrarPersonaje = async (nombre) => {
-    if (!estadoUI.esAdmin) {
-        alert("No tienes permisos de Máster para eliminar personajes.");
-        return;
-    }
+// 👉 NUEVA ELIMINACIÓN: Borra de raíz en Supabase al instante
+window.borrarPersonaje = async (nombre, event) => {
+    if(event) event.stopPropagation();
     
-    const confirmacion = confirm(`⚠️ ADVERTENCIA CRÍTICA ⚠️\n\n¿Estás absolutamente seguro de que deseas DESTRUIR a [${nombre}] de la base de datos?\n\nEsta acción es irreversible y borrará sus stats de la existencia.`);
-    
-    if (!confirmacion) return;
-
-    try {
-        const exito = await db.personajes.eliminar(nombre);
-        if (exito) {
-            alert(`El personaje ${nombre} ha sido erradicado de Supabase.`);
-            window.location.reload();
-        } else {
-            alert("Hubo un problema al intentar eliminar al personaje desde la base de datos.");
+    if(confirm(`⚠️ ADVERTENCIA CRÍTICA ⚠️\n\n¿Estás absolutamente seguro de que deseas DESTRUIR a [${nombre.toUpperCase()}] de la base de datos?\n\nEsta acción es irreversible y borrará sus stats de la existencia.`)) {
+        try {
+            const exito = await db.personajes.eliminar(nombre);
+            if (exito) {
+                alert(`El personaje ${nombre} ha sido erradicado de Supabase.`);
+                window.location.reload();
+            } else {
+                alert("Hubo un problema al intentar eliminar al personaje desde la base de datos.");
+            }
+        } catch (error) {
+            alert("Error crítico al eliminar: " + error.message);
         }
-    } catch (error) {
-        console.error("Error al eliminar personaje:", error);
-        alert("Error crítico al eliminar: " + error.message);
     }
 };
 
