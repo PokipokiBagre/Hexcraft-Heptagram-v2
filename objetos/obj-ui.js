@@ -275,7 +275,7 @@ export function dibujarCatalogo() {
     const term = (estadoUI.busquedaCat || "").toLowerCase();
     let cantRender = 0;
 
-    items.forEach(o => {
+items.forEach(o => {
         const info = objGlobal[o];
         const matchR = estadoUI.filtroRar === 'Todos' || info.rar.trim() === estadoUI.filtroRar;
         const matchM = estadoUI.filtroMat === 'Todos' || info.mat.trim() === estadoUI.filtroMat;
@@ -292,30 +292,29 @@ export function dibujarCatalogo() {
             let btnOpciones = '';
             if (estadoUI.esAdmin) {
                 btnOpciones = `
-                <div style="position:absolute; top:10px; right:10px; display:flex; gap:5px; z-index:10;">
-                    <button onclick="window.abrirEdicionObjeto('${o.replace(/'/g, "\\'")}')" style="background:rgba(0, 100, 255, 0.8); color:white; border:1px solid #0064ff; border-radius:4px; cursor:pointer; padding:5px 8px; font-weight:bold; transition:0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" title="Editar Objeto">✏️</button>
-                    <button onclick="window.eliminarObjetoBD('${o.replace(/'/g, "\\'")}')" style="background:rgba(255,0,0,0.8); color:white; border:1px solid #ff0000; border-radius:4px; cursor:pointer; padding:5px 8px; font-weight:bold; transition:0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" title="Eliminar de la Base de Datos">🗑️</button>
+                <div style="position:absolute; top:5px; right:5px; display:flex; gap:3px; z-index:10;">
+                    <button onclick="window.abrirEdicionObjeto('${o.replace(/'/g, "\\'")}')" style="background:rgba(0, 100, 255, 0.8); color:white; border:1px solid #0064ff; border-radius:4px; cursor:pointer; padding:3px 6px; font-size:0.9em;" title="Editar">✏️</button>
+                    <button onclick="window.eliminarObjetoBD('${o.replace(/'/g, "\\'")}')" style="background:rgba(255,0,0,0.8); color:white; border:1px solid #ff0000; border-radius:4px; cursor:pointer; padding:3px 6px; font-size:0.9em;" title="Eliminar">🗑️</button>
                 </div>`;
             }
 
+            // Construcción del HTML (Versión compacta para 7 columnas)
             html += `
-            <div class="item-card ${rClass}" style="position:relative;">
-                ${btnOpciones}
-                <div class="item-image-wrapper">
-                    <img src="${db.storage.urlBase}/imgobjetos/${nomNorm}.png" alt="${o}" onerror="${imgErrorObj}" style="cursor:pointer;" onclick="window.verImagen(this.src)">
-                    ${info.rar === "Legendario" ? '<div class="legendary-glint"></div>' : ''}
-                </div>
-                <h3>${o}</h3>
-                <div class="item-tags">
-                    <span class="tag-tipo">${info.tipo}</span>
-                    <span class="tag-mat">${info.mat}</span>
-                </div>
-                <p class="eff-text"><i>${info.eff}</i></p>
-                <div style="margin-top:10px; padding-top:10px; border-top:1px dashed #444;">
-                    <div style="font-size:0.8em; color:var(--gold); margin-bottom:5px; font-family:'Cinzel';">Dueños Actuales:</div>
-                    ${propText}
-                </div>
-            </div>`;
+                <div class="item-card ${rClass}" style="position:relative;">
+                    ${btnOpciones}
+                    <div class="item-image-wrapper">
+                        <img src="${db.storage.urlBase}/imgobjetos/${nomNorm}.png" 
+                             alt="${o}" 
+                             onerror="${imgErrorObj}" 
+                             style="cursor:pointer;" 
+                             onclick="window.verImagen(this.src)">
+                    </div>
+                    <h3 title="${o}">${o}</h3>
+                    <div style="font-size:0.6em; color:#888; margin-top:2px;">
+                        ${Object.keys(invGlobal).filter(j => invGlobal[j][o] > 0).length} Dueños
+                    </div>
+                </div>`;
+            
             cantRender++;
         }
     });
