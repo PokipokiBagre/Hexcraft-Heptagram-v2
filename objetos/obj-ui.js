@@ -272,16 +272,17 @@ export function dibujarCatalogo() {
         if (matchR && matchM && (!term || o.toLowerCase().includes(term))) {
             const oSafe = o.replace(/'/g, "\\'");
             const btnAdmin = estadoUI.esAdmin ? `
-                <button onclick="window.abrirEdicionObjeto('${oSafe}')" style="background:rgba(0,100,255,0.8); color:white; border:1px solid #0064ff; border-radius:3px; cursor:pointer; padding:2px 5px; font-size:0.8em; margin-right:3px;" title="Editar">✏️</button>
-                <button onclick="window.eliminarObjetoBD('${oSafe}')" style="background:rgba(255,0,0,0.8); color:white; border:1px solid #ff0000; border-radius:3px; cursor:pointer; padding:2px 5px; font-size:0.8em;" title="Eliminar">🗑️</button>
+                <button onclick="window.abrirEdicionObjeto('${oSafe}')" style="background:rgba(0,100,255,0.8); color:white; border:1px solid #0064ff; border-radius:3px; cursor:pointer; padding:2px 6px; font-size:0.8em; margin-left:6px;" title="Editar">✏️</button>
+                <button onclick="window.eliminarObjetoBD('${oSafe}')" style="background:rgba(255,0,0,0.8); color:white; border:1px solid #f00; border-radius:3px; cursor:pointer; padding:2px 6px; font-size:0.8em;" title="Eliminar">🗑️</button>
             ` : '';
             html += `<tr>
-                <td><img src="${db.storage.urlBase}/imgobjetos/${normalizarNombre(o)}.png" class="cat-img" onclick="window.verImagen(this.src)" onerror="this.onerror=null; this.src='https://gkscqurkpyteusqyspsu.supabase.co/storage/v1/object/public/imagenes-hex/imginterfaz/no_encontrado.png'"></td>
+                <td><img src="${db.storage.urlBase}/imgobjetos/${normalizarNombre(o)}.png" class="cat-img" onclick="window.verImagen(this.src)" onerror="this.onerror=null; this.src='${db.storage.urlBase}/imginterfaz/no_encontrado.png'"></td>
                 <td style="font-weight:bold; color:#d4af37; cursor:pointer;" onclick="window.verImagenByName('${oSafe}')">${o} ${btnAdmin}</td>
                 <td style="font-size:0.85em; color:#aaa;">${item.tipo}</td>
                 <td style="text-align:left; font-size:0.85em;">${item.eff}</td>
                 <td style="font-size:0.85em;">${item.rar}</td>
             </tr>`;
+
         }
     });
     drawnHEXPreserveFocus('tabla-todos-objetos', html + "</table></div>");
@@ -617,27 +618,26 @@ export function dibujarCreacionMulti() {
     drawnHEXPreserveFocus('panel-creacion-multi', html);
 }
 
-// ── Modal de edición de objetos ──────────────────────────────
-function generarDatalistsDinamicosModal() {
-    const tipos = new Set(['Consumible', 'Herramienta', 'Accesorio', 'Equipo']);
-    const mats = new Set(['Cristal', 'Metal', 'Orgánico', 'Sagrado']);
-    const rars = new Set(['Común', 'Raro', 'Legendario']);
-    Object.values(objGlobal).forEach(obj => {
-        if (obj.tipo && obj.tipo !== '-') tipos.add(obj.tipo.trim());
-        if (obj.mat && obj.mat !== '-') mats.add(obj.mat.trim());
-        if (obj.rar && obj.rar !== '-') rars.add(obj.rar.trim());
+
+// ── Modal de edición de objetos ──────────────────────────────────────────────
+function generarDatalistsModal() {
+    const tipos = new Set(['Consumible','Herramienta','Accesorio','Equipo']);
+    const mats  = new Set(['Cristal','Metal','Orgánico','Sagrado']);
+    const rars  = new Set(['Común','Raro','Legendario']);
+    Object.values(objGlobal).forEach(o => {
+        if (o.tipo && o.tipo !== '-') tipos.add(o.tipo.trim());
+        if (o.mat  && o.mat  !== '-') mats.add(o.mat.trim());
+        if (o.rar  && o.rar  !== '-') rars.add(o.rar.trim());
     });
     return `
-        <datalist id="dl-tipos-m">${[...tipos].sort().map(t => `<option value="${t}">`).join('')}</datalist>
-        <datalist id="dl-mats-m">${[...mats].sort().map(m => `<option value="${m}">`).join('')}</datalist>
-        <datalist id="dl-rars-m">${[...rars].sort().map(r => `<option value="${r}">`).join('')}</datalist>
-    `;
+        <datalist id="dl-tipos-m">${[...tipos].sort().map(t=>`<option value="${t}">`).join('')}</datalist>
+        <datalist id="dl-mats-m">${[...mats].sort().map(m=>`<option value="${m}">`).join('')}</datalist>
+        <datalist id="dl-rars-m">${[...rars].sort().map(r=>`<option value="${r}">`).join('')}</datalist>`;
 }
 
 export function dibujarModalEdicionObjeto(nombre) {
     const info = objGlobal[nombre];
     if (!info) return;
-
     const existing = document.getElementById('modal-edit-obj');
     if (existing) existing.remove();
 
@@ -645,41 +645,29 @@ export function dibujarModalEdicionObjeto(nombre) {
     modal.id = 'modal-edit-obj';
     modal.style.cssText = 'display:flex; position:fixed; z-index:100000; left:0; top:0; width:100%; height:100%; background:rgba(0,0,0,0.85); align-items:center; justify-content:center; backdrop-filter:blur(4px);';
     modal.onclick = (e) => { if (e.target === modal) window.cerrarModalEdicion(); };
-
     modal.innerHTML = `
-        ${generarDatalistsDinamicosModal()}
-        <div style="max-width:500px; width:90%; padding:25px; background:rgba(20,0,40,0.97); border:2px solid var(--gold); border-radius:12px; box-shadow:0 10px 40px rgba(0,0,0,0.8); position:relative;">
-            <button onclick="window.cerrarModalEdicion()" style="position:absolute; top:10px; right:15px; background:none; border:none; color:#aaa; font-size:1.5em; cursor:pointer;">&times;</button>
-            <h2 style="color:var(--gold); margin-top:0; font-family:'Cinzel'; text-align:center;">✏️ Editar Objeto</h2>
-            <div style="display:flex; flex-direction:column; gap:12px; text-align:left;">
-                <div>
-                    <label style="color:#aaa; font-size:0.8em;">Nombre:</label>
-                    <input type="text" id="edit-obj-name" class="search-bar" value="${nombre}" style="width:100%; box-sizing:border-box; margin-top:4px;">
+        ${generarDatalistsModal()}
+        <div style="max-width:500px;width:90%;padding:25px;background:rgba(20,0,40,0.97);border:2px solid var(--gold);border-radius:12px;box-shadow:0 10px 40px rgba(0,0,0,0.8);position:relative;">
+            <button onclick="window.cerrarModalEdicion()" style="position:absolute;top:10px;right:15px;background:none;border:none;color:#aaa;font-size:1.5em;cursor:pointer;">&times;</button>
+            <h2 style="color:var(--gold);margin-top:0;font-family:'Cinzel';text-align:center;">✏️ Editar Objeto</h2>
+            <div style="display:flex;flex-direction:column;gap:12px;text-align:left;">
+                <div><label style="color:#aaa;font-size:0.8em;">Nombre:</label>
+                    <input type="text" id="edit-obj-name" class="search-bar" value="${nombre}" style="width:100%;box-sizing:border-box;margin-top:4px;"></div>
+                <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                    <div><label style="color:#aaa;font-size:0.8em;">Tipo:</label>
+                        <input type="text" id="edit-obj-tipo" list="dl-tipos-m" class="search-bar" value="${info.tipo}" style="width:100%;box-sizing:border-box;margin-top:4px;"></div>
+                    <div><label style="color:#aaa;font-size:0.8em;">Material:</label>
+                        <input type="text" id="edit-obj-mat" list="dl-mats-m" class="search-bar" value="${info.mat}" style="width:100%;box-sizing:border-box;margin-top:4px;"></div>
                 </div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
-                    <div>
-                        <label style="color:#aaa; font-size:0.8em;">Tipo:</label>
-                        <input type="text" id="edit-obj-tipo" list="dl-tipos-m" class="search-bar" value="${info.tipo}" style="width:100%; box-sizing:border-box; margin-top:4px;">
-                    </div>
-                    <div>
-                        <label style="color:#aaa; font-size:0.8em;">Material:</label>
-                        <input type="text" id="edit-obj-mat" list="dl-mats-m" class="search-bar" value="${info.mat}" style="width:100%; box-sizing:border-box; margin-top:4px;">
-                    </div>
-                </div>
-                <div>
-                    <label style="color:#aaa; font-size:0.8em;">Efecto:</label>
-                    <textarea id="edit-obj-eff" class="search-bar" style="width:100%; height:70px; box-sizing:border-box; margin-top:4px; resize:none;">${info.eff}</textarea>
-                </div>
-                <div>
-                    <label style="color:#aaa; font-size:0.8em;">Rareza:</label>
-                    <input type="text" id="edit-obj-rar" list="dl-rars-m" class="search-bar" value="${info.rar}" style="width:100%; box-sizing:border-box; margin-top:4px;">
-                </div>
-                <div style="display:flex; gap:10px; margin-top:10px;">
-                    <button onclick="window.guardarEdicionObjeto('${nombre.replace(/'/g, "\'")}')" style="flex:2; background:linear-gradient(135deg,#004a00,#008000); color:white; font-weight:bold; padding:12px; border:none; border-radius:6px; cursor:pointer; font-size:1.05em;">💾 GUARDAR</button>
-                    <button onclick="window.cerrarModalEdicion()" style="flex:1; background:#444; color:white; padding:12px; border:none; border-radius:6px; cursor:pointer;">Cancelar</button>
+                <div><label style="color:#aaa;font-size:0.8em;">Efecto:</label>
+                    <textarea id="edit-obj-eff" class="search-bar" style="width:100%;height:70px;box-sizing:border-box;margin-top:4px;resize:none;">${info.eff}</textarea></div>
+                <div><label style="color:#aaa;font-size:0.8em;">Rareza:</label>
+                    <input type="text" id="edit-obj-rar" list="dl-rars-m" class="search-bar" value="${info.rar}" style="width:100%;box-sizing:border-box;margin-top:4px;"></div>
+                <div style="display:flex;gap:10px;margin-top:10px;">
+                    <button onclick="window.guardarEdicionObjeto('${nombre.replace(/'/g,"\'")}') " style="flex:2;background:linear-gradient(135deg,#004a00,#008000);color:white;font-weight:bold;padding:12px;border:none;border-radius:6px;cursor:pointer;font-size:1.05em;">💾 GUARDAR</button>
+                    <button onclick="window.cerrarModalEdicion()" style="flex:1;background:#444;color:white;padding:12px;border:none;border-radius:6px;cursor:pointer;">Cancelar</button>
                 </div>
             </div>
         </div>`;
-
     document.body.appendChild(modal);
 }
