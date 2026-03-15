@@ -267,14 +267,14 @@ export const db = {
             return !error;
         },
 
+
         async guardarPosicionesBatch(posiciones) {
-            // posiciones = [{ hechizo_id, pos_x, pos_y }, ...]
-            for (const pos of posiciones) {
-                await supabase.from('hechizos_nodos')
-                    .update({ pos_x: pos.pos_x, pos_y: pos.pos_y })
-                    .eq('hechizo_id', pos.hechizo_id);
-            }
-            return true;
+            // posiciones = [{ hechizo_id, x, y, es_conocido }, ...]
+            const { error } = await supabase
+                .from('hechizos_nodos')
+                .upsert(posiciones, { onConflict: 'hechizo_id' });
+            if (error) console.error('Error en guardarPosicionesBatch:', error);
+            return !error;
         }
     },
 
