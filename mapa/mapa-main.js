@@ -5,29 +5,24 @@ import { hexAuth } from '../hex-auth.js';
 import { db }      from '../hex-db.js';
 
 window.onload = async () => {
-    // Buscar el favicon o crearlo si no existe
     let favicon = document.querySelector("link[rel='icon']");
     if (!favicon) {
         favicon = document.createElement("link");
         favicon.rel = "icon";
         document.head.appendChild(favicon);
     }
-    // Asignar la ruta de Supabase
     favicon.href = `${db.storage.urlBase}/imginterfaz/icon.png`;
 
-    // --- AGREGAMOS LA INICIALIZACIÓN DE SUPABASE ---
     await hexAuth.init();
     estadoMapa.esAdmin = hexAuth.esAdmin();
-    // -----------------------------------------------
 
-    // 👉 Si es admin, mostramos AMBOS botones mágicamente
     if (estadoMapa.esAdmin) {
         const btnEditar = document.getElementById('btn-editar-mapa');
         const btnOrdenar = document.getElementById('btn-ordenar');
         if (btnEditar) btnEditar.classList.remove('oculto');
         if (btnOrdenar) btnOrdenar.classList.remove('oculto');
     }
-    
+
     try { 
         inicializarCanvas();
         const barra = document.getElementById('carga-progreso');
@@ -83,6 +78,7 @@ function inicializarSidebar() {
     });
 }
 
+// ── LÓGICA DE SELECCIÓN BLINDADA ──────────────────────────────────
 window.seleccionarJugador = (nombre) => {
     estadoMapa.jugadorActivo = nombre;
     
@@ -100,25 +96,29 @@ window.seleccionarJugador = (nombre) => {
         const inv = estadoMapa.inventario[nombre] || new Set();
         
         estadoMapa.nodos.forEach(n => {
-            let baseName = n.nombreOriginal.replace(/\s*\(\d+\)$/, '').trim().toLowerCase();
-            let idName = n.id.replace(/\s*\(\d+\)$/, '').trim().toLowerCase();
-            let justId = n.id.toLowerCase();
+            let idName = n.id.toLowerCase().trim();
+            let originalName = n.nombreOriginal.toLowerCase().trim();
+            let baseName = originalName.replace(/\s*\(\d+\)$/, '').trim();
+            let justId = idName.replace('hechizo', '').trim();
             let idWithHechizo = `hechizo ${justId}`;
-            
-            if (inv.has(baseName) || inv.has(idName) || inv.has(justId) || inv.has(idWithHechizo)) {
+
+            // Comparamos contra todas las variables posibles
+            if (inv.has(idName) || inv.has(originalName) || inv.has(baseName) || inv.has(justId) || inv.has(idWithHechizo)) {
                 estadoMapa.vistaJugador.posesiones.add(n);
             }
         });
 
+        // Reconstruir aprendibles
         estadoMapa.enlaces.forEach(e => {
             if (estadoMapa.vistaJugador.posesiones.has(e.source) && !estadoMapa.vistaJugador.posesiones.has(e.target)) {
                 estadoMapa.vistaJugador.aprendibles.add(e.target);
             }
         });
 
+        // Reconstruir rastreo (recursivo) hacia atrás
         const rastrear = (n) => {
             estadoMapa.enlaces.forEach(e => {
-                if (e.target === n && !estadoMapa.vistaJugador.rastreo.has(e.source)) {
+                if (e.target === n && !estadoMapa.vistaJugador.rastreo.has(e.source) && !estadoMapa.vistaJugador.posesiones.has(e.source)) {
                     estadoMapa.vistaJugador.rastreo.add(e.source);
                     rastrear(e.source);
                 }
@@ -148,7 +148,7 @@ window.abrirMenuOP = async () => {
         if (estadoMapa.esAdmin) {
             document.getElementById('btn-ordenar').classList.remove('oculto');
             document.getElementById('btn-editar-mapa').classList.remove('oculto'); 
-            alert("Modo OP Activado.\n- TOCA un nodo para fijar su menú.\n- Usa 'Auto-Ordenar' para organizar el mapa.");
+            alert("Modo OP Activado.\\n- TOCA un nodo para fijar su menú.\\n- Usa 'Auto-Ordenar' para organizar el mapa.");
             actualizarPanelInfo(); 
         }
     } 
@@ -162,9 +162,7 @@ window.cerrarPanelInfo = () => {
     dibujarFrame(); 
 };
 
-// -------------------------------------------------------------
-// MOTOR FÍSICO CORREGIDO
-// -------------------------------------------------------------
+// ... Resto del motor físico sin alterar (se asume que YifanHu y eventos input ya están bien)
 window.ordenarMapaYifanHu = () => {
     const nodos = estadoMapa.nodos;
     const enlaces = estadoMapa.enlaces;
@@ -188,13 +186,11 @@ window.ordenarMapaYifanHu = () => {
         for(let i=0; i<nodos.length; i++) {
             for(let j=i+1; j<nodos.length; j++) {
                 const u = nodos[i]; const v = nodos[j];
-                let dx = u.x - v.x;
-                let dy = u.y - v.y;
+                let dx = u.x - v.x; let dy = u.y - v.y;
                 let dist = Math.sqrt(dx*dx + dy*dy) || 1;
                 
                 const f = (K * K) / dist;
-                const fx = (dx / dist) * f; 
-                const fy = (dy / dist) * f;
+                const fx = (dx / dist) * f; const fy = (dy / dist) * f;
 
                 disp.get(u.id).x += fx; disp.get(u.id).y += fy;
                 disp.get(v.id).x -= fx; disp.get(v.id).y -= fy;
@@ -203,13 +199,11 @@ window.ordenarMapaYifanHu = () => {
 
         enlaces.forEach(link => {
             const u = link.source; const v = link.target;
-            let dx = u.x - v.x;
-            let dy = u.y - v.y;
+            let dx = u.x - v.x; let dy = u.y - v.y;
             let dist = Math.sqrt(dx*dx + dy*dy) || 1;
 
             const f = (dist * dist) / K;
-            const fx = (dx / dist) * f;
-            const fy = (dy / dist) * f;
+            const fx = (dx / dist) * f; const fy = (dy / dist) * f;
 
             disp.get(u.id).x -= fx; disp.get(u.id).y -= fy;
             disp.get(v.id).x += fx; disp.get(v.id).y += fy;
@@ -225,10 +219,7 @@ window.ordenarMapaYifanHu = () => {
         });
 
         nodos.forEach(u => {
-            if(u.isHexNode) { 
-                u.x = 0; u.y = 0; 
-                return; 
-            }
+            if(u.isHexNode) { u.x = 0; u.y = 0; return; }
 
             const d = disp.get(u.id);
             const dLen = Math.sqrt(d.x*d.x + d.y*d.y);
@@ -254,7 +245,6 @@ window.cambiarEstadoNodo = (id, valor) => {
         if (nodo.esConocido !== nuevoEstado) {
             nodo.esConocido = nuevoEstado;
             nodo.modificado = true;
-            
             nodo.radio = nodo.esConocido ? 35 : 28;
             let baseName = nodo.nombreOriginal.replace(/\s*\(\d+\)$/, '').trim();
             if (nodo.esConocido) {
@@ -288,7 +278,6 @@ window.guardarCambiosMapa = async () => {
         return;
     }
 
-    // Llamada directa usando db en lugar de duplicar lógica
     if (await db.hechizos.guardarPosicionesBatch(cambios)) {
         alert("¡Éxito! Posiciones guardadas permanentemente.");
         estadoMapa.nodos.forEach(n => n.modificado = false);
@@ -357,14 +346,12 @@ function iniciarEventosInput() {
         const worldPos = getPosicionMundo(e.clientX, e.clientY);
         const nodo = obtenerNodoEnCursor(worldPos.x, worldPos.y);
 
-        // --- HOOK DE EDICIÓN ---
         if (window.mapaEditor && window.mapaEditor.activa) {
             window.mapaEditor.onMouseDown(e, nodo, worldPos);
             estadoMapa.interaccion.lastMouseX = e.clientX;
             estadoMapa.interaccion.lastMouseY = e.clientY;
             return;
         }
-        // -----------------------
 
         if (nodo) {
             if (estadoMapa.interaccion.selectedNode === nodo) {
@@ -389,7 +376,6 @@ function iniciarEventosInput() {
         const dy = e.clientY - estadoMapa.interaccion.lastMouseY;
         const worldPos = getPosicionMundo(e.clientX, e.clientY);
 
-        // --- HOOK DE EDICIÓN ---
         if (window.mapaEditor && window.mapaEditor.activa) {
             window.mapaEditor.onMouseMove(e, dx, dy, worldPos);
             estadoMapa.interaccion.lastMouseX = e.clientX;
@@ -398,7 +384,6 @@ function iniciarEventosInput() {
             canvas.style.cursor = nodoBajoCursor ? 'pointer' : (window.mapaEditor.herramienta === 'enlace' ? 'crosshair' : 'grab');
             return;
         }
-        // -----------------------
 
         if (estadoMapa.interaccion.isDraggingBg) {
             estadoMapa.camara.x += dx;
@@ -424,14 +409,12 @@ function iniciarEventosInput() {
     });
 
     canvas.addEventListener('mouseup', (e) => {
-        // --- HOOK DE EDICIÓN ---
         if (window.mapaEditor && window.mapaEditor.activa) {
             const worldPos = getPosicionMundo(e.clientX, e.clientY);
             const nodo = obtenerNodoEnCursor(worldPos.x, worldPos.y);
             window.mapaEditor.onMouseUp(e, nodo);
             return;
         }
-        // -----------------------
         estadoMapa.interaccion.isDraggingBg = false;
         estadoMapa.interaccion.draggedNode = null;
         canvas.style.cursor = estadoMapa.interaccion.hoveredNode ? 'pointer' : 'grab';
@@ -460,14 +443,12 @@ function iniciarEventosInput() {
             const worldPos = getPosicionMundo(touch.clientX, touch.clientY);
             const nodo = obtenerNodoEnCursor(worldPos.x, worldPos.y);
 
-            // --- HOOK DE EDICIÓN (TOUCH) ---
             if (window.mapaEditor && window.mapaEditor.activa) {
                 window.mapaEditor.onMouseDown(e, nodo, worldPos);
                 estadoMapa.interaccion.lastMouseX = touch.clientX;
                 estadoMapa.interaccion.lastMouseY = touch.clientY;
                 return;
             }
-            // -------------------------------
 
             if (nodo) {
                 if (estadoMapa.interaccion.selectedNode === nodo) {
@@ -505,14 +486,12 @@ function iniciarEventosInput() {
             const dy = touch.clientY - estadoMapa.interaccion.lastMouseY;
             const worldPos = getPosicionMundo(touch.clientX, touch.clientY);
 
-            // --- HOOK DE EDICIÓN (TOUCH) ---
             if (window.mapaEditor && window.mapaEditor.activa) {
                 window.mapaEditor.onMouseMove(e, dx, dy, worldPos);
                 estadoMapa.interaccion.lastMouseX = touch.clientX;
                 estadoMapa.interaccion.lastMouseY = touch.clientY;
                 return;
             }
-            // -------------------------------
 
             if (estadoMapa.interaccion.isDraggingBg) {
                 estadoMapa.camara.x += dx;
@@ -552,7 +531,6 @@ function iniciarEventosInput() {
     }, { passive: false });
 
     canvas.addEventListener('touchend', (e) => {
-        // --- HOOK DE EDICIÓN (TOUCH) ---
         if (window.mapaEditor && window.mapaEditor.activa) {
             let nodo = null;
             if (e.changedTouches && e.changedTouches.length > 0) {
@@ -563,7 +541,6 @@ function iniciarEventosInput() {
             window.mapaEditor.onMouseUp(e, nodo);
             return;
         }
-        // -------------------------------
 
         estadoMapa.interaccion.isDraggingBg = false;
         estadoMapa.interaccion.draggedNode = null;
