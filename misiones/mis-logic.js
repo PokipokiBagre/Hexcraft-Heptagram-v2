@@ -5,18 +5,19 @@ export function encolarCambioMision(idMision) {
     const m = misGlobal.find(mis => mis.id === idMision);
     if (!m) return;
     
-    if(!estadoUI.colaCambios.misiones[idMision]) estadoUI.colaCambios.misiones[idMision] = {};
-    const sync = estadoUI.colaCambios.misiones[idMision];
-    
-    sync['Misiones'] = m.titulo;
-    sync['Tipo'] = m.tipo;
-    sync['Necesarios'] = m.cupos;
-    sync['Activa'] = m.estado;
-    sync['Clase'] = 'Clase ' + m.clase;
-    sync['Recompensa'] = m.desc;
-    sync['Nota OP'] = m.notaOP;
-    sync['Jugadores'] = m.jugadores.join(', ');
-    sync['Autor'] = m.autor;
+    // Sobreescribimos con el objeto completo en formato Supabase
+    estadoUI.colaCambios.misiones[idMision] = {
+        titulo:      m.titulo,
+        tipo:        m.tipo,
+        cupos:       m.cupos,
+        estado:      m.estado,
+        clase:       m.clase,
+        desc:        m.desc,
+        notaOP:      m.notaOP,
+        jugadores:   m.jugadores,   // array — db.misiones.upsert lo espera así
+        autor:       m.autor,
+        orden:       m.orden || 0
+    };
     
     actualizarBotonSync();
 }
