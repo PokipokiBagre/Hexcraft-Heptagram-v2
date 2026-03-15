@@ -268,14 +268,23 @@ export const db = {
         },
 
 
-        async guardarPosicionesBatch(posiciones) {
-            // posiciones = [{ hechizo_id, x, y, es_conocido }, ...]
-            const { error } = await supabase
-                .from('hechizos_nodos')
-                .upsert(posiciones, { onConflict: 'hechizo_id' });
-            if (error) console.error('Error en guardarPosicionesBatch:', error);
-            return !error;
-        }
+            async guardarPosicionesBatch(posiciones) {
+            let hasError = false;
+            // Procesamos las actualizaciones en bloques de 15 para no ahogar la base de datos
+            for (let i = 0; i < posiciones.length; i += 15) {
+                const lote = posiciones.slice(i, i + 15);
+                
+                // Usamos .update() en lugar de .upsert() para modificar solo X e Y
+                const promesas = lote.map(pos =>
+                    supabase.from('hechizos_nodos')
+                        .update({ pos_x: pos.pos_x, pos_y: pos.pos_y, es_conocido: pos.es_conocido })
+                        .eq('hechizo_id', pos.hechizo_id)
+                );
+                
+                const resultados = await Promise.all(promesas);
+                if (resultados.some(r => r.error)) hasError = true;
+            }
+            return !hasError;
     },
 
     // ══════════════════════════════════════════════════════
