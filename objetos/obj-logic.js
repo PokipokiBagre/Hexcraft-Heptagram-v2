@@ -4,43 +4,27 @@
 
 import { invGlobal, objGlobal, historial, estadoUI, guardar } from './obj-state.js';
 
-// Prepara la info del objeto modificado para enviarla a Supabase
 export function encolarCambioObjeto(nombreObj) {
-    let duenos = [];
-    let cants = [];
-    
+    let duenos = []; let cants = [];
     Object.keys(invGlobal).forEach(j => {
         if (invGlobal[j][nombreObj] > 0) {
-            duenos.push(j);
-            cants.push(invGlobal[j][nombreObj]);
+            duenos.push(j); cants.push(invGlobal[j][nombreObj]);
         }
     });
 
     const info = objGlobal[nombreObj] || { tipo: '-', mat: '-', eff: 'Sin descripción', rar: 'Común' };
-    
-    // Se guarda en la cola en un formato que obj-data.js leerá para actualizar la Nube
     estadoUI.colaCambios[nombreObj] = {
-        objeto: nombreObj,
-        tipo: info.tipo, 
-        mat: info.mat,
-        eff: info.eff, 
-        rar: info.rar,
-        duenos: duenos.join(", "), 
-        cantidades: cants.join(", ") 
+        objeto: nombreObj, tipo: info.tipo, mat: info.mat, eff: info.eff, rar: info.rar,
+        duenos: duenos.join(", "), cantidades: cants.join(", ") 
     };
 }
 
 export function modificar(j, o, c, callback) {
     if (!invGlobal[j]) invGlobal[j] = {};
     invGlobal[j][o] = Math.max(0, (invGlobal[j][o] || 0) + c);
+    if (c !== 0) historial.push({ fecha: new Date().toLocaleString(), jugador: j, objeto: o, cambio: c, total: invGlobal[j][o] });
     
-    if (c !== 0) {
-        historial.push({ fecha: new Date().toLocaleString(), jugador: j, objeto: o, cambio: c, total: invGlobal[j][o] });
-    }
-    
-    encolarCambioObjeto(o); 
-    guardar(); 
-    if(callback) callback();
+    encolarCambioObjeto(o); guardar(); if(callback) callback();
 }
 
 export function modificarMulti(jugadores, o, c, callback) {
@@ -49,10 +33,7 @@ export function modificarMulti(jugadores, o, c, callback) {
         invGlobal[j][o] = Math.max(0, (invGlobal[j][o] || 0) + c);
         historial.push({ fecha: new Date().toLocaleString(), jugador: j, objeto: o, cambio: c, total: invGlobal[j][o] });
     });
-    
-    encolarCambioObjeto(o);
-    guardar();
-    if(callback) callback();
+    encolarCambioObjeto(o); guardar(); if(callback) callback();
 }
 
 export function transferir(origen, destino, o, c, callback) {
@@ -68,15 +49,11 @@ export function transferir(origen, destino, o, c, callback) {
     historial.push({ fecha: new Date().toLocaleString(), jugador: origen, objeto: o, cambio: -realC, total: invGlobal[origen][o], nota: `Transferido a ${destino}` });
     historial.push({ fecha: new Date().toLocaleString(), jugador: destino, objeto: o, cambio: realC, total: invGlobal[destino][o], nota: `Recibido de ${origen}` });
 
-    encolarCambioObjeto(o);
-    guardar();
-    if(callback) callback();
+    encolarCambioObjeto(o); guardar(); if(callback) callback();
 }
 
 export function agregarObjetoManual(dataObj, repartos, callback) {
     const { nombre, tipo, mat, eff, rar } = dataObj;
-    
-    // Actualiza o crea la info global del objeto
     objGlobal[nombre] = { tipo, mat, eff, rar };
 
     Object.keys(repartos).forEach(j => {
@@ -88,17 +65,13 @@ export function agregarObjetoManual(dataObj, repartos, callback) {
         }
     });
 
-    encolarCambioObjeto(nombre);
-    guardar();
-    if(callback) callback(true);
+    encolarCambioObjeto(nombre); guardar(); if(callback) callback(true);
 }
 
 export function agregarObjetosMulti(listaNuevos, destPlayer, callback) {
     if (listaNuevos.length === 0) return;
-
     listaNuevos.forEach(item => {
         const { nombre, tipo, mat, eff, rar, cant } = item;
-        
         objGlobal[nombre] = { tipo, mat, eff, rar };
 
         if (destPlayer && destPlayer !== "") {
@@ -106,19 +79,15 @@ export function agregarObjetosMulti(listaNuevos, destPlayer, callback) {
             invGlobal[destPlayer][nombre] = (invGlobal[destPlayer][nombre] || 0) + cant;
             historial.push({ fecha: new Date().toLocaleString(), jugador: destPlayer, objeto: nombre, cambio: cant, total: invGlobal[destPlayer][nombre], nota: "Creación Multi" });
         }
-        
         encolarCambioObjeto(nombre);
     });
-
-    guardar();
-    if(callback) callback(true);
+    guardar(); if(callback) callback(true);
 }
 
 export function descargarLogExcel() {
     let csv = "Fecha,Jugador,Objeto,Cambio,Total_Resultante,Notas\n";
     historial.forEach(h => { csv += `"${h.fecha}","${h.jugador}","${h.objeto}","${h.cambio}","${h.total}","${h.nota || ''}"\n`; });
-    const link = document.createElement('a');
-    link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+    const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
     link.download = `HEX_OBJ_LOG.csv`; link.click();
 }
 
@@ -131,33 +100,25 @@ export function descargarEstadoExcel() {
         else { data.push([o, info.tipo, info.mat, info.eff, info.rar, "", ""]); }
     });
     
-    // Si la librería XLSX está cargada en el index.html
     if (typeof XLSX !== 'undefined') {
-        const ws = XLSX.utils.aoa_to_sheet(data);
-        const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, "Inventario");
-        XLSX.writeFile(wb, "HEX_OBJ_ESTADO.xlsx");
+        const ws = XLSX.utils.aoa_to_sheet(data); const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Inventario"); XLSX.writeFile(wb, "HEX_OBJ_ESTADO.xlsx");
     } else {
-        // Respaldo a CSV nativo si no detecta XLSX
         let csv = "Objeto,Tipo,Material,Efecto,Rareza,Dueños,Cantidades\n";
-        data.slice(1).forEach(row => {
-            csv += `"${row[0]}","${row[1]}","${row[2]}","${row[3]}","${row[4]}","${row[5]}","${row[6]}"\n`;
-        });
-        const link = document.createElement('a');
-        link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
+        data.slice(1).forEach(row => { csv += `"${row[0]}","${row[1]}","${row[2]}","${row[3]}","${row[4]}","${row[5]}","${row[6]}"\n`; });
+        const link = document.createElement('a'); link.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' }));
         link.download = `HEX_OBJ_ESTADO.csv`; link.click();
     }
+}
 
+// 💥 NUEVAS FUNCIONES DE BORRADO Y EDICIÓN
 export function eliminarObjetoCompletamente(nombreObj, callback) {
     if(!confirm(`⚠️ ¿Estás seguro de ELIMINAR COMPLETAMENTE "${nombreObj}"?\n\nDesaparecerá del catálogo y de los inventarios de todos los jugadores para siempre.`)) return;
 
-    // Lo marcamos en la cola para que el data.js lo borre de Supabase
-    estadoUI.colaCambios[nombreObj] = {
-        objeto: nombreObj,
-        __ELIMINAR_OBJETO__: true
-    };
+    // Encola la orden de matar el objeto en la BD
+    estadoUI.colaCambios[nombreObj] = { objeto: nombreObj, __ELIMINAR_OBJETO__: true };
 
-    // Lo borramos de la memoria local para que la UI se actualice al instante
+    // Limpia la memoria local (Catálogo e Inventarios)
     delete objGlobal[nombreObj];
     Object.keys(invGlobal).forEach(j => {
         if (invGlobal[j][nombreObj] !== undefined) {
@@ -165,10 +126,43 @@ export function eliminarObjetoCompletamente(nombreObj, callback) {
         }
     });
 
-    // Limpiamos el caché de orden para que no intente renderizar un objeto borrado
     estadoUI.resetCacheOrder = true;
-
     guardar();
     if(callback) callback();
-    } 
+}
+
+export function editarObjetoCatalogo(nombreViejo, newData, callback) {
+    const nuevoNombre = newData.nombre;
+    
+    if (nombreViejo !== nuevoNombre) {
+        if (objGlobal[nuevoNombre]) return alert(`Ya existe un objeto llamado "${nuevoNombre}".`);
+        
+        // 1. Mandar orden de eliminar el viejo a Supabase
+        estadoUI.colaCambios[nombreViejo] = { objeto: nombreViejo, __ELIMINAR_OBJETO__: true };
+        
+        // 2. Transmutar objeto en el Catálogo local
+        objGlobal[nuevoNombre] = { tipo: newData.tipo, mat: newData.mat, eff: newData.eff, rar: newData.rar };
+        delete objGlobal[nombreViejo];
+
+        // 3. Transmutar objeto en los Inventarios de la Party
+        Object.keys(invGlobal).forEach(j => {
+            if (invGlobal[j][nombreViejo] !== undefined) {
+                if (invGlobal[j][nombreViejo] > 0) {
+                    invGlobal[j][nuevoNombre] = invGlobal[j][nombreViejo];
+                }
+                delete invGlobal[j][nombreViejo];
+            }
+        });
+
+        // 4. Mandar a guardar el nuevo objeto
+        encolarCambioObjeto(nuevoNombre);
+    } else {
+        // Si el nombre no cambió, solo pisamos las estadísticas
+        objGlobal[nombreViejo] = { tipo: newData.tipo, mat: newData.mat, eff: newData.eff, rar: newData.rar };
+        encolarCambioObjeto(nombreViejo);
+    }
+
+    estadoUI.resetCacheOrder = true;
+    guardar();
+    if(callback) callback();
 }
