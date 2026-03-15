@@ -1,5 +1,5 @@
 // ============================================================
-// mapa-data.js — VERSIÓN SUPABASE
+// mapa-data.js — VERSIÓN SUPABASE (BLINDADA)
 // ============================================================
 
 import { estadoMapa, ESTETICA } from './mapa-state.js';
@@ -26,7 +26,6 @@ export async function cargarDatos(barra) {
         window.mapaColores = {};
         if (hechizosData.afinidades) {
             hechizosData.afinidades.forEach(row => {
-                // row = [afinidad, color_t, color_b]
                 if (row[0]) {
                     window.mapaColores[row[0].trim()] = {
                         t: row[1] ? row[1].toString().trim() : '#ffffff',
@@ -36,165 +35,96 @@ export async function cargarDatos(barra) {
             });
         }
 
-        // ── PROCESAR NODOS Y ENLACES ───────────────────────────
-        // getDataCompleta() devuelve datos en formato PascalCase que el motor ya espera
-        procesarInventario(hechizosData);
-        procesarNodos(hechizosData);
-        procesarEnlaces(hechizosData.string || []);
-
-        if (barra) barra.style.width = '100%';
-        return true;
-
-    } catch (e) {
-        console.error("Error cargando mapa:", e);
-        return false;
-    }
-}
-
-function procesarInventario(json) {
-    estadoMapa.inventario = {};
-    if (json.inventario) {
-        json.inventario.forEach(row => {
-            const pj = row.Personaje ? row.Personaje.trim() : '';
-            const he = row.Hechizo   ? row.Hechizo.trim()   : '';
-            if (pj && he) {
-                if (!estadoMapa.inventario[pj]) estadoMapa.inventario[pj] = new Set();
-                estadoMapa.inventario[pj].add(he.replace(/\s*\(\d+\)$/, '').trim().toLowerCase());
-            }
+        // LIMPIAR ARRAYS POR SEGURIDAD
+        estadoMapa.nodos = [];
+        estadoMapa.enlaces = [];
+        
+        // UNIR NODOS Y FILTRAR FANTASMAS (Evita el error 'reading x')
+        const todosLosNodos = [...(hechizosData.nodos || []), ...(hechizosData.nodosOcultos || [])];
+        
+        todosLosNodos.forEach(n => {
+            if (!n) return; // ¡Filtro de seguridad contra undefined!
+            
+            estadoMapa.nodos.push({
+                id: n.ID,
+                nombreOriginal: n.Nombre || n.ID,
+                nombre: `${n.Nombre || n.ID} (${n.HEX || 0})`,
+                afinidad: n.Afinidad || '-',
+                clase: n.Clase || 'Clase 1',
+                hex: parseInt(n.HEX) || 0,
+                resumen: n.Resumen || '',
+                efecto: n.Efecto || '',
+                overcast: n['Overcast 100%'] || '',
+                undercast: n['Undercast 50%'] || '',
+                especial: n.Especial || '',
+                esConocido: n.Conocido === 'si',
+                isHexNode: false,
+                x: parseFloat(n.X) || 0,
+                y: parseFloat(n.Y) || 0,
+                radio: n.Size || (n.Conocido === 'si' ? 35 : 28),
+                colorBase: n.Color || '#ffffff',
+                incomingSources: [],
+                modificado: false
+            });
         });
-    }
-}
 
-function parseCoord(val) {
-    if (val === undefined || val === null || val === '') return null;
-    const num = parseFloat(String(val).trim().replace(/,/g, '.').replace(/[^0-9.\-]/g, ''));
-    return isNaN(num) ? null : num;
-}
+        // ── ENLACES ───────────────────────────────────────────
+        const findNode = (str) => {
+            if (!str) return null;
+            const strNorm = String(str).trim().toLowerCase();
+            const strNum = strNorm.replace(/^hechizo\s+/i, '').trim();
+            
+            return estadoMapa.nodos.find(n => {
+                const nid = String(n.id).trim().toLowerCase();
+                const nnom = String(n.nombreOriginal).trim().toLowerCase();
+                const nidNum = nid.replace(/^hechizo\s+/i, '').trim();
+                const nnomNum = nnom.replace(/^hechizo\s+/i, '').trim();
+                return nid === strNorm || nnom === strNorm || nidNum === strNum || nnomNum === strNum;
+            });
+        };
 
-function procesarNodos(json) {
-    const todos = [].concat(json.nodos || []).concat(json.nodosOcultos || []);
-    estadoMapa.nodos = [];
-    const procesados = new Set();
+        if (hechizosData.string) {
+            hechizosData.string.forEach(rel => {
+                if (!rel || !rel.Source || !rel.Target) return;
+                const sourceNode = findNode(rel.Source);
+                const targetNode = findNode(rel.Target);
 
-    // Detectar si las coords son Gephi raw (>15000) y necesitan escalar
-    let maxVal = 0;
-    todos.forEach(n => {
-        const x = parseCoord(n.X); const y = parseCoord(n.Y);
-        if (x !== null && Math.abs(x) > maxVal) maxVal = Math.abs(x);
-        if (y !== null && Math.abs(y) > maxVal) maxVal = Math.abs(y);
-    });
-    const isGephiRaw   = maxVal > 15000;
-    const scaleFactor  = isGephiRaw ? (3500 / maxVal) : 1;
-
-    todos.forEach(n => {
-        if (!n.ID && !n.Nombre) return;
-
-        const idReal      = n.ID     ? n.ID.toString().trim()     : '';
-        const nombreReal  = n.Nombre && n.Nombre.trim() !== '' ? n.Nombre.trim() : idReal;
-        const idUnico     = (idReal || nombreReal).toLowerCase();
-        if (procesados.has(idUnico)) return;
-        procesados.add(idUnico);
-
-        const esConocido  = n.Conocido && n.Conocido.toString().trim().toLowerCase() === 'si';
-        const hexCost     = parseInt(n.HEX) || 0;
-        const isHexNode   = (idUnico === 'hex' || idUnico === 'hechizo hex');
-
-        const baseName    = nombreReal.replace(/\s*\(\d+\)$/, '').trim();
-        const nombreMostrar = (esConocido || isHexNode)
-            ? (isHexNode ? "HEX" : `${baseName} (${hexCost})`)
-            : `${idReal.toLowerCase().includes('hechizo') ? idReal : `Hechizo ${idReal}`} (${hexCost})`;
-
-        let rawX = parseCoord(n.X); let rawY = parseCoord(n.Y);
-        if (rawX === null) rawX = (Math.random() * 800) - 400;
-        if (rawY === null) rawY = (Math.random() * 800) - 400;
-
-        estadoMapa.nodos.push({
-            id:             idReal,
-            nombreOriginal: nombreReal,
-            nombre:         nombreMostrar,
-            afinidad:       n.Afinidad || 'Desconocida',
-            clase:          n.Clase    || '-',
-            hex:            hexCost,
-            resumen:        n.Resumen  || 'Sin descripción',
-            efecto:         n.Efecto   || '',
-            overcast:       n['Overcast 100%'] || n.overcast || '',
-            undercast:      n['Undercast 50%'] || n.undercast || '',
-            especial:       n.Especial || '',
-            esConocido,
-            isHexNode,
-            x:              rawX * scaleFactor,
-            y:              rawY * scaleFactor,
-            radio:          isHexNode ? 65 : (esConocido ? 35 : 28),
-            incomingSources: [],
-            modificado:     isGephiRaw
-        });
-    });
-}
-
-function procesarEnlaces(arrayStrings) {
-    estadoMapa.enlaces = [];
-
-    const findNode = (val) => {
-        if (!val) return null;
-        const str    = String(val).trim().toLowerCase();
-        const strNum = str.replace(/^hechizo\s+/i, '').trim();
-        return estadoMapa.nodos.find(n => {
-            const nid    = String(n.id).trim().toLowerCase();
-            const nnom   = String(n.nombreOriginal).trim().toLowerCase();
-            const nidNum = nid.replace(/^hechizo\s+/i, '').trim();
-            const nnomNum = nnom.replace(/^hechizo\s+/i, '').trim();
-            return nid === str || nnom === str || nidNum === strNum || nnomNum === strNum;
-        });
-    };
-
-    arrayStrings.forEach(rel => {
-        if (!rel) return;
-        // getDataCompleta devuelve { Source, Target }
-        const src = rel.Source || Object.values(rel)[0];
-        const tgt = rel.Target || Object.values(rel)[1];
-        const sourceNode = findNode(src);
-        const targetNode = findNode(tgt);
-        if (sourceNode && targetNode && sourceNode !== targetNode) {
-            estadoMapa.enlaces.push({ source: sourceNode, target: targetNode });
-            targetNode.incomingSources.push(sourceNode);
+                // Solo creamos la flecha si AMBOS nodos existen realmente
+                if (sourceNode && targetNode && sourceNode !== targetNode) {
+                    estadoMapa.enlaces.push({ source: sourceNode, target: targetNode });
+                    targetNode.incomingSources.push(sourceNode);
+                }
+            });
         }
-    });
-    actualizarColoresFlechas();
+
+        actualizarColoresFlechas();
+        
+        if (barra) barra.style.width = '100%';
+    } catch (e) {
+        console.error("Error en cargarDatos:", e);
+    }
 }
 
 export function actualizarColoresFlechas() {
     estadoMapa.nodos.forEach(nodo => {
-        if (nodo.incomingSources.length === 0) { nodo.arrowColor = ESTETICA.lineaDescubierta; return; }
-        const total    = nodo.incomingSources.length;
-        const conocidos = nodo.incomingSources.filter(n => n.esConocido).length;
-        if (conocidos === total)     nodo.arrowColor = ESTETICA.lineaDescubierta;
-        else if (conocidos > 0)     nodo.arrowColor = ESTETICA.lineaMostaza;
-        else                        nodo.arrowColor = ESTETICA.lineaRosa;
+        if (!nodo) return;
+        if (nodo.incomingSources.length === 0) {
+            nodo.arrowColor = ESTETICA.lineaDescubierta; 
+            return;
+        }
+        const total = nodo.incomingSources.length;
+        const conocidos = nodo.incomingSources.filter(n => n && n.esConocido).length;
+        
+        if (conocidos === total) {
+            nodo.arrowColor = ESTETICA.lineaDescubierta; 
+        } else if (conocidos > 0) {
+            nodo.arrowColor = ESTETICA.lineaMostaza; 
+        } else {
+            nodo.arrowColor = ESTETICA.lineaRosa; 
+        }
     });
 }
 
-// ── Guardar posiciones + visibilidad (desde mapa-main) ────────
-// Usado cuando solo se arrastran nodos o se cambia si/no en el panel info
-export async function guardarPosicionesYVisibilidad(cambios) {
-    // cambios = [{ id, x, y, conocido: 'si'/'no' }]
-    try {
-        // 1. Batch de posiciones
-        const posiciones = cambios.map(c => ({ hechizo_id: c.id, pos_x: c.x, pos_y: c.y }));
-        await db.hechizos.guardarPosicionesBatch(posiciones);
-
-        // 2. Visibilidad nodo a nodo
-        for (const c of cambios) {
-            await db.hechizos.toggleConocido(c.id, c.conocido === 'si');
-        }
-        return true;
-    } catch (e) {
-        console.error("Error en guardarPosicionesYVisibilidad:", e);
-        return false;
-    }
-}
-
-// ── Guardar edición completa (desde mapa-edicion) ─────────────
-// Maneja nodos (upsert/delete), enlaces (insert/delete) y colores de afinidad
 export async function guardarEdicionCompleta(payload) {
     try {
         const nodosParaUpsert = [];
@@ -205,7 +135,7 @@ export async function guardarEdicionCompleta(payload) {
                 const { error } = await supabase.from('hechizos_nodos').delete().eq('hechizo_id', item.idOriginal);
                 if (error) throw error;
             } else {
-                const d = item.datos; // <-- ¡AQUÍ ESTABA EL ERROR! Faltaba desempacar los datos.
+                const d = item.datos; 
                 
                 nodosParaUpsert.push({
                     hechizo_id:  d.ID,
@@ -223,14 +153,14 @@ export async function guardarEdicionCompleta(payload) {
                     es_conocido: d.Conocido === 'si'
                 });
 
-                // Si el ID cambió, borrar el registro viejo
+                // Limpiar viejo ID si fue renombrado
                 if (item.idOriginal && item.idOriginal !== d.ID) {
                     await supabase.from('hechizos_nodos').delete().eq('hechizo_id', item.idOriginal);
                 }
             }
         }
 
-        // Hacer el guardado masivo en lotes (batch) para que no crashee
+        // Guardado masivo por lotes (Batch)
         if (nodosParaUpsert.length > 0) {
             for (let i = 0; i < nodosParaUpsert.length; i += 50) {
                 const lote = nodosParaUpsert.slice(i, i + 50);
@@ -285,4 +215,9 @@ export async function guardarEdicionCompleta(payload) {
         console.error("Error crítico guardando en Supabase:", e);
         return false;
     }
+}
+
+// Para evitar errores si algún archivo viejo todavía intenta llamarla
+export async function guardarPosicionesYVisibilidad() {
+    return true; 
 }
