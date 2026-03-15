@@ -1,5 +1,5 @@
 export let db = {
-    personajes: {}, csvHeadersPersonajes: [],
+    personajes: {},
     hechizos: { nodos: [], nodosOcultos: [], inventario: [], string: [] }
 };
 
@@ -12,5 +12,5 @@ export let estadoUI = {
     filtrosAll: { afinidad: 'Todos', clase: 'Todos', estado: 'Todos', busqueda: '' },
     restarHexAsignacion: true,
     logOP: { descubiertos: [], aprendidos: [], hexGastado: 0 },
-    colaCambios: { agregar: [], quitar: [], toggleConocido: [], stats: {} }
+    colaCambios: { agregar: [], quitar: [], toggleConocido: [], hexCasts: [], stats: {} }
 };
