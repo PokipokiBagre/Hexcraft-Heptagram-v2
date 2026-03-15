@@ -16,14 +16,14 @@ const norm = (str) => str ? str.toString().trim().toLowerCase()
 export async function asegurarBucket() {
     try {
         const { data: buckets, error } = await supabase.storage.listBuckets();
-        if (error) return; 
-
+        if (error) return; // Si es un colaborador sin permisos para listar, ignoramos el error
+        
         const existe = buckets?.some(b => b.name === BUCKET);
         if (!existe) {
             await supabase.storage.createBucket(BUCKET, { public: true });
         }
     } catch(e) {
-        // Ignoramos el error para que la página siga cargando
+        // Ignoramos silenciosamente si falla por permisos anónimos
     }
 }
 
@@ -81,6 +81,10 @@ export async function cargarDatos() {
     ];
 
     const imgEncontradas = new Set();
+    
+    // 🔥 NUEVO: Forzamos manualmente el icono del navegador
+    imgEncontradas.add('icon.png');
+
     itemsInterfaz.length = 0;
 
     for (const ruta of rutasHTML) {
@@ -116,7 +120,6 @@ export async function cargarDatos() {
     });
 }
 
-// ... mantener tu función subirImagen y convertirAPNG intactas debajo ...
 export async function subirImagen(file, keyNorm, tipoIcono, onProgreso) {
     const rutaPNG = `${tipoIcono}/${keyNorm}.png`;
     const rutaJPG = `${tipoIcono}/${keyNorm}.jpg`;
@@ -151,9 +154,22 @@ function convertirAPNG(file) {
         const url = URL.createObjectURL(file);
         img.onload = () => {
             const canvas = document.createElement('canvas');
-            canvas.width  = img.naturalWidth;
-            canvas.height = img.naturalHeight;
-            canvas.getContext('2d').drawImage(img, 0, 0);
+            
+            // Definir un tamaño máximo para evitar archivos gigantes
+            const MAX_SIZE = 512; 
+            let width = img.naturalWidth;
+            let height = img.naturalHeight;
+
+            // Redimensionar si excede el límite
+            if (width > MAX_SIZE || height > MAX_SIZE) {
+                const ratio = Math.min(MAX_SIZE / width, MAX_SIZE / height);
+                width = Math.round(width * ratio);
+                height = Math.round(height * ratio);
+            }
+
+            canvas.width  = width;
+            canvas.height = height;
+            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
             URL.revokeObjectURL(url);
             canvas.toBlob(resolve, 'image/png');
         };
