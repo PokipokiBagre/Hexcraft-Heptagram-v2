@@ -94,18 +94,18 @@ export function dibujarFrame() {
 
         if (nodoActivo) {
             if (outgoingEdges.has(link)) {
-                ctx.strokeStyle = ESTETICA.lineaSaliente;
+                ctx.strokeStyle = ESTETICA.lineaSaliente || '#00ffff';
                 ctx.lineWidth = 4 / scaleFactor;
                 ctx.setLineDash([]);
                 drawNormal = false;
             } else if (ancestorEdges.has(link)) {
-                ctx.strokeStyle = 'rgba(177, 156, 217, 0.55)'; 
-                ctx.lineWidth = 1.5 / scaleFactor; 
+                ctx.strokeStyle = 'rgba(177, 156, 217, 0.8)'; // Más visible
+                ctx.lineWidth = 3.5 / scaleFactor; // Más grueso
                 ctx.setLineDash([]);
                 drawNormal = false;
             } else {
                 ctx.strokeStyle = 'rgba(80, 80, 80, 0.35)'; 
-                ctx.lineWidth = 0.8 / scaleFactor; 
+                ctx.lineWidth = 1.2 / scaleFactor; 
                 ctx.setLineDash([]);
                 ctx.globalAlpha = 0.3; 
                 arrowMult = 1.5; baseHeadLen = 5;
@@ -122,8 +122,8 @@ export function dibujarFrame() {
                 let tT = rastreo.has(link.target) || tP || tA;
 
                 if (sP && tP) {
-                    ctx.strokeStyle = COLORES_JUGADOR.posesionMorada; 
-                    ctx.lineWidth = 1.5 / scaleFactor;
+                    ctx.strokeStyle = COLORES_JUGADOR?.posesionMorada || '#b19cd9'; 
+                    ctx.lineWidth = 3.5 / scaleFactor; // Más grueso
                     ctx.setLineDash([]);
                 } else if (sP && tA) {
                     let target = link.target;
@@ -131,31 +131,32 @@ export function dibujarFrame() {
                     let posReq = target.incomingSources.filter(n => posesiones.has(n)).length;
                     let ratio = posReq / totalReq;
 
-                    if (ratio >= 0.75) ctx.strokeStyle = COLORES_JUGADOR.doradoInmediato; 
-                    else if (ratio >= 0.4) ctx.strokeStyle = COLORES_JUGADOR.doradoMedio; 
-                    else ctx.strokeStyle = COLORES_JUGADOR.doradoTenue; 
+                    if (ratio >= 0.75) ctx.strokeStyle = COLORES_JUGADOR?.doradoInmediato || '#ffdf00'; 
+                    else if (ratio >= 0.4) ctx.strokeStyle = COLORES_JUGADOR?.doradoMedio || '#d4af37'; 
+                    else ctx.strokeStyle = COLORES_JUGADOR?.doradoTenue || '#aa8822'; 
                     
-                    ctx.lineWidth = 1.5 / scaleFactor;
+                    ctx.lineWidth = 3.5 / scaleFactor; // Más grueso
                     ctx.setLineDash([]);
                 } else if (sT && tT) {
-                    ctx.strokeStyle = COLORES_JUGADOR.doradoRastreo; 
-                    ctx.lineWidth = 1 / scaleFactor; 
+                    ctx.strokeStyle = COLORES_JUGADOR?.doradoRastreo || '#8866cc'; 
+                    ctx.lineWidth = 2.5 / scaleFactor; // Un poco más grueso que antes
                     ctx.setLineDash([]); 
                 } else {
-                    ctx.strokeStyle = COLORES_JUGADOR.fondoNeutro; 
-                    ctx.lineWidth = 0.8 / scaleFactor;
+                    ctx.strokeStyle = COLORES_JUGADOR?.fondoNeutro || 'rgba(80, 80, 80, 0.15)'; 
+                    ctx.lineWidth = 1.2 / scaleFactor;
                     ctx.setLineDash([]);
                     arrowMult = 1.5; baseHeadLen = 5;
                 }
             } else {
                 if (modoVisual === 'afinidades') {
-                    ctx.strokeStyle = link.target.arrowColor; 
-                    ctx.lineWidth = 1.5 / scaleFactor; 
+                    ctx.strokeStyle = link.target.arrowColor || 'rgba(255,255,255,0.7)'; 
+                    ctx.lineWidth = 3.5 / scaleFactor; // Más grueso
                     if (ctx.strokeStyle === ESTETICA.lineaRosa) ctx.setLineDash([8 / scaleFactor, 8 / scaleFactor]);
                     else ctx.setLineDash([]); 
                 } else {
-                    ctx.strokeStyle = 'rgba(150, 150, 150, 0.3)'; 
-                    ctx.lineWidth = 1.5 / scaleFactor; 
+                    // AQUÍ ESTABA EL ERROR: gris transparente. Ahora usa el color correcto y grueso.
+                    ctx.strokeStyle = link.source.arrowColor || 'rgba(210, 190, 230, 0.8)'; 
+                    ctx.lineWidth = 3.5 / scaleFactor; // Más grueso
                     ctx.setLineDash([]); 
                 }
             }
@@ -284,7 +285,7 @@ export function dibujarFrame() {
         if (isSelected) {
             ctx.beginPath();
             ctx.arc(nodo.x, nodo.y, nodo.radio + (10/scaleFactor), 0, Math.PI * 2);
-            ctx.strokeStyle = ESTETICA.lineaSaliente; 
+            ctx.strokeStyle = ESTETICA.lineaSaliente || '#00ffff'; 
             ctx.lineWidth = 3 / scaleFactor;
             ctx.setLineDash([8/scaleFactor, 8/scaleFactor]);
             ctx.stroke();
@@ -350,7 +351,7 @@ export function dibujarFrame() {
         }
         ctx.setLineDash([]); 
 
-// ==========================================
+        // ==========================================
         // 3. TEXTOS
         // ==========================================
         if (camara.zoom > 0.08 || isHovered || isSelected || nodo.isHexNode) {
@@ -386,7 +387,7 @@ export function dibujarFrame() {
             } else if (modoVisual === 'descubiertos') {
                 ctx.fillStyle = colorAfinidadReal;
             } else if (nodo.esConocido) {
-                ctx.fillStyle = (isHovered || isSelected) ? ESTETICA.lineaSaliente : '#fff';
+                ctx.fillStyle = (isHovered || isSelected) ? (ESTETICA.lineaSaliente || '#00ffff') : '#fff';
             } else {
                 // Si está sellado, pero somos Máster, lo pintamos de gris clarito para diferenciar
                 ctx.fillStyle = (isHovered || isSelected) ? '#ddd' : (estadoMapa.esAdmin ? '#e0e0e0' : '#bbb'); 
@@ -395,8 +396,8 @@ export function dibujarFrame() {
             ctx.fillText(textoADibujar, nodo.x, textY);
         }
 
-    }); // cierra nodos.forEach
-} // cierra dibujarFrame
+    }); 
+} 
 
 export function actualizarPanelInfo() {
     const panel = document.getElementById('panel-info');
