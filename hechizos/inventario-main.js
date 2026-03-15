@@ -1,8 +1,9 @@
 import { estadoUI, db } from './inventario-state.js';
-import { inicializarDatos, sincronizarColaBD } from './inventario-data.js';
+import { inicializarDatos, sincronizarColaBD } from './inventario-data.js'; // Se quitó exportarCSVPersonajes
 import { dibujarCatalogo, renderHeaders, dibujarGrimorioGrid, dibujarGestionGrid, dibujarAprendizajeGrid, dibujarCatalogoHechizos, getValInfo } from './inventario-ui.js';
 import { getInventarioCombinado } from './inventario-logic.js';
 import { db as hexDB } from '../hex-db.js';
+import { hexAuth } from '../hex-auth.js'; // Importamos la autenticación de Supabase
 
 estadoUI.colaCambios.hexCasts = estadoUI.colaCambios.hexCasts || [];
 
@@ -14,13 +15,18 @@ window.onload = async () => {
         favicon.rel = "icon";
         document.head.appendChild(favicon);
     }
-// Asignar la ruta de Supabase
+    // Asignar la ruta de Supabase (Corregido para usar hexDB)
     favicon.href = `${hexDB.storage.urlBase}/imginterfaz/icon.png`;
 
     const perf = performance.getEntriesByType("navigation")[0];
     if (perf && perf.type === "reload") {
         localStorage.removeItem('hex_hechizos_cache');
     }
+
+    // --- INICIALIZAR SESIÓN DE SUPABASE ---
+    await hexAuth.init();
+    estadoUI.esAdmin = hexAuth.esAdmin();
+    // --------------------------------------
 
     const loader = document.getElementById('loader');
     const barra = document.getElementById('carga-progreso');
@@ -94,10 +100,22 @@ window.cambiarVista = (vista) => {
 };
 
 window.abrirGrimorio = (pj) => { estadoUI.personajeSeleccionado = pj; estadoUI.filtrosGrimorio = { afinidad: 'Todos', busqueda: '' }; window.cambiarVista('grimorio'); window.scrollTo(0,0); };
+
+// --- NUEVA LÓGICA DE LOGIN OP ---
 window.abrirMenuOP = () => {
-    if(estadoUI.esAdmin) { estadoUI.esAdmin = false; alert("Modo OP Desactivado."); window.cambiarVista('catalogo'); return; }
-    if (prompt("Contraseña:") === atob('Y2FuZXk=')) { estadoUI.esAdmin = true; window.cambiarVista(estadoUI.vistaActual); }
+    if (hexAuth.esAdmin()) {
+        estadoUI.esAdmin = !estadoUI.esAdmin;
+        if (!estadoUI.esAdmin) {
+            alert("Modo OP Desactivado.");
+            window.cambiarVista('catalogo');
+        } else {
+            window.cambiarVista(estadoUI.vistaActual);
+        }
+        return;
+    }
+    hexAuth._mostrarModalLogin();
 };
+// --------------------------------
 
 window.setFiltro = (tipo, valor) => {
     if(tipo === 'rol') { estadoUI.filtroRol = valor; ['Todos','Jugador','NPC'].forEach(k => document.getElementById('btn-rol-'+k)?.classList.remove('btn-active')); document.getElementById('btn-rol-'+valor)?.classList.add('btn-active'); }
@@ -111,6 +129,8 @@ window.aplicarFiltrosAprendizaje = () => { estadoUI.filtrosAprendizaje.afinidad 
 window.aplicarFiltrosAll = () => { estadoUI.filtrosAll.afinidad = document.getElementById('f-all-afinidad').value; estadoUI.filtrosAll.clase = document.getElementById('f-all-clase').value; estadoUI.filtrosAll.estado = document.getElementById('f-all-estado').value; estadoUI.filtrosAll.busqueda = document.getElementById('f-all-texto').value; dibujarCatalogoHechizos(); };
 
 window.toggleRestarHex = (c) => { estadoUI.restarHexAsignacion = c; };
+
+// Exportación CSV deshabilitada en la nube
 window.descargarCSVHex = () => { alert("La exportación a CSV está deshabilitada en la versión de la base de datos en la nube."); };
 
 // Guardado de configuración de checkboxes para que no se reseteen
@@ -182,7 +202,6 @@ function actualizarTextoLogOP() {
         out += `Hechizo aprendido: ${list} -${estadoUI.logOP.hexGastado} Hex (${char ? char.hex : 0})\n`;
     }
 
-    // Aquí está el cambio: quitamos el (${g.cost}) para que no se duplique
     gratuitos.forEach(g => {
         out += `${pj} | Hechizo aprendido | ${g.spell}\n`; 
     });
@@ -190,7 +209,6 @@ function actualizarTextoLogOP() {
     textarea.value = out; textarea.scrollTop = textarea.scrollHeight;
 }
 
-// TOTALMENTE SILENCIOSOS (Cero alertas)
 window.copiarLogOP = () => { 
     const t = document.getElementById('op-log-textarea'); 
     if(t) { t.select(); document.execCommand('copy'); } 
@@ -281,7 +299,6 @@ window.ejecutarSincronizacion = async () => {
 // MOTOR DE CASTEO DE HECHIZOS (VEX/HEX)
 // =========================================================================
 
-// TOTALMENTE SILENCIOSO
 window.copiarLogCasteo = () => { 
     const t = document.getElementById('log-casteo-textarea'); 
     if(t) { t.select(); document.execCommand('copy'); } 
@@ -290,14 +307,14 @@ window.limpiarLogCasteo = () => {
     const t = document.getElementById('log-casteo-textarea'); 
     if(t) t.value = ''; 
 };
-// 1. EVENTO DE RUEDA DEL RATÓN PARA CANTIDAD DE HECHIZOS
+
 window.scrollCasteo = (e) => {
     e.preventDefault();
     const input = document.getElementById('cast-num');
     if(!input) return;
     let val = parseInt(input.value) || 3;
-    if (e.deltaY < 0) val++; // Scroll hacia arriba (Aumentar)
-    else val--;              // Scroll hacia abajo (Disminuir)
+    if (e.deltaY < 0) val++; 
+    else val--;              
     
     val = Math.max(1, Math.min(50, val));
     if(input.value != val) {
@@ -306,46 +323,41 @@ window.scrollCasteo = (e) => {
     }
 };
 
-// 2. CONTROLADOR MAESTRO DE TECLADO (FLECHAS Y TABULADOR)
 window.onGridKeydown = (e, row, col) => {
     const num = parseInt(document.getElementById('cast-num').value) || 3;
     
-    // A. Autocompletado con la tecla TAB (Solo en la columna 1: Hechizo)
     if (e.key === 'Tab' && col === 1) {
         const input = document.getElementById(`spell-${row}`);
         const val = input.value.toLowerCase();
         if (val) {
             const pj = estadoUI.personajeSeleccionado;
             const invReal = db.hechizos.inventario.filter(i => i.Personaje === pj).map(i => i.Hechizo);
-            invReal.sort((a, b) => a.localeCompare(b)); // Ordenar alfabéticamente
+            invReal.sort((a, b) => a.localeCompare(b)); 
             
             const match = invReal.find(h => h.toLowerCase().startsWith(val));
             if (match && match.toLowerCase() !== val) {
-                e.preventDefault(); // Evita el salto por defecto
-                input.value = match; // Autocompleta el nombre
-                window.actualizarAfinidadCasteo(row); // Actualiza la afinidad
-                document.getElementById(`afinidad-${row}`)?.focus(); // Salta a la derecha
+                e.preventDefault(); 
+                input.value = match; 
+                window.actualizarAfinidadCasteo(row); 
+                document.getElementById(`afinidad-${row}`)?.focus(); 
                 return;
             }
         }
     }
 
-    // B. Navegación con Flechas Arriba y Abajo
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
-        e.preventDefault(); // Bloquea que los números sumen/resten nativamente
+        e.preventDefault(); 
         let nextRow = e.key === 'ArrowUp' ? Math.max(0, row - 1) : Math.min(num - 1, row + 1);
         const mapCol = {0: 'dado', 1: 'spell', 2: 'afinidad'};
         document.getElementById(`${mapCol[col]}-${nextRow}`)?.focus();
     } 
-    // C. Navegación con Flechas Izquierda y Derecha
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         const target = e.target;
         let shouldMove = false;
         
         if (target.type === 'number') {
-            shouldMove = true; // Si es un número, salta inmediato
+            shouldMove = true; 
         } else if (target.type === 'text') {
-            // Si es texto, solo salta si el cursor está en el borde de la palabra
             if (e.key === 'ArrowLeft' && target.selectionStart === 0) shouldMove = true;
             if (e.key === 'ArrowRight' && target.selectionEnd === target.value.length) shouldMove = true;
         }
@@ -359,7 +371,6 @@ window.onGridKeydown = (e, row, col) => {
     }
 };
 
-// 3. GENERADOR DE FILAS ACTUALIZADO PARA USAR EL NUEVO CONTROLADOR
 window.generarFilasCasteo = () => {
     const contenedor = document.getElementById('casteo-filas');
     if (!contenedor) return;
@@ -487,7 +498,6 @@ window.conjurarHechizos = () => {
             continue;
         }
 
-        // Búsqueda inteligente: permite encontrar el hechizo por nombre o por ID (ej: Hechizo 24)
         const spellNorm = spellName.trim().toLowerCase();
         const info = todosNodos.find(n => (n.Nombre && n.Nombre.trim().toLowerCase() === spellNorm) || (n.ID && n.ID.trim().toLowerCase() === spellNorm));
         if(!info) { resDiv.innerHTML = "Hechizo no encontrado."; continue; }
@@ -496,12 +506,10 @@ window.conjurarHechizos = () => {
         const NC = dadoVal * afinVal;
         conjurosRealizados++;
         
-        // --- EVALUACIÓN DE ENMASCARAMIENTO DE DATOS ---
         const checkColaVis = estadoUI.colaCambios.toggleConocido.slice().reverse().find(c => c.ID === info.ID || c.Nombre === info.Nombre);
         const isPublicBase = info.Conocido && info.Conocido.toString().trim().toLowerCase() === 'si';
         const isKnown = checkColaVis ? (checkColaVis.Estado === 'si') : isPublicBase;
         
-        // Si el usuario NO es OP y el hechizo está oculto, enmascaramos los resultados
         const isHidden = !estadoUI.esAdmin && !isKnown;
 
         let effect = getValInfo(info, ['efecto', 'Efecto']) || 'Ningún efecto base.';
@@ -515,7 +523,6 @@ window.conjurarHechizos = () => {
             under = under ? '<i style="color:#888;">Efecto oculto.</i>' : null;
             esp = esp ? '<i style="color:#888;">Efecto oculto.</i>' : null;
         }
-        // ----------------------------------------------
 
         let htmlUI = `<div style="margin-bottom:5px;"><strong>Nivel de Casteo: <span style="font-size:1.2em; color:white;">${NC}</span></strong> <span style="color:#aaa; font-size:0.8em;">(Costo: ${hexCost})</span></div>`;
         let logStatus = "";
@@ -590,7 +597,7 @@ window.conjurarHechizos = () => {
 
     if (estadoUI.esAdmin) {
         let textoLog = "";
-        const mostrarEfectos = estadoUI.efectosCast !== false; // Evalúa el checkbox de efectos
+        const mostrarEfectos = estadoUI.efectosCast !== false;
 
         Object.values(agrupacionLogs).forEach(g => {
             if (g.status.includes("FALLO") || !mostrarEfectos) {
