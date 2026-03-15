@@ -283,9 +283,13 @@ export const db = {
                 
                 const resultados = await Promise.all(promesas);
                 if (resultados.some(r => r.error)) hasError = true;
-            }
+                        }
             return !hasError;
-    },
+        }
+    }, 
+
+    // ══════════════════════════════════════════════════════
+    // MISIONES
 
     // ══════════════════════════════════════════════════════
     // MISIONES
