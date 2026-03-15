@@ -87,26 +87,30 @@ window.cerrarUpload = () => {
     ocultarPanelUpload();
 };
 
-window.handleDrop = (e) => {
+window.handleDrop = async (e) => {
     e.preventDefault();
     document.getElementById('drop-zone').classList.remove('drag-over');
     const file = e.dataTransfer.files[0];
-    if (file && file.type.startsWith('image/')) ejecutarSubida(file);
+    if (file && file.type.startsWith('image/')) {
+        await ejecutarSubida(file); // Aseguramos la espera en Drag&Drop
+    }
 };
 
-window.handleFileSelect = (e) => {
+// 👉 LÓGICA BLINDADA: Ahora espera a que termine TODO antes de limpiar
+window.handleFileSelect = async (e) => {
     const file = e.target.files[0];
-    // Mandamos el 'input' para limpiarlo de forma segura SOLO cuando termine
-    if (file) ejecutarSubida(file, e.target); 
+    if (file) {
+        await ejecutarSubida(file); 
+    }
+    e.target.value = ''; // Limpiamos seguro sin cortar el flujo
 };
 
-async function ejecutarSubida(file, inputTarget = null) {
+async function ejecutarSubida(file) {
     if (!estadoUI.uploadTarget) return;
     const { keyNorm, tipoIcono } = estadoUI.uploadTarget;
 
     if (!hexAuth.estaLogueado() && tipoIcono !== 'imgobjetos') {
         actualizarProgreso(0, '❌ Permiso denegado para esta categoría.', true);
-        if (inputTarget) inputTarget.value = '';
         return;
     }
 
@@ -120,14 +124,11 @@ async function ejecutarSubida(file, inputTarget = null) {
         setTimeout(() => {
             window.cerrarUpload();
             renderGrid();
-            // Limpiamos el input ahora sí de forma segura
-            if (inputTarget) inputTarget.value = ''; 
         }, 1500);
 
     } catch(e) {
         console.error('Error subiendo imagen:', e);
         actualizarProgreso(0, '❌ Error: ' + (e.message || 'fallo al subir'), true);
-        if (inputTarget) inputTarget.value = ''; 
     }
 }
 
