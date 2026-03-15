@@ -1,4 +1,4 @@
-import { estadoMapa, COLOR_AFINIDAD, ESTETICA, COLORES_JUGADOR } from './mapa-state.js';
+import { estadoMapa, ESTETICA } from './mapa-state.js';
 
 let canvas, ctx;
 
@@ -9,7 +9,6 @@ export function inicializarCanvas() {
     redimensionar();
     window.addEventListener('resize', redimensionar);
     
-    // Hacemos arrastrables ambos paneles
     hacerPanelArrastrable('panel-info');
     hacerPanelArrastrable('panel-edicion-avanzada');
 }
@@ -94,20 +93,19 @@ export function dibujarFrame() {
 
         if (nodoActivo) {
             if (outgoingEdges.has(link)) {
-                ctx.strokeStyle = ESTETICA.lineaSaliente || '#00ffff';
+                ctx.strokeStyle = '#00ffff'; // Saliente (Cyan)
                 ctx.lineWidth = 4 / scaleFactor;
                 ctx.setLineDash([]);
                 drawNormal = false;
             } else if (ancestorEdges.has(link)) {
-                ctx.strokeStyle = 'rgba(177, 156, 217, 0.8)'; // Más visible
-                ctx.lineWidth = 3.5 / scaleFactor; // Más grueso
+                ctx.strokeStyle = 'rgba(177, 156, 217, 0.6)'; // Precedente directo (Morado)
+                ctx.lineWidth = 3.5 / scaleFactor; 
                 ctx.setLineDash([]);
                 drawNormal = false;
             } else {
-                ctx.strokeStyle = 'rgba(80, 80, 80, 0.35)'; 
+                ctx.strokeStyle = 'rgba(80, 80, 80, 0.35)'; // Apagado
                 ctx.lineWidth = 1.2 / scaleFactor; 
                 ctx.setLineDash([]);
-                ctx.globalAlpha = 0.3; 
                 arrowMult = 1.5; baseHeadLen = 5;
                 drawNormal = false;
             }
@@ -115,48 +113,41 @@ export function dibujarFrame() {
         
         if (drawNormal) {
             if (isPlayerView) {
-                let sP = posesiones.has(link.source);
-                let tP = posesiones.has(link.target);
-                let tA = aprendibles.has(link.target);
-                let sT = rastreo.has(link.source) || sP;
-                let tT = rastreo.has(link.target) || tP || tA;
+                const sPos = posesiones.has(link.source);
+                const tPos = posesiones.has(link.target);
+                const tApr = aprendibles.has(link.target);
+                const sRas = rastreo.has(link.source);
+                const tRas = rastreo.has(link.target);
 
-                if (sP && tP) {
-                    ctx.strokeStyle = COLORES_JUGADOR?.posesionMorada || '#b19cd9'; 
-                    ctx.lineWidth = 3.5 / scaleFactor; // Más grueso
-                    ctx.setLineDash([]);
-                } else if (sP && tA) {
-                    let target = link.target;
-                    let totalReq = target.incomingSources.length;
-                    let posReq = target.incomingSources.filter(n => posesiones.has(n)).length;
-                    let ratio = posReq / totalReq;
-
-                    if (ratio >= 0.75) ctx.strokeStyle = COLORES_JUGADOR?.doradoInmediato || '#ffdf00'; 
-                    else if (ratio >= 0.4) ctx.strokeStyle = COLORES_JUGADOR?.doradoMedio || '#d4af37'; 
-                    else ctx.strokeStyle = COLORES_JUGADOR?.doradoTenue || '#aa8822'; 
-                    
-                    ctx.lineWidth = 3.5 / scaleFactor; // Más grueso
-                    ctx.setLineDash([]);
-                } else if (sT && tT) {
-                    ctx.strokeStyle = COLORES_JUGADOR?.doradoRastreo || '#8866cc'; 
-                    ctx.lineWidth = 2.5 / scaleFactor; // Un poco más grueso que antes
-                    ctx.setLineDash([]); 
+                if (tPos) {
+                    // Posesión asegurada
+                    ctx.strokeStyle = '#b19cd9'; // Morado fuerte
+                    ctx.lineWidth = 3.5 / scaleFactor;
+                } else if (tApr && sPos) {
+                    // Ruta directa a un hechizo aprendible
+                    ctx.strokeStyle = '#ffdf00'; // Dorado brillante
+                    ctx.lineWidth = 3.5 / scaleFactor;
+                } else if ((sRas || sPos) && (tRas || tApr || tPos)) {
+                    // Ruta de precedentes (rastreo)
+                    ctx.strokeStyle = '#8866cc'; // Morado oscuro / indigo
+                    ctx.lineWidth = 3.0 / scaleFactor;
                 } else {
-                    ctx.strokeStyle = COLORES_JUGADOR?.fondoNeutro || 'rgba(80, 80, 80, 0.15)'; 
+                    // Ruta irrelevante para el jugador
+                    ctx.strokeStyle = 'rgba(80, 80, 80, 0.15)'; 
                     ctx.lineWidth = 1.2 / scaleFactor;
-                    ctx.setLineDash([]);
                     arrowMult = 1.5; baseHeadLen = 5;
                 }
+                ctx.setLineDash([]);
             } else {
+                // VISTA GLOBAL
                 if (modoVisual === 'afinidades') {
-                    ctx.strokeStyle = link.target.arrowColor || 'rgba(255,255,255,0.7)'; 
-                    ctx.lineWidth = 3.5 / scaleFactor; // Más grueso
-                    if (ctx.strokeStyle === ESTETICA.lineaRosa) ctx.setLineDash([8 / scaleFactor, 8 / scaleFactor]);
+                    ctx.strokeStyle = link.target.arrowColor || 'rgba(255,255,255,0.6)'; 
+                    ctx.lineWidth = 3.5 / scaleFactor;
+                    if (ctx.strokeStyle === (ESTETICA.lineaRosa || 'rgba(200, 60, 100, 0.25)')) ctx.setLineDash([8 / scaleFactor, 8 / scaleFactor]);
                     else ctx.setLineDash([]); 
                 } else {
-                    // AQUÍ ESTABA EL ERROR: gris transparente. Ahora usa el color correcto y grueso.
-                    ctx.strokeStyle = link.source.arrowColor || 'rgba(210, 190, 230, 0.8)'; 
-                    ctx.lineWidth = 3.5 / scaleFactor; // Más grueso
+                    ctx.strokeStyle = link.source.arrowColor || 'rgba(210, 190, 230, 0.7)'; 
+                    ctx.lineWidth = 3.5 / scaleFactor;
                     ctx.setLineDash([]); 
                 }
             }
@@ -165,6 +156,7 @@ export function dibujarFrame() {
         ctx.stroke();
         ctx.setLineDash([]); 
 
+        // DIBUJAR PUNTA DE FLECHA
         const headlen = (ctx.lineWidth * arrowMult) + (baseHeadLen / scaleFactor); 
         ctx.beginPath();
         ctx.moveTo(targetX, targetY);
@@ -177,14 +169,11 @@ export function dibujarFrame() {
 
     // --- HOOK DIBUJO DE EDICIÓN ---
     if (window.mapaEditor && window.mapaEditor.activa) {
-        // 1. Dibujar enlace temporal
         if (window.mapaEditor.tempLink) {
             const temp = window.mapaEditor.tempLink;
             const seleccion = window.mapaEditor.seleccionMultiple;
-            
             const nodosOrigen = (window.mapaEditor.isShiftPressed && seleccion.has(temp.source) && seleccion.size > 1) 
-                ? Array.from(seleccion) 
-                : [temp.source];
+                ? Array.from(seleccion) : [temp.source];
 
             nodosOrigen.forEach(nodoOrg => {
                 const angle = Math.atan2(temp.endY - nodoOrg.y, temp.endX - nodoOrg.x);
@@ -209,7 +198,6 @@ export function dibujarFrame() {
             });
         }
         
-        // 2. Dibujar Caja de Selección
         if (window.mapaEditor.boxStart && window.mapaEditor.boxCurrent) {
             const minX = Math.min(window.mapaEditor.boxStart.x, window.mapaEditor.boxCurrent.x);
             const minY = Math.min(window.mapaEditor.boxStart.y, window.mapaEditor.boxCurrent.y);
@@ -225,7 +213,6 @@ export function dibujarFrame() {
             ctx.setLineDash([]);
         }
 
-        // 3. Dibujar Enmascarado
         window.mapaEditor.seleccionMultiple.forEach(n => {
             ctx.beginPath(); 
             ctx.arc(n.x, n.y, n.radio + (12/scaleFactor), 0, Math.PI * 2);
@@ -244,16 +231,11 @@ export function dibujarFrame() {
     nodos.forEach(nodo => {
         ctx.globalAlpha = 1.0; 
         
-        let colorAfinidadReal;
+        let colorAfinidadReal = window.mapaColores && window.mapaColores[nodo.afinidad] ? window.mapaColores[nodo.afinidad].t : '#aaaaaa';
 
-        if (modoVisual === 'afinidades') {
-            colorAfinidadReal = window.mapaColores[nodo.afinidad] ? window.mapaColores[nodo.afinidad].t : '#aaaaaa';
-        } else {
-            if (nodo.esConocido) {
-                colorAfinidadReal = 'rgba(177, 156, 217, 1)';
-            } else {
-                colorAfinidadReal = 'rgba(236, 213, 154, 1)';
-            }
+        if (modoVisual !== 'afinidades') {
+            if (nodo.esConocido) colorAfinidadReal = 'rgba(177, 156, 217, 1)';
+            else colorAfinidadReal = 'rgba(236, 213, 154, 1)';
         }
 
         if (nodo.isHexNode) colorAfinidadReal = '#ff4444'; 
@@ -270,8 +252,10 @@ export function dibujarFrame() {
         let colorNodoFinal = colorAfinidadReal;
         if (isPlayerView && tieneElHechizo && !nodo.isHexNode) {
             colorNodoFinal = 'rgba(177, 156, 217, 1)';
-        } else if (isPlayerView && (esAprendibleInmediato || esPrecedente)) {
-            colorNodoFinal = esAprendibleInmediato ? 'rgba(236, 213, 154, 0.8)' : 'rgba(212, 196, 146, 0.4)';
+        } else if (isPlayerView && esAprendibleInmediato) {
+            colorNodoFinal = 'rgba(255, 223, 0, 0.9)'; // Dorado fuerte
+        } else if (isPlayerView && esPrecedente) {
+            colorNodoFinal = 'rgba(136, 102, 204, 0.8)'; // Morado precedente
         }
 
         if (nodoActivo) {
@@ -279,13 +263,13 @@ export function dibujarFrame() {
                 ctx.globalAlpha = 0.2;
             }
         } else if (isPlayerView && esIrrelevantePlayer) {
-            ctx.globalAlpha = 0.56; 
+            ctx.globalAlpha = 0.4; // Menos transparente para no perderlos de vista
         }
 
         if (isSelected) {
             ctx.beginPath();
             ctx.arc(nodo.x, nodo.y, nodo.radio + (10/scaleFactor), 0, Math.PI * 2);
-            ctx.strokeStyle = ESTETICA.lineaSaliente || '#00ffff'; 
+            ctx.strokeStyle = '#00ffff'; 
             ctx.lineWidth = 3 / scaleFactor;
             ctx.setLineDash([8/scaleFactor, 8/scaleFactor]);
             ctx.stroke();
@@ -317,10 +301,10 @@ export function dibujarFrame() {
                 ctx.globalAlpha = 1.0;
             } else if (esAprendibleInmediato) {
                 ctx.fillStyle = '#222'; ctx.fill();
-                ctx.fillStyle = 'rgba(236, 213, 154, 0.3)'; ctx.fill();
+                ctx.fillStyle = 'rgba(255, 223, 0, 0.4)'; ctx.fill();
             } else if (esPrecedente) {
                 ctx.fillStyle = '#222'; ctx.fill();
-                ctx.fillStyle = 'rgba(212, 196, 146, 0.08)'; ctx.fill();
+                ctx.fillStyle = 'rgba(136, 102, 204, 0.3)'; ctx.fill();
             } else {
                 ctx.fillStyle = '#111'; ctx.fill();
                 if (!isPlayerView) {
@@ -364,7 +348,6 @@ export function dibujarFrame() {
             const textY = nodo.y + nodo.radio + (15 / scaleFactor);
             ctx.lineWidth = 6 / scaleFactor;
             
-            // LÓGICA MÁSTER: Si es Admin, forzamos mostrar el nombre real del hechizo
             const textoADibujar = estadoMapa.esAdmin && !nodo.esConocido && !nodo.isHexNode 
                                   ? `${nodo.nombreOriginal.replace(/\s*\(\d+\)$/, '').trim()} (${nodo.hex})` 
                                   : nodo.nombre;
@@ -380,24 +363,22 @@ export function dibujarFrame() {
             if (nodo.isHexNode) {
                 ctx.fillStyle = '#ffaaaa';
             } else if (isPlayerView) {
-                if (tieneElHechizo) ctx.fillStyle = 'rgba(177, 156, 217, 1)'; 
-                else if (esAprendibleInmediato) ctx.fillStyle = 'rgba(236, 213, 154, 0.9)'; 
-                else if (esPrecedente) ctx.fillStyle = 'rgba(212, 196, 146, 0.4)'; 
-                else ctx.fillStyle = 'rgba(100, 100, 100, 0.2)'; 
+                if (tieneElHechizo) ctx.fillStyle = '#b19cd9'; 
+                else if (esAprendibleInmediato) ctx.fillStyle = '#ffdf00'; 
+                else if (esPrecedente) ctx.fillStyle = '#8866cc'; 
+                else ctx.fillStyle = 'rgba(100, 100, 100, 0.3)'; 
             } else if (modoVisual === 'descubiertos') {
                 ctx.fillStyle = colorAfinidadReal;
             } else if (nodo.esConocido) {
-                ctx.fillStyle = (isHovered || isSelected) ? (ESTETICA.lineaSaliente || '#00ffff') : '#fff';
+                ctx.fillStyle = (isHovered || isSelected) ? '#00ffff' : '#fff';
             } else {
-                // Si está sellado, pero somos Máster, lo pintamos de gris clarito para diferenciar
                 ctx.fillStyle = (isHovered || isSelected) ? '#ddd' : (estadoMapa.esAdmin ? '#e0e0e0' : '#bbb'); 
             }
             
             ctx.fillText(textoADibujar, nodo.x, textY);
         }
-
     }); 
-} 
+}
 
 export function actualizarPanelInfo() {
     const panel = document.getElementById('panel-info');
@@ -408,7 +389,7 @@ export function actualizarPanelInfo() {
     if (!nodo) { panel.classList.add('oculto'); return; }
 
     document.getElementById('info-titulo').innerText = nodo.nombre;
-    const colorData = window.mapaColores[nodo.afinidad];
+    const colorData = window.mapaColores && window.mapaColores[nodo.afinidad];
     const colorAfinidad = colorData ? colorData.t : '#888';
     
     if (nodo.esConocido || nodo.isHexNode) {
@@ -479,7 +460,6 @@ export function resetearPosicionPanel() {
     if (panel) { panel.style.top = ''; panel.style.left = ''; panel.style.right = ''; panel.style.bottom = ''; panel.style.transform = ''; }
 }
 
-// NUEVO: SISTEMA UNIVERSAL DE ARRASTRE PARA PANELES
 function hacerPanelArrastrable(id) {
     const el = document.getElementById(id);
     if(!el) return;
@@ -491,36 +471,25 @@ function hacerPanelArrastrable(id) {
     el.ontouchstart = iniciarArrastre;
 
     function iniciarArrastre(e) {
-        // Evitar que el arrastre se active al intentar escribir o pulsar botones
         if (e.target.closest('button') || e.target.closest('select') || e.target.closest('summary') || e.target.closest('input') || e.target.closest('textarea')) {
             return; 
         }
 
-        // --- CORRECCIÓN CLAVE PARA RESIZE ---
-        // Detectar si el clic es en la esquina inferior derecha (zona de resize)
         let clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
         let clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
         
         const rect = el.getBoundingClientRect();
-        
-        // Zona de tolerancia en píxeles para el tirador de resize
         const toleranciaResize = 30; 
         
         const clickEnXDeResize = (clientX - rect.left) > (rect.width - toleranciaResize);
         const clickEnYDeResize = (clientY - rect.top) > (rect.height - toleranciaResize);
         
-        if (clickEnXDeResize && clickEnYDeResize) {
-            // El usuario está intentando redimensionar. Cancelamos el drag & drop (mover ventana)
-            // y dejamos que el navegador actúe nativamente con el resize CSS.
-            return; 
-        }
-        // -------------------------------------
+        if (clickEnXDeResize && clickEnYDeResize) return; 
 
         e = e || window.event;
         if (e.type !== 'touchstart') e.preventDefault(); 
         
         el.style.cursor = 'grabbing'; 
-        
         el.style.bottom = "auto";
         el.style.right = "auto";
         el.style.transform = "none";
