@@ -1,9 +1,10 @@
 // ============================================================
-// inventario-data.js — VERSIÓN SUPABASE
+// inventario-data.js — VERSIÓN SUPABASE (CORREGIDA)
 // ============================================================
 
 import { db as localDB } from './inventario-state.js';
 import { db as hexDB }   from '../hex-db.js';
+import { supabase }      from '../hex-auth.js'; // 👉 IMPORTANTE: Agregado para poder hacer UPDATE directos
 
 // ── Carga inicial desde Supabase ─────────────────────────────
 export async function inicializarDatos(barraProgreso) {
@@ -58,8 +59,6 @@ export async function inicializarDatos(barraProgreso) {
         });
 
         // ── PROCESAR HECHIZOS ─────────────────────────────────
-        // getDataCompleta() ya devuelve el formato { nodos, nodosOcultos, string, inventario, afinidades }
-        // con claves PascalCase que todo el código de UI ya espera
         localDB.hechizos = hechizosData;
 
         if (barraProgreso) barraProgreso.style.width = '100%';
@@ -77,7 +76,6 @@ export async function sincronizarColaBD(cola) {
         let success = true;
 
         // 1. Agregar hechizos al inventario
-        // item = [pj, nombreHechizo, afinidad, hex, tipo, origen]
         for (const item of cola.agregar) {
             const ok = await hexDB.hechizos.agregarHechizo(item[0], {
                 nombre:   item[1],
@@ -90,26 +88,30 @@ export async function sincronizarColaBD(cola) {
         }
 
         // 2. Quitar hechizos del inventario
-        // item = { Personaje, Hechizo }
         for (const item of cola.quitar) {
             const ok = await hexDB.hechizos.quitarHechizo(item.Personaje, item.Hechizo);
             if (!ok) success = false;
         }
 
         // 3. Cambiar visibilidad de nodos del mapa
-        // item = { ID, Nombre, Estado: 'si'/'no' }
         for (const item of cola.toggleConocido) {
             const ok = await hexDB.hechizos.toggleConocido(item.ID, item.Estado === 'si');
             if (!ok) success = false;
         }
 
-        // 4. Actualizar estadísticas del personaje (hex gastado + afinidades recalculadas)
-        // colaCambios.stats[pj] = { hex: X, hz_fisica: Y, hz_energetica: Z, ... }
+        // 👉 4. CORRECCIÓN CRÍTICA: Actualizar estadísticas con UPDATE (esquiva el rechazo de Supabase)
         if (cola.stats && Object.keys(cola.stats).length > 0) {
             for (const [pj, cambios] of Object.entries(cola.stats)) {
-                const payload = { nombre: pj, ...cambios };
-                const ok = await hexDB.personajes.upsert(payload);
-                if (!ok) success = false;
+                // Actualizamos directamente solo los campos que cambiaron (Ej: hex y hz_oscura)
+                const { error } = await supabase
+                    .from('personajes')
+                    .update(cambios)
+                    .eq('nombre', pj);
+                    
+                if (error) {
+                    console.error(`Error actualizando stats de ${pj}:`, error);
+                    success = false;
+                }
             }
         }
 
