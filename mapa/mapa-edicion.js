@@ -92,13 +92,13 @@ editor.setHerramienta = (herr) => {
 };
 
 // --- EL ÚNICO BOTÓN DE GUARDADO MAESTRO ---
-// Sobreescribimos el de mapa-main.js para que guarde ABSOLUTAMENTE TODO
+// Guardará NODOS, ENLACES y AFINIDADES directamente en Supabase
 window.guardarCambiosMapa = async () => {
     estadoMapa.nodos.forEach(n => { if(n.modificado) registrarCambioNodo(n); });
 
     const payload = {
-        nodos:      Object.values(editor.cambiosPendientes.nodos),
-        enlaces:    editor.cambiosPendientes.enlaces,
+        nodos: Object.values(editor.cambiosPendientes.nodos),
+        enlaces: editor.cambiosPendientes.enlaces,
         afinidades: window.mapaColores 
     };
 
@@ -110,15 +110,23 @@ window.guardarCambiosMapa = async () => {
     const textoOriginal = btn.innerText;
     btn.innerText = "Guardando Red..."; btn.disabled = true;
 
-    if (await guardarEdicionCompleta(payload)) {
-        alert("¡Cambios guardados en Supabase!");
-        editor.cambiosPendientes = { nodos: {}, enlaces: [] };
-        estadoMapa.nodos.forEach(n => { n.modificado = false; n._esNuevo = false; n._oldId = n.id; });
-        btn.classList.add('oculto');
-    } else {
-        alert("Error al guardar. Revisa la consola.");
+    try {
+        // Ejecutamos la función conectada a Supabase que ya tenías en mapa-data.js
+        const exito = await guardarEdicionCompleta(payload);
+        
+        if (exito) {
+            alert("¡Cambios guardados en la base de datos! ✅");
+            editor.cambiosPendientes = { nodos: {}, enlaces: [] };
+            estadoMapa.nodos.forEach(n => { n.modificado = false; n._esNuevo = false; n._oldId = n.id; });
+            btn.classList.add('oculto'); // Se oculta tras guardar
+        } else {
+            alert("Fallo del servidor al intentar guardar los cambios.");
+        }
+    } catch(e) { 
+        console.error("Error guardando el mapa:", e);
+        alert("Error de Red o conexión con la base de datos."); 
     }
-
+    
     btn.innerText = textoOriginal; btn.disabled = false;
 };
 
