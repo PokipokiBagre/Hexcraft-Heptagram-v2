@@ -170,5 +170,5 @@ export function eliminarObjetoCompletamente(nombreObj, callback) {
 
     guardar();
     if(callback) callback();
-} 
+    } 
 }
