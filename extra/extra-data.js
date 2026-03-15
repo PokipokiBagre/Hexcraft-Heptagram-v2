@@ -14,10 +14,16 @@ const norm = (str) => str ? str.toString().trim().toLowerCase()
     .replace(/[^a-z0-9_]/g,'') : ''; // <-- Quitamos la ñ de los caracteres permitidos
 
 export async function asegurarBucket() {
-    const { data: buckets } = await supabase.storage.listBuckets();
-    const existe = buckets?.some(b => b.name === BUCKET);
-    if (!existe) {
-        await supabase.storage.createBucket(BUCKET, { public: true });
+    try {
+        const { data: buckets, error } = await supabase.storage.listBuckets();
+        if (error) return; 
+
+        const existe = buckets?.some(b => b.name === BUCKET);
+        if (!existe) {
+            await supabase.storage.createBucket(BUCKET, { public: true });
+        }
+    } catch(e) {
+        // Ignoramos el error para que la página siga cargando
     }
 }
 
