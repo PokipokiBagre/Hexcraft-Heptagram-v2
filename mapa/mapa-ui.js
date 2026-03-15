@@ -99,15 +99,15 @@ export function dibujarFrame() {
                 ctx.setLineDash([]);
                 drawNormal = false;
             } else if (ancestorEdges.has(link)) {
-                ctx.strokeStyle = 'rgba(177, 156, 217, 0.45)'; 
+                ctx.strokeStyle = 'rgba(177, 156, 217, 0.55)'; 
                 ctx.lineWidth = 1.5 / scaleFactor; 
                 ctx.setLineDash([]);
                 drawNormal = false;
             } else {
-                ctx.strokeStyle = 'rgba(80, 80, 80, 0.15)'; 
+                ctx.strokeStyle = 'rgba(80, 80, 80, 0.35)'; 
                 ctx.lineWidth = 0.8 / scaleFactor; 
                 ctx.setLineDash([]);
-                ctx.globalAlpha = 0.2; 
+                ctx.globalAlpha = 0.3; 
                 arrowMult = 1.5; baseHeadLen = 5;
                 drawNormal = false;
             }
