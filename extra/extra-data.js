@@ -127,28 +127,31 @@ export async function cargarDatos() {
 
 export async function subirImagen(file, keyNorm, tipoIcono, onProgreso) {
     const rutaPNG = `${tipoIcono}/${keyNorm}.png`;
+    const rutaJPG = `${tipoIcono}/${keyNorm}.jpg`;
 
-    if (onProgreso) onProgreso(30, 'Procesando imagen...');
-    const blob = await convertirAPNG(file);
+    if (onProgreso) onProgreso(30, 'Procesando formatos...');
+    
+    // RESTAURADO: Ahora generamos ambos archivos físicamente
+    const { blobPNG, blobJPG } = await convertirAFormatos(file);
 
-    if (onProgreso) onProgreso(60, 'Subiendo al servidor...');
-
-    // SUBIMOS ÚNICAMENTE EL PNG PARA EVITAR ERROR DE MIME-TYPE EN SUPABASE
-    const { error } = await supabase.storage
+    if (onProgreso) onProgreso(50, 'Subiendo versión PNG...');
+    const { error: errPNG } = await supabase.storage
         .from(BUCKET)
-        .upload(rutaPNG, blob, { upsert: true, contentType: 'image/png' });
+        .upload(rutaPNG, blobPNG, { upsert: true, contentType: 'image/png' });
+    if (errPNG) throw new Error(errPNG.message || 'Error PNG');
 
-    if (error) {
-        console.error("Error de Supabase:", error);
-        throw new Error(error.message || 'Error al guardar en el servidor.');
-    }
+    if (onProgreso) onProgreso(80, 'Subiendo versión JPG...');
+    const { error: errJPG } = await supabase.storage
+        .from(BUCKET)
+        .upload(rutaJPG, blobJPG, { upsert: true, contentType: 'image/jpeg' });
+    if (errJPG) throw new Error(errJPG.message || 'Error JPG');
 
     if (onProgreso) onProgreso(100, '¡Imagen subida exitosamente!');
 
     return `${STORAGE_URL}/${rutaPNG}?v=${Date.now()}`;
 }
 
-function convertirAPNG(file) {
+function convertirAFormatos(file) {
     return new Promise((resolve) => {
         const img = new Image();
         const url = URL.createObjectURL(file);
@@ -166,9 +169,28 @@ function convertirAPNG(file) {
 
             canvas.width  = width;
             canvas.height = height;
-            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-            URL.revokeObjectURL(url);
-            canvas.toBlob(resolve, 'image/png');
+            const ctx = canvas.getContext('2d');
+            
+            // 1. Generar el PNG puro
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            canvas.toBlob((blobPNG) => {
+                
+                // 2. Generar el JPG (rellenamos de negro por si tenía fondo transparente)
+                const canvasJPG = document.createElement('canvas');
+                canvasJPG.width = width;
+                canvasJPG.height = height;
+                const ctxJPG = canvasJPG.getContext('2d');
+                ctxJPG.fillStyle = '#05000a'; 
+                ctxJPG.fillRect(0, 0, width, height);
+                ctxJPG.drawImage(img, 0, 0, width, height);
+
+                canvasJPG.toBlob((blobJPG) => {
+                    URL.revokeObjectURL(url);
+                    resolve({ blobPNG, blobJPG });
+                }, 'image/jpeg', 0.9);
+
+            }, 'image/png');
         };
         img.src = url;
     });
