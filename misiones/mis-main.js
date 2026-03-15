@@ -3,12 +3,16 @@ import { cargarDatos, sincronizarBD } from './mis-data.js';
 import { dibujarTablero, dibujarRoster, renderFormularioModal } from './mis-ui.js';
 import { asignarJugador, removerJugador, guardarMision, eliminarPersonalizada } from './mis-logic.js';
 import { hexAuth } from '../hex-auth.js';
+import { db }      from '../hex-db.js';
 
 // ============================================================
 // mis-main.js — VERSIÓN SUPABASE
 // ============================================================
 
 window.onload = async () => {
+    const favicon = document.querySelector("link[rel='icon']");
+    if (favicon) favicon.href = `${db.storage.urlBase}/imginterfaz/icon.png`;
+
     const perf = performance.getEntriesByType("navigation")[0];
     if (perf && perf.type === "reload") localStorage.removeItem('hex_mis_v1');
 
