@@ -3,7 +3,7 @@
 // ============================================================
 
 import { hexAuth } from '../hex-auth.js';
-import { estadoUI } from './extra-state.js';
+import { estadoUI, STORAGE_URL } from './extra-state.js';
 import { asegurarBucket, cargarDatos, subirImagen } from './extra-data.js';
 import { marcarExiste } from './extra-logic.js';
 import {
@@ -13,6 +13,11 @@ import {
 
 // ── Iniciar ──────────────────────────────────────────────────
 async function iniciar() {
+    // --- NUEVO: Inyectar el icono de la pestaña desde Supabase ---
+    const favicon = document.querySelector("link[rel='icon']");
+    if (favicon) favicon.href = `${STORAGE_URL}/imginterfaz/icon.png`;
+    // -------------------------------------------------------------
+
     await hexAuth.init();
 
     const badge = document.getElementById('hex-session-badge');
