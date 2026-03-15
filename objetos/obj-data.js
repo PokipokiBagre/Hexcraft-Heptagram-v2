@@ -1,122 +1,122 @@
 // ============================================================
-// obj-data.js — VERSIÓN SUPABASE
+// obj-data.js — VERSIÓN SUPABASE (ESTABILIDAD MÁXIMA)
+// Reemplaza los fetch de Google Sheets
 // ============================================================
 
-import { invGlobal, objGlobal, statsGlobal, guardar } from './obj-state.js';
+import { invGlobal, objGlobal, statsGlobal, historial, estadoUI } from './obj-state.js';
 import { db } from '../hex-db.js';
 
 export async function cargarTodoDesdeCSV() {
     try {
-        // Carga paralela desde Supabase
-        const [catalogoArr, inventarioArr, personajesArr] = await Promise.all([
+        const [personajesArr, objetosArr, inventObjArr] = await Promise.all([
+            db.personajes.getAll(),
             db.objetos.getCatalogo(),
-            db.objetos.getInventarioCompleto(),
-            db.personajes.getAll()
+            db.objetos.getInventarioCompleto()
         ]);
-        
-        // 1. PROCESAR OBJETOS (Catálogo)
+
+        // Limpieza en memoria
+        for (let k in invGlobal) delete invGlobal[k];
         for (let k in objGlobal) delete objGlobal[k];
-        catalogoArr.forEach(o => {
-            if (o.nombre) {
-                objGlobal[o.nombre] = { 
-                    tipo: o.tipo || '-', 
-                    mat:  o.material || '-', 
-                    eff:  o.efecto || 'Sin descripción', 
-                    rar:  o.rareza || 'Común' 
+        for (let k in statsGlobal) delete statsGlobal[k];
+
+        // 1. Cargar Personajes
+        personajesArr.forEach(p => {
+            statsGlobal[p.nombre] = { 
+                isPlayer: p.is_player, 
+                isActive: p.is_active, 
+                iconoOverride: p.icono_override || '' 
+            };
+            invGlobal[p.nombre] = {};
+        });
+
+        // 2. Cargar Catálogo de Objetos
+        objetosArr.forEach(o => {
+            objGlobal[o.nombre] = { 
+                tipo: o.tipo || '-', 
+                mat: o.material || '-', 
+                eff: o.efecto || 'Sin descripción', 
+                rar: o.rareza || 'Común' 
+            };
+        });
+
+        // 3. Cargar Inventarios
+        inventObjArr.forEach(row => {
+            const p = row.personaje_nombre;
+            const o = row.objeto_nombre;
+            
+            // Si el personaje fue borrado pero quedan rastros, inicializamos
+            if (!invGlobal[p]) invGlobal[p] = {};
+            invGlobal[p][o] = row.cantidad;
+            
+            // Si el objeto no está en el catálogo, lo creamos temporalmente
+            if (!objGlobal[o] && row.objetos) {
+                objGlobal[o] = { 
+                    tipo: row.objetos.tipo || '-', 
+                    mat: row.objetos.material || '-', 
+                    eff: row.objetos.efecto || 'Sin descripción', 
+                    rar: row.objetos.rareza || 'Común' 
                 };
             }
         });
 
-        // 2. PROCESAR INVENTARIOS
-        for (let k in invGlobal) delete invGlobal[k];
-        inventarioArr.forEach(inv => {
-            const j = inv.personaje_nombre;
-            const o = inv.objeto_nombre;
-            const c = inv.cantidad;
-            
-            if (!invGlobal[j]) invGlobal[j] = {};
-            if (c > 0) invGlobal[j][o] = c;
-        });
-
-        // 3. PROCESAR ESTADÍSTICAS (Para filtros Activo/Jugador)
-        for (let k in statsGlobal) delete statsGlobal[k];
-        personajesArr.forEach(p => {
-            statsGlobal[p.nombre] = {
-                isPlayer:      p.is_player, 
-                isActive:      p.is_active,
-                iconoOverride: p.icono_override || ""
-            };
-            // Inicializar su inventario en 0 si no tiene objetos
-            if (!invGlobal[p.nombre]) invGlobal[p.nombre] = {};
-        });
-
-        guardar();
-    } catch (e) { console.error("Error cargando desde Supabase:", e); }
+        return true;
+    } catch(e) {
+        console.error("Error al cargar datos desde Supabase:", e);
+        return false;
+    }
 }
 
-export async function sincronizarObjetosBD(cola) {
+export async function sincronizarObjetosBD(colaCambios) {
+    let logErrores = [];
     try {
-        const actualizaciones = Object.values(cola);
-        if(actualizaciones.length === 0) return true;
-
-        const cambiosInventario = [];
-        const promesasObjetos = [];
-        const promesasEliminar = []; // Para los objetos borrados
-
-        actualizaciones.forEach(act => {
-            // 🚨 SI ES UNA ORDEN DE BORRADO
-            if (act.__ELIMINAR_OBJETO__) {
-                promesasEliminar.push(db.objetos.eliminarObjeto(act.objeto));
-                
-                // Forzamos el borrado en inventario seteando cantidad a 0 para todos
-                Object.keys(invGlobal).forEach(j => {
-                    cambiosInventario.push({
-                        personaje_nombre: j,
-                        objeto_nombre: act.objeto,
-                        cantidad: 0
-                    });
-                });
-                return; // Saltamos lo demás y pasamos al siguiente objeto en la cola
+        for (const [nombreObj, data] of Object.entries(colaCambios)) {
+            
+            // Acción 1: Eliminar objeto de raíz
+            if (data.__ELIMINAR_OBJETO__) {
+                const ok = await db.objetos.eliminarObjeto(nombreObj);
+                if (!ok) logErrores.push(`Fallo al eliminar: ${nombreObj}`);
+                continue;
             }
 
-            // 1. Actualizar el catálogo de objetos normales
-            promesasObjetos.push(db.objetos.upsertObjeto({
-                nombre: act.objeto,
-                tipo:   act.tipo,
-                material: act.mat,
-                efecto: act.eff,
-                rareza: act.rar
-            }));
+            // Acción 2: Actualizar/Insertar Catálogo de Objetos
+            const objInfo = objGlobal[nombreObj];
+            if (objInfo) {
+                const okObj = await db.objetos.upsertObjeto({
+                    nombre: nombreObj,
+                    tipo: objInfo.tipo,
+                    material: objInfo.mat,
+                    efecto: objInfo.eff,
+                    rareza: objInfo.rar
+                });
+                if (!okObj) logErrores.push(`Fallo al actualizar catálogo: ${nombreObj}`);
+            }
 
-            // 2. Extraer cantidades.
-            const players = act.duenos ? act.duenos.split(',').map(s=>s.trim()).filter(Boolean) : [];
-            const cants   = act.cantidades ? act.cantidades.split(',').map(s=>parseInt(s.trim())) : [];
-            
-            Object.keys(invGlobal).forEach(j => {
-                const idx = players.indexOf(j);
-                const cantActual = (idx !== -1) ? cants[idx] : 0;
-                cambiosInventario.push({
-                    personaje_nombre: j,
-                    objeto_nombre: act.objeto,
-                    cantidad: cantActual
+            // Acción 3: Actualizar Inventarios Relacionales (Batch nativo)
+            const changes = [];
+            Object.keys(invGlobal).forEach(jugador => {
+                const cant = invGlobal[jugador][nombreObj] || 0;
+                changes.push({
+                    personaje_nombre: jugador,
+                    objeto_nombre: nombreObj,
+                    cantidad: cant
                 });
             });
-        });
+            
+            if (changes.length > 0) {
+                const okInv = await db.objetos.sincronizarBatch(changes);
+                if (!okInv) logErrores.push(`Fallo al asignar stock del objeto: ${nombreObj}`);
+            }
+        }
 
-        // Ejecutar borrados del catálogo
-        await Promise.all(promesasEliminar);
-        // Ejecutar upserts de Catálogo
-        await Promise.all(promesasObjetos);
-        // Ejecutar Sincronización Batch de Inventario
-        const exitoInv = await db.objetos.sincronizarBatch(cambiosInventario);
+        if (logErrores.length > 0) {
+            alert("⚠️ Problemas al guardar en Supabase:\n\n" + logErrores.join('\n'));
+            return false;
+        }
 
-        if(exitoInv) return true;
-        alert("Error al sincronizar inventarios en Supabase.");
-        return false;
-
-    } catch (e) {
-        console.error("Error fatal en sincronización:", e);
-        alert("Error de conexión con la base de datos.");
+        return true;
+    } catch(e) {
+        console.error("Crash Crítico en sincronizarObjetosBD:", e);
+        alert("Error crítico de base de datos:\n" + e.message);
         return false;
     }
 }
