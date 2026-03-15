@@ -1,9 +1,9 @@
 // ============================================================
-// obj-ui.js — VERSIÓN SUPABASE
+// obj-ui.js — VERSIÓN SUPABASE (Con Edición y Borrado)
 // ============================================================
 
 import { invGlobal, objGlobal, statsGlobal, estadoUI } from './obj-state.js';
-import { db } from '../hex-db.js'; // <-- IMPORTAMOS LA DB CENTRALIZADA
+import { db } from '../hex-db.js';
 
 function drawnHEXPreserveFocus(containerId, html) {
     const activeId = document.activeElement ? document.activeElement.id : null;
@@ -28,14 +28,12 @@ const normalizarNombre = (str) => str ? str.toString().trim().toLowerCase().repl
 const imgErrorObj = `this.onerror=null; this.src='${db.storage.urlBase}/imginterfaz/no_encontrado.png'`;
 const imgErrorPj  = `this.onerror=null; this.src='${db.storage.urlBase}/imginterfaz/icon.png'`;
 
-// BUSCADOR INTELIGENTE: Soluciona el problema de mayúsculas (Ej: LINDA vs Linda)
 const getPjStats = (nombre) => {
     const key = Object.keys(statsGlobal).find(k => k.toLowerCase() === nombre.toLowerCase());
     return key ? statsGlobal[key] : { isPlayer: false, isActive: true, iconoOverride: "" };
 };
 
 export function refrescarUI() { 
-    // CONGELADOR DE ORDEN GENERAL (Se activa al cambiar de pestaña)
     if (estadoUI.resetCacheOrder) {
         estadoUI.cachedSortKeys = Object.keys(objGlobal).sort((a, b) => (invGlobal[estadoUI.jugadorInv]?.[b]||0) - (invGlobal[estadoUI.jugadorInv]?.[a]||0) || a.localeCompare(b));
         estadoUI.cachedInvOrders = {};
@@ -137,8 +135,6 @@ export function dibujarResumenVisual() {
     
     Object.keys(invGlobal).sort().forEach(j => {
         let itemsHtml = '';
-        
-        // Usamos el caché de orden. Añadimos objetos nuevos si recibieron stock en esta vista.
         let frozenKeys = estadoUI.cachedInvOrders[j] || [];
         Object.keys(invGlobal[j]).forEach(k => { if (invGlobal[j][k] > 0 && !frozenKeys.includes(k)) frozenKeys.push(k); });
 
@@ -149,7 +145,6 @@ export function dibujarResumenVisual() {
                 const imgFile = normalizarNombre(o);
                 const tooltipText = `<span>${o}</span>Tipo: ${info.tipo}<br>Rareza: ${info.rar}<br><br>${info.eff}`;
                 
-                // Botones +/- en modo OP
                 let badgeHTML = '';
                 if(estadoUI.esAdmin) {
                     badgeHTML = `
@@ -192,7 +187,6 @@ export function dibujarInventarios() {
     if (!estadoUI.jugadorInv) return;
     const j = estadoUI.jugadorInv;
     const term = (estadoUI.busquedaInv || "").toLowerCase();
-    
     const linkStats = `../estadisticas/index.html?pj=${encodeURIComponent(j)}`;
     
     let html = `
@@ -237,7 +231,6 @@ export function dibujarInventarios() {
     frozenKeys.forEach(o => {
         if (invGlobal[j][o] > 0 && (!term || o.toLowerCase().includes(term))) {
             const oSafe = o.replace(/'/g, "\\'");
-            
             const cantHTML = estadoUI.esAdmin 
                 ? `<div style="display:flex; justify-content:center; align-items:center; gap:8px;">
                      <button class="btn-inline-op minus" onclick="window.hexMod('${j}','${oSafe}',-1)">-</button>
@@ -271,26 +264,65 @@ export function dibujarCatalogo() {
         html += `<button onclick="window.setMat('${m}')" ${active}>${m}</button> `;
     });
     html += `</div><br><input type="text" id="busq-cat" class="search-bar" placeholder="🔍 Buscar objeto..." value="${estadoUI.busquedaCat}" oninput="window.setBusquedaCat(this.value)">
-    <div class="table-responsive"><table><tr><th>Imagen</th><th>Nombre</th><th>Tipo</th><th>Efecto</th><th>Rareza</th></tr>`;
+    <div class="inventario-grid" style="margin-top: 20px;">`;
     
+    let items = Object.keys(objGlobal);
+    if (estadoUI.cachedSortKeys === null) {
+        items.sort((a,b) => (raridadValor[objGlobal[b]?.rar||'-']||0) - (raridadValor[objGlobal[a]?.rar||'-']||0));
+        estadoUI.cachedSortKeys = items;
+    } else { items = estadoUI.cachedSortKeys; }
+
     const term = (estadoUI.busquedaCat || "").toLowerCase();
-    Object.keys(objGlobal).sort().forEach(o => {
-        const item = objGlobal[o];
-        const matchR = estadoUI.filtroRar === 'Todos' || item.rar.trim() === estadoUI.filtroRar;
-        const matchM = estadoUI.filtroMat === 'Todos' || item.mat.trim() === estadoUI.filtroMat;
+    let cantRender = 0;
+
+    items.forEach(o => {
+        const info = objGlobal[o];
+        const matchR = estadoUI.filtroRar === 'Todos' || info.rar.trim() === estadoUI.filtroRar;
+        const matchM = estadoUI.filtroMat === 'Todos' || info.mat.trim() === estadoUI.filtroMat;
         
-        if (matchR && matchM && (!term || o.toLowerCase().includes(term))) {
-            const oSafe = o.replace(/'/g, "\\'");
-            html += `<tr>
-                <td><img src="${db.storage.urlBase}/imgobjetos/${normalizarNombre(o)}.png" class="cat-img" onclick="window.verImagen(this.src)" onerror="${imgErrorObj}"></td>
-                <td style="font-weight:bold; color:#d4af37; cursor:pointer;" onclick="window.verImagenByName('${oSafe}')">${o}</td>
-                <td style="font-size:0.85em; color:#aaa;">${item.tipo}</td>
-                <td style="text-align:left; font-size:0.85em;">${item.eff}</td>
-                <td style="font-size:0.85em;">${item.rar}</td>
-            </tr>`;
+        if (matchR && matchM && (!term || o.toLowerCase().includes(term) || info.tipo.toLowerCase().includes(term) || info.eff.toLowerCase().includes(term) || info.mat.toLowerCase().includes(term))) {
+            const nomNorm = normalizarNombre(o);
+            const rClass = info.rar === "Legendario" ? "rarity-legendario" : (info.rar === "Raro" ? "rarity-raro" : "rarity-comun");
+
+            let propText = "";
+            Object.keys(invGlobal).forEach(j => { if (invGlobal[j][o] > 0) propText += `<span style="display:inline-block; background:#222; border:1px solid #444; border-radius:4px; padding:2px 6px; margin:2px; font-size:0.8em; color:#ccc;">${j}: <b style="color:var(--gold)">${invGlobal[j][o]}</b></span> `; });
+            if(!propText) propText = `<span style="color:#666; font-size:0.8em; font-style:italic;">Sin dueños</span>`;
+
+            // 💥 BOTONES DE EDICIÓN Y BORRADO (Solo para Máster)
+            let btnOpciones = '';
+            if (estadoUI.esAdmin) {
+                btnOpciones = `
+                <div style="position:absolute; top:10px; right:10px; display:flex; gap:5px; z-index:10;">
+                    <button onclick="window.abrirEdicionObjeto('${o.replace(/'/g, "\\'")}')" style="background:rgba(0, 100, 255, 0.8); color:white; border:1px solid #0064ff; border-radius:4px; cursor:pointer; padding:5px 8px; font-weight:bold; transition:0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" title="Editar Objeto">✏️</button>
+                    <button onclick="window.eliminarObjetoBD('${o.replace(/'/g, "\\'")}')" style="background:rgba(255,0,0,0.8); color:white; border:1px solid #ff0000; border-radius:4px; cursor:pointer; padding:5px 8px; font-weight:bold; transition:0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'" title="Eliminar de la Base de Datos">🗑️</button>
+                </div>`;
+            }
+
+            html += `
+            <div class="item-card ${rClass}" style="position:relative;">
+                ${btnOpciones}
+                <div class="item-image-wrapper">
+                    <img src="${db.storage.urlBase}/imgobjetos/${nomNorm}.png" alt="${o}" onerror="${imgErrorObj}" style="cursor:pointer;" onclick="window.verImagen(this.src)">
+                    ${info.rar === "Legendario" ? '<div class="legendary-glint"></div>' : ''}
+                </div>
+                <h3>${o}</h3>
+                <div class="item-tags">
+                    <span class="tag-tipo">${info.tipo}</span>
+                    <span class="tag-mat">${info.mat}</span>
+                </div>
+                <p class="eff-text"><i>${info.eff}</i></p>
+                <div style="margin-top:10px; padding-top:10px; border-top:1px dashed #444;">
+                    <div style="font-size:0.8em; color:var(--gold); margin-bottom:5px; font-family:'Cinzel';">Dueños Actuales:</div>
+                    ${propText}
+                </div>
+            </div>`;
+            cantRender++;
         }
     });
-    drawnHEXPreserveFocus('tabla-todos-objetos', html + "</table></div>");
+
+    if (cantRender === 0) html += `<div style="grid-column:1/-1; text-align:center; padding:20px; color:#666;">No hay objetos que coincidan.</div>`;
+    html += `</div>`;
+    drawnHEXPreserveFocus('tabla-todos-objetos', html);
 }
 
 export function dibujarMenuOP() {
@@ -309,15 +341,11 @@ export function dibujarMenuOP() {
 
 export function dibujarControl() {
     if (!estadoUI.jugadorInv) return; const j = estadoUI.jugadorInv; 
-    
     let currentKeys = estadoUI.cachedInvOrders[j] || [];
-    Object.keys(invGlobal[j]).forEach(k => {
-         if (invGlobal[j][k] > 0 && !currentKeys.includes(k)) currentKeys.push(k);
-    });
+    Object.keys(invGlobal[j]).forEach(k => { if (invGlobal[j][k] > 0 && !currentKeys.includes(k)) currentKeys.push(k); });
 
-    let html = `<h2>Edición In-Situ: ${j}</h2><button onclick="window.mostrarPagina('inventario')" style="background:#444; margin-bottom: 20px;">⬅ Volver al Inventario</button>`;
-    
-    html += `<h3 style="color:var(--gold); margin-top:10px;">Inventario Actual (Click para modificar)</h3>
+    let html = `<h2>Edición In-Situ: ${j}</h2><button onclick="window.mostrarPagina('inventario')" style="background:#444; margin-bottom: 20px;">⬅ Volver al Inventario</button>
+             <h3 style="color:var(--gold); margin-top:10px;">Inventario Actual (Click para modificar)</h3>
              <div style="background:#0a0014; padding:15px; border:1px solid var(--gold); border-radius:8px; margin-bottom:20px; display:flex; flex-wrap:wrap; gap:10px; justify-content:center;">`;
     
     let hasItems = false;
@@ -335,13 +363,11 @@ export function dibujarControl() {
         }
     });
     if(!hasItems) html += `<span style="color:#666;">El inventario está vacío.</span>`;
-    html += `</div>`;
-
-    html += `<div class="container-hex" style="margin-bottom:20px; background:#1a0033; padding:15px; border:1px dashed #d4af37;">
+    html += `</div>
+             <div class="container-hex" style="margin-bottom:20px; background:#1a0033; padding:15px; border:1px dashed #d4af37;">
                 <textarea id="copy-log-stock" class="search-bar" readonly style="width:95%; height:80px; font-size:0.85em; margin-bottom:10px;">${estadoUI.logCopy || 'Bitácora de sesión...'}</textarea>
                 <div style="display:flex; gap:10px;"><button onclick="window.copyToClipboard('copy-log-stock')" style="flex:3; background:#d4af37; color:#120024; font-weight:bold;">COPIAR REGISTRO TOTAL</button><button onclick="window.limpiarLog()" style="flex:1; background:#8b0000; color:white;">X</button></div>
              </div>
-             
              <h3 style="color:var(--gold); margin-top:20px; border-bottom:1px solid #333; padding-bottom:10px;">Catálogo (Haz clic en la imagen)</h3>
              <div style="display:flex; justify-content:center; gap:10px; margin-bottom:10px; margin-top:15px;">
                 <button onclick="window.setEditModo(1)" style="background:${estadoUI.editModo === 1 ? '#004a00' : '#222'}">MODO SUMAR (+)</button>
@@ -350,7 +376,6 @@ export function dibujarControl() {
              <div style="display:flex; justify-content:center; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
                 ${[1, 5, 10, 50, 100].map(m => `<button onclick="window.setEditMult(${m})" style="background:${estadoUI.editMult === m ? 'var(--gold)' : '#222'}; color:${estadoUI.editMult === m ? '#000' : '#fff'}">x${m}</button>`).join('')}
              </div>
-             
              <input type="text" id="busq-op" class="search-bar" placeholder="🔍 Filtrar objeto y haz clic en la imagen..." value="${estadoUI.busquedaOP}" oninput="window.setBusquedaOP(this.value)">
              <div class="grid-control">`;
     
@@ -442,7 +467,6 @@ export function dibujarPartyLoot() {
     let html = `<h2>Loot Rápido para la Party</h2>
                 <button onclick="window.mostrarPagina('op-menu')" style="background:#444; margin-bottom: 20px;">⬅ Volver al Panel OP</button>
                 <div style="background:#1a0033; padding:20px; border-radius:8px; border:1px dashed var(--gold); margin-bottom:20px;">
-                    
                     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #444; padding-bottom:10px; flex-wrap:wrap; gap:10px;">
                         <h4 style="color:var(--gold); margin:0;">1. Selecciona los destinatarios</h4>
                         <div style="display:flex; gap:10px;">
@@ -453,16 +477,13 @@ export function dibujarPartyLoot() {
                             </button>
                         </div>
                     </div>
-
                     <div style="display:flex; flex-wrap:wrap; gap:10px; justify-content:center;">`;
     
     Object.keys(invGlobal).sort().forEach(j => {
         const p = getPjStats(j);
         if (!estadoUI.mostrarNPCsLoot && !p.isPlayer) return;
-
         const isChecked = estadoUI.partyLoot.includes(j) ? 'checked' : '';
         const colorTexto = p.isPlayer ? '#fff' : '#aaa';
-
         html += `<label style="background:#000; padding:10px; border:1px solid #444; border-radius:4px; cursor:pointer; color:${colorTexto};">
                     <input type="checkbox" ${isChecked} onchange="window.togglePartyLoot('${j}', this.checked)"> 
                     <img src="${db.storage.urlBase}/imgpersonajes/${normalizarNombre(p.iconoOverride || j)}icon.png" style="width:24px; height:24px; border-radius:50%; vertical-align:middle; margin-right:5px;" onerror="${imgErrorPj}">
@@ -480,12 +501,10 @@ export function dibujarPartyLoot() {
 
     html += `   </div>
             </div>
-            
             <div class="container-hex" style="margin-bottom:20px; background:#1a0033; padding:15px; border:1px dashed #d4af37;">
                 <textarea id="copy-log-loot" class="search-bar" readonly style="width:95%; height:80px; font-size:0.85em; margin-bottom:10px;"></textarea>
                 <div style="display:flex; gap:10px;"><button onclick="window.copyToClipboard('copy-log-loot')" style="flex:3; background:#d4af37; color:#120024; font-weight:bold;">COPIAR REGISTRO</button><button onclick="window.limpiarLog()" style="flex:1; background:#8b0000; color:white;">X</button></div>
             </div>
-            
             <h4 style="color:var(--gold);">3. Haz clic en la IMAGEN de un objeto para entregar <span style="color:white;">x${estadoUI.partyMult}</span></h4>
             <input type="text" id="busq-op" class="search-bar" placeholder="🔍 Buscar objeto..." value="${estadoUI.busquedaOP}" oninput="window.setBusquedaOP(this.value)">
             <div class="grid-control">`;
@@ -502,7 +521,6 @@ export function dibujarPartyLoot() {
                      </div>`;
         }
     });
-
     drawnHEXPreserveFocus('panel-party-loot', html + `</div>`);
 }
 
@@ -530,14 +548,11 @@ export function dibujarCreacionObjeto() {
     <h2>Creación Rápida (1 Objeto)</h2>
     <div class="container-hex" style="max-width:600px; background:rgba(30,0,60,0.9); padding:20px; border:1px solid #d4af37; border-radius:8px; margin:0 auto;">
         <input type="text" id="new-obj-name" class="search-bar" placeholder="Nombre del Objeto..." oninput="window.updateCreationLog()" style="width:95%">
-        
         <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
             <input type="text" id="new-obj-tipo" list="dl-tipos" class="search-bar" style="width:100%" placeholder="Tipo (Ej: Consumible)" value="">
             <input type="text" id="new-obj-mat" list="dl-mats" class="search-bar" style="width:100%" placeholder="Material (Ej: Metal)" value="">
         </div>
-        
         <textarea id="new-obj-eff" class="search-bar" placeholder="Efecto o Descripción..." oninput="window.updateCreationLog()" style="width:95%; height:60px; margin-top:10px; resize:none;"></textarea>
-        
         <input type="text" id="new-obj-rar" list="dl-rars" class="search-bar" style="width:95%; margin-top:10px;" placeholder="Rareza (Ej: Común)" value="">
         
         <div style="display:flex; justify-content:space-between; align-items:center; margin-top:25px; margin-bottom:10px; border-bottom:1px solid #444; padding-bottom:10px;">
@@ -551,7 +566,6 @@ export function dibujarCreacionObjeto() {
     Object.keys(invGlobal).sort().forEach(j => {
         const p = getPjStats(j);
         if (!estadoUI.mostrarNPCsCrea && !p.isPlayer) return;
-
         html += `<div style="text-align:left; font-size:0.8em; border-bottom:1px solid #333; padding:5px; display:flex; justify-content:space-between; align-items:center;">
                     <label style="color:${p.isPlayer ? 'white' : '#aaa'};">${j}:</label>
                     <input type="number" class="cant-input" data-player="${j}" value="" placeholder="0" min="0" oninput="window.updateCreationLog()" style="width:60px; background:#000; color:white; border:1px solid #555; text-align:center;">
@@ -574,7 +588,6 @@ export function dibujarCreacionMulti() {
     ${generarDatalistsDinamicos()}
     <h2 style="font-family:'Cinzel';">Forja Múltiple (6 Objetos)</h2>
     <div class="container-hex" style="max-width:1200px; background:rgba(15,0,30,0.95); padding:25px; border:1px solid var(--gold); border-radius:12px; margin:0 auto; box-shadow: 0 0 30px rgba(0,0,0,0.5);">
-        
         <div style="text-align:left; margin-bottom:25px; border-bottom:1px solid #444; padding-bottom:15px;">
             <h3 style="margin:0 0 10px 0; font-size:1.1em; color:var(--gold);">Destinatario del Loot (Opcional)</h3>
             <select id="multi-player-dest" class="search-bar" onchange="window.updateCreationMultiLog()" style="width:100%; max-width:400px; margin:0;">
@@ -582,43 +595,97 @@ export function dibujarCreacionMulti() {
                 ${Object.keys(invGlobal).sort().map(j => `<option value="${j}">${j}</option>`).join('')}
             </select>
         </div>
-        
         <div id="multi-creation-container">`;
     
     for(let i=1; i<=6; i++) {
         html += `
         <div style="border: 1px solid #444; padding: 18px; border-radius: 10px; background:rgba(0,0,0,0.3); display:flex; flex-direction:column; gap:12px;">
             <h4 style="margin:0; color:var(--gold); font-family:'Cinzel'; border-bottom:1px solid #333; padding-bottom:8px;">OBJETO ${i}</h4>
-            
             <input type="text" id="new-obj-name-${i}" class="search-bar" placeholder="Nombre del Objeto..." oninput="window.updateCreationMultiLog()" style="width:100%;">
-            
             <div class="multi-obj-row">
                 <input type="text" id="new-obj-tipo-${i}" list="dl-tipos" class="search-bar" placeholder="Tipo..." oninput="window.updateCreationMultiLog()">
                 <input type="text" id="new-obj-mat-${i}" list="dl-mats" class="search-bar" placeholder="Material..." oninput="window.updateCreationMultiLog()">
             </div>
-            
             <div class="multi-obj-row-triple">
                 <input type="text" id="new-obj-rar-${i}" list="dl-rars" class="search-bar" placeholder="Rareza..." oninput="window.updateCreationMultiLog()">
                 <div style="color:#666; font-size:0.7em; display:flex; align-items:center; justify-content:center;">CANT:</div>
                 <input type="number" id="new-obj-cant-${i}" class="search-bar" placeholder="1" min="1" oninput="window.updateCreationMultiLog()" style="width:100%; text-align:center; padding:5px;">
             </div>
-            
             <textarea id="new-obj-eff-${i}" class="search-bar" placeholder="Descripción del efecto..." oninput="window.updateCreationMultiLog()" style="width:100%; height:60px; margin:0; resize:none; text-align:left; font-size:0.8em;"></textarea>
         </div>`;
     }
 
     html += `</div>
-        
         <div style="margin-top:30px; background:rgba(26,0,51,0.8); padding:20px; border:1px dashed var(--gold); border-radius:10px;">
             <h4 style="color:var(--gold); margin:0 0 12px 0; text-align:left; font-family:'Cinzel';">Discord Log (Vista Previa)</h4>
             <textarea id="copy-log-crea-multi" class="search-bar" readonly style="width:100%; height:120px; font-size:0.9em; margin-bottom:15px; resize:none; background:#000; color:#00ff00; border-color:#333; text-align:left; font-family:monospace;"></textarea>
             <button onclick="window.copyToClipboard('copy-log-crea-multi')" style="width:100%; max-width:300px; background:var(--gold); color:#000; font-weight:bold;">📋 COPIAR LOG PARA DISCORD</button>
         </div>
-
         <div style="display:flex; gap:20px; margin-top:35px; justify-content:center;">
             <button onclick="window.ejecutarAgregarMulti()" style="flex:2; max-width:450px; background:linear-gradient(135deg, #004a00 0%, #008000 100%); color:white; font-size:1.3em; padding:18px; border:none; border-radius:8px; box-shadow: 0 5px 15px rgba(0,255,0,0.2);">🔨 FINALIZAR GRAN FORJA 🔨</button>
             <button onclick="window.mostrarPagina('op-menu')" style="flex:1; max-width:200px; background:#333; color:#ccc; border:1px solid #555;">CANCELAR</button>
         </div>
     </div>`;
     drawnHEXPreserveFocus('panel-creacion-multi', html);
+}
+
+// 💥 NUEVO: MODAL DE EDICIÓN DE OBJETOS (Visualizado al darle al botón ✏️)
+export function dibujarModalEdicionObjeto(nombre) {
+    const info = objGlobal[nombre];
+    if(!info) return;
+
+    window.cerrarModalEdicion(); // Cerrar si hay uno abierto por si acaso
+
+    const modal = document.createElement('div');
+    modal.id = 'modal-edit-obj';
+    modal.className = 'hex-modal';
+    modal.style.display = 'flex';
+    modal.style.zIndex = '999999';
+
+    // Cerrar al hacer clic fuera
+    modal.onclick = (e) => { if (e.target === modal) window.cerrarModalEdicion(); };
+
+    modal.innerHTML = `
+        ${generarDatalistsDinamicos()}
+        <div class="hex-modal-content" style="max-width: 500px; width: 90%; padding: 25px; background: rgba(20,0,40,0.95); border: 2px solid var(--gold); border-radius: 12px; box-shadow: 0 10px 40px rgba(0,0,0,0.8); position: relative;">
+            <button onclick="window.cerrarModalEdicion()" style="position: absolute; top: 10px; right: 15px; background: none; border: none; color: #aaa; font-size: 1.5em; cursor: pointer;">&times;</button>
+            
+            <h2 style="color:var(--gold); margin-top:0; font-family:'Cinzel'; text-align:center;">✏️ Editar Objeto</h2>
+            
+            <div style="display:flex; flex-direction:column; gap:15px; text-align:left;">
+                <div>
+                    <label style="color:#aaa; font-size:0.8em; font-weight:bold;">Nombre del Objeto:</label>
+                    <input type="text" id="edit-obj-name" class="search-bar" value="${nombre}" style="width:100%; box-sizing:border-box; margin-top:5px;">
+                </div>
+                
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px;">
+                    <div>
+                        <label style="color:#aaa; font-size:0.8em; font-weight:bold;">Tipo:</label>
+                        <input type="text" id="edit-obj-tipo" list="dl-tipos" class="search-bar" value="${info.tipo}" style="width:100%; box-sizing:border-box; margin-top:5px;">
+                    </div>
+                    <div>
+                        <label style="color:#aaa; font-size:0.8em; font-weight:bold;">Material:</label>
+                        <input type="text" id="edit-obj-mat" list="dl-mats" class="search-bar" value="${info.mat}" style="width:100%; box-sizing:border-box; margin-top:5px;">
+                    </div>
+                </div>
+                
+                <div>
+                    <label style="color:#aaa; font-size:0.8em; font-weight:bold;">Efecto / Descripción:</label>
+                    <textarea id="edit-obj-eff" class="search-bar" style="width:100%; height:80px; box-sizing:border-box; margin-top:5px; resize:none;">${info.eff}</textarea>
+                </div>
+                
+                <div>
+                    <label style="color:#aaa; font-size:0.8em; font-weight:bold;">Rareza:</label>
+                    <input type="text" id="edit-obj-rar" list="dl-rars" class="search-bar" value="${info.rar}" style="width:100%; box-sizing:border-box; margin-top:5px;">
+                </div>
+                
+                <div style="display:flex; gap:10px; margin-top:15px;">
+                    <button onclick="window.guardarEdicionObjeto('${nombre.replace(/'/g, "\\'")}')" style="flex:2; background:linear-gradient(135deg, #004a00 0%, #008000 100%); color:white; font-weight:bold; padding:12px; border:none; border-radius:6px; cursor:pointer; font-size:1.1em; transition:0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">💾 GUARDAR CAMBIOS</button>
+                    <button onclick="window.cerrarModalEdicion()" style="flex:1; background:#444; color:white; padding:12px; border:none; border-radius:6px; cursor:pointer; transition:0.2s;" onmouseover="this.style.background='#555'" onmouseout="this.style.background='#444'">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
 }
