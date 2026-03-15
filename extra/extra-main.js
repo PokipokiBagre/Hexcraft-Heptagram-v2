@@ -87,22 +87,22 @@ window.cerrarUpload = () => {
     ocultarPanelUpload();
 };
 
-window.handleDrop = (e) => {
+window.handleDrop = async (e) => {
     e.preventDefault();
     document.getElementById('drop-zone').classList.remove('drag-over');
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('image/')) {
-        ejecutarSubida(file); 
+        await ejecutarSubida(file);
     }
 };
 
-// 👉 LIMPIEZA SÍNCRONA: Borra el input al instante para evitar cuelgues eternos
-window.handleFileSelect = (e) => {
+window.handleFileSelect = async (e) => {
     const file = e.target.files[0];
-    e.target.value = ''; // ¡Limpieza inmediata! Ahora puedes subir la misma foto 100 veces sin F5
     if (file) {
-        ejecutarSubida(file); 
+        await ejecutarSubida(file); 
     }
+    // Limpieza SEGURA del input de memoria una vez que todo el proceso ha terminado
+    e.target.value = ''; 
 };
 
 async function ejecutarSubida(file) {
@@ -128,7 +128,15 @@ async function ejecutarSubida(file) {
 
     } catch(e) {
         console.error('Error subiendo imagen:', e);
-        actualizarProgreso(0, '❌ Error: ' + (e.message || 'fallo al subir'), true);
+        actualizarProgreso(0, '❌ ' + (e.message || 'Fallo al subir.'), true);
+        
+        // 👉 NUEVO: Auto-Recuperación de Interfaz. 
+        // Si falla, borramos el error y cerramos la ventana a los 3.5 seg para evitar bloqueos
+        setTimeout(() => {
+            if (estadoUI.uploadTarget && estadoUI.uploadTarget.keyNorm === keyNorm) {
+                window.cerrarUpload();
+            }
+        }, 3500);
     }
 }
 
