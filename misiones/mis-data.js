@@ -58,8 +58,24 @@ export async function cargarDatos() {
 
 export async function sincronizarBD() {
     try {
-        return await db.misiones.sincronizarBatch(estadoUI.colaCambios.misiones);
+        const cambios = estadoUI.colaCambios.misiones;
+        let success = true;
+
+        for (const [id, datos] of Object.entries(cambios)) {
+            if (datos.__ELIMINAR__) {
+                // Borrado real en Supabase
+                const ok = await db.misiones.eliminar(datos.titulo);
+                if (!ok) success = false;
+            } else {
+                // Upsert normal
+                const ok = await db.misiones.upsert(datos);
+                if (!ok) success = false;
+            }
+        }
+
+        return success;
     } catch(e) {
+        console.error("Error en sincronizarBD:", e);
         return false;
     }
 }

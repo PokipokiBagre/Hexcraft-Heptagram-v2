@@ -5,19 +5,18 @@ export function encolarCambioMision(idMision) {
     const m = misGlobal.find(mis => mis.id === idMision);
     if (!m) return;
     
-    // Sobreescribimos con el objeto completo en formato Supabase
-    estadoUI.colaCambios.misiones[idMision] = {
-        titulo:      m.titulo,
-        tipo:        m.tipo,
-        cupos:       m.cupos,
-        estado:      m.estado,
-        clase:       m.clase,
-        desc:        m.desc,
-        notaOP:      m.notaOP,
-        jugadores:   m.jugadores,   // array — db.misiones.upsert lo espera así
-        autor:       m.autor,
-        orden:       m.orden || 0
-    };
+    if(!estadoUI.colaCambios.misiones[idMision]) estadoUI.colaCambios.misiones[idMision] = {};
+    const sync = estadoUI.colaCambios.misiones[idMision];
+    
+    sync['Misiones'] = m.titulo;
+    sync['Tipo'] = m.tipo;
+    sync['Necesarios'] = m.cupos;
+    sync['Activa'] = m.estado;
+    sync['Clase'] = 'Clase ' + m.clase;
+    sync['Recompensa'] = m.desc;
+    sync['Nota OP'] = m.notaOP;
+    sync['Jugadores'] = m.jugadores.join(', ');
+    sync['Autor'] = m.autor;
     
     actualizarBotonSync();
 }
@@ -100,9 +99,9 @@ export function eliminarPersonalizada(id) {
         if (m.tipo !== 'Personalizada' && !estadoUI.esAdmin) return alert("Solo puedes borrar personalizadas.");
         misGlobal.splice(idx, 1);
         
-        if(!estadoUI.colaCambios.misiones[id]) estadoUI.colaCambios.misiones[id] = {};
-        estadoUI.colaCambios.misiones[id]['Activa'] = 0; 
-        
+        // Marcador de borrado — sincronizarBD llama a db.misiones.eliminar
+        estadoUI.colaCambios.misiones[id] = { __ELIMINAR__: true, titulo: id };
+
         actualizarBotonSync();
         dibujarTablero();
     }
