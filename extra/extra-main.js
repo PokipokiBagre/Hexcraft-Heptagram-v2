@@ -19,17 +19,16 @@ async function iniciar() {
     if (badge) {
         if (hexAuth.esAdmin()) {
             badge.innerHTML = `<span style="background:#4a004a; color:#d4af37; border:1px dashed #d4af37; padding:8px 14px; border-radius:4px; font-weight:bold; font-family:'Cinzel'; cursor:pointer; font-size:0.85em;">⚙️ MÁSTER</span>`;
-        } else {
+        } else if (hexAuth.estaLogueado()) {
             badge.innerHTML = hexAuth.renderStatusBadge();
+        } else {
+            // NUEVO: Letrero para los ayudantes que no tienen cuenta
+            badge.innerHTML = `<span style="background:#222; color:#00ff00; border:1px solid #00ff00; padding:8px 14px; border-radius:4px; font-size:0.85em; font-weight:bold;">🤝 COLABORADOR</span>`;
         }
     }
 
-    if (!hexAuth.estaLogueado()) {
-        document.getElementById('loader-msg').innerHTML =
-            '<p style="color:#ff4444; font-family:sans-serif;">Debes iniciar sesión para gestionar imágenes.</p>';
-        hexAuth._mostrarModalLogin();
-        return;
-    }
+    // ELIMINAMOS la validación "!hexAuth.estaLogueado()" 
+    // Ahora todo el mundo pasa directo a intentar cargar los datos.
 
     try {
         await asegurarBucket();
@@ -96,7 +95,6 @@ async function ejecutarSubida(file) {
             actualizarProgreso(pct, msg);
         });
 
-        // Actualizar estado local sin recargar todo
         marcarExiste(keyNorm, tipoIcono, nuevaUrl);
 
         setTimeout(() => {
