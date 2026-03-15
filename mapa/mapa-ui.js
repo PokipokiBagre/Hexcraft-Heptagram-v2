@@ -9,6 +9,7 @@ export function inicializarCanvas() {
     redimensionar();
     window.addEventListener('resize', redimensionar);
     
+    // Hacemos arrastrables ambos paneles
     hacerPanelArrastrable('panel-info');
     hacerPanelArrastrable('panel-edicion-avanzada');
 }
@@ -93,19 +94,20 @@ export function dibujarFrame() {
 
         if (nodoActivo) {
             if (outgoingEdges.has(link)) {
-                ctx.strokeStyle = '#00ffff'; 
-                ctx.lineWidth = 4 / scaleFactor;
+                ctx.strokeStyle = ESTETICA.lineaSaliente;
+                ctx.lineWidth = 4.05 / scaleFactor;
                 ctx.setLineDash([]);
                 drawNormal = false;
             } else if (ancestorEdges.has(link)) {
-                ctx.strokeStyle = 'rgba(177, 156, 217, 0.8)'; 
-                ctx.lineWidth = 3.5 / scaleFactor; 
+                ctx.strokeStyle = 'rgba(177, 156, 217, 0.55)'; 
+                ctx.lineWidth = 1.55 / scaleFactor; // +0.05
                 ctx.setLineDash([]);
                 drawNormal = false;
             } else {
                 ctx.strokeStyle = 'rgba(80, 80, 80, 0.35)'; 
-                ctx.lineWidth = 1.2 / scaleFactor; 
+                ctx.lineWidth = 0.85 / scaleFactor; // +0.05
                 ctx.setLineDash([]);
+                ctx.globalAlpha = 0.3; 
                 arrowMult = 1.5; baseHeadLen = 5;
                 drawNormal = false;
             }
@@ -113,36 +115,47 @@ export function dibujarFrame() {
         
         if (drawNormal) {
             if (isPlayerView) {
-                const sPos = posesiones.has(link.source);
-                const tPos = posesiones.has(link.target);
-                const tApr = aprendibles.has(link.target);
-                const sRas = rastreo.has(link.source);
-                const tRas = rastreo.has(link.target);
+                let sP = posesiones.has(link.source);
+                let tP = posesiones.has(link.target);
+                let tA = aprendibles.has(link.target);
+                let sT = rastreo.has(link.source) || sP;
+                let tT = rastreo.has(link.target) || tP || tA;
 
-                if (sPos && tPos) {
-                    ctx.strokeStyle = '#ffffff'; // RESTAURACIÓN: Blanco Brillante para conexiones de Posesiones
-                    ctx.lineWidth = 4.0 / scaleFactor;
-                } else if (sPos && tApr) {
-                    ctx.strokeStyle = '#ffdf00'; // Dorado Brillante para ruta Aprendible
-                    ctx.lineWidth = 3.5 / scaleFactor;
-                } else if ((sRas || sPos) && (tRas || tApr || tPos)) {
-                    ctx.strokeStyle = '#b19cd9'; // Morado fuerte para Precedentes
-                    ctx.lineWidth = 3.0 / scaleFactor;
+                if (sP && tP) {
+                    ctx.strokeStyle = COLORES_JUGADOR.posesionMorada; 
+                    ctx.lineWidth = 1.55 / scaleFactor; // +0.05
+                    ctx.setLineDash([]);
+                } else if (sP && tA) {
+                    let target = link.target;
+                    let totalReq = target.incomingSources.length;
+                    let posReq = target.incomingSources.filter(n => posesiones.has(n)).length;
+                    let ratio = posReq / totalReq;
+
+                    if (ratio >= 0.75) ctx.strokeStyle = COLORES_JUGADOR.doradoInmediato; 
+                    else if (ratio >= 0.4) ctx.strokeStyle = COLORES_JUGADOR.doradoMedio; 
+                    else ctx.strokeStyle = COLORES_JUGADOR.doradoTenue; 
+                    
+                    ctx.lineWidth = 1.55 / scaleFactor; // +0.05
+                    ctx.setLineDash([]);
+                } else if (sT && tT) {
+                    ctx.strokeStyle = COLORES_JUGADOR.doradoRastreo; 
+                    ctx.lineWidth = 1.05 / scaleFactor; // +0.05
+                    ctx.setLineDash([]); 
                 } else {
-                    ctx.strokeStyle = 'rgba(50, 50, 50, 0.15)'; // Gris invisible para el resto
-                    ctx.lineWidth = 1.0 / scaleFactor;
+                    ctx.strokeStyle = COLORES_JUGADOR.fondoNeutro; 
+                    ctx.lineWidth = 0.85 / scaleFactor; // +0.05
+                    ctx.setLineDash([]);
                     arrowMult = 1.5; baseHeadLen = 5;
                 }
-                ctx.setLineDash([]);
             } else {
                 if (modoVisual === 'afinidades') {
-                    ctx.strokeStyle = link.target.arrowColor || 'rgba(255,255,255,0.7)'; 
-                    ctx.lineWidth = 3.5 / scaleFactor;
-                    if (ctx.strokeStyle === (ESTETICA.lineaRosa || 'rgba(200, 60, 100, 0.25)')) ctx.setLineDash([8 / scaleFactor, 8 / scaleFactor]);
+                    ctx.strokeStyle = link.target.arrowColor || 'rgba(150, 150, 150, 0.3)'; 
+                    ctx.lineWidth = 1.55 / scaleFactor; // +0.05
+                    if (ctx.strokeStyle === ESTETICA.lineaRosa) ctx.setLineDash([8 / scaleFactor, 8 / scaleFactor]);
                     else ctx.setLineDash([]); 
                 } else {
-                    ctx.strokeStyle = link.source.arrowColor || 'rgba(210, 190, 230, 0.8)'; 
-                    ctx.lineWidth = 3.5 / scaleFactor;
+                    ctx.strokeStyle = link.source.arrowColor || 'rgba(150, 150, 150, 0.3)'; 
+                    ctx.lineWidth = 1.55 / scaleFactor; // +0.05
                     ctx.setLineDash([]); 
                 }
             }
@@ -161,12 +174,16 @@ export function dibujarFrame() {
         ctx.fill();
     });
 
+    // --- HOOK DIBUJO DE EDICIÓN ---
     if (window.mapaEditor && window.mapaEditor.activa) {
+        // 1. Dibujar enlace temporal
         if (window.mapaEditor.tempLink) {
             const temp = window.mapaEditor.tempLink;
             const seleccion = window.mapaEditor.seleccionMultiple;
+            
             const nodosOrigen = (window.mapaEditor.isShiftPressed && seleccion.has(temp.source) && seleccion.size > 1) 
-                ? Array.from(seleccion) : [temp.source];
+                ? Array.from(seleccion) 
+                : [temp.source];
 
             nodosOrigen.forEach(nodoOrg => {
                 const angle = Math.atan2(temp.endY - nodoOrg.y, temp.endX - nodoOrg.x);
@@ -176,7 +193,7 @@ export function dibujarFrame() {
                 ctx.moveTo(nodoOrg.x, nodoOrg.y);
                 ctx.lineTo(temp.endX, temp.endY);
                 ctx.strokeStyle = '#00ffff'; 
-                ctx.lineWidth = 4 / scaleFactor; 
+                ctx.lineWidth = 4.05 / scaleFactor; 
                 ctx.setLineDash([10/scaleFactor, 10/scaleFactor]);
                 ctx.stroke(); 
                 ctx.setLineDash([]);
@@ -191,6 +208,7 @@ export function dibujarFrame() {
             });
         }
         
+        // 2. Dibujar Caja de Selección
         if (window.mapaEditor.boxStart && window.mapaEditor.boxCurrent) {
             const minX = Math.min(window.mapaEditor.boxStart.x, window.mapaEditor.boxCurrent.x);
             const minY = Math.min(window.mapaEditor.boxStart.y, window.mapaEditor.boxCurrent.y);
@@ -200,17 +218,18 @@ export function dibujarFrame() {
             ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
             ctx.fillRect(minX, minY, w, h);
             ctx.strokeStyle = '#00ffff';
-            ctx.lineWidth = 2 / scaleFactor;
+            ctx.lineWidth = 2.05 / scaleFactor;
             ctx.setLineDash([5/scaleFactor, 5/scaleFactor]);
             ctx.strokeRect(minX, minY, w, h);
             ctx.setLineDash([]);
         }
 
+        // 3. Dibujar Enmascarado
         window.mapaEditor.seleccionMultiple.forEach(n => {
             ctx.beginPath(); 
             ctx.arc(n.x, n.y, n.radio + (12/scaleFactor), 0, Math.PI * 2);
             ctx.strokeStyle = '#00ffff'; 
-            ctx.lineWidth = 6 / scaleFactor; 
+            ctx.lineWidth = 6.05 / scaleFactor; 
             ctx.shadowBlur = 20;
             ctx.shadowColor = '#00ffff';
             ctx.stroke();
@@ -224,11 +243,16 @@ export function dibujarFrame() {
     nodos.forEach(nodo => {
         ctx.globalAlpha = 1.0; 
         
-        let colorAfinidadReal = window.mapaColores && window.mapaColores[nodo.afinidad] ? window.mapaColores[nodo.afinidad].t : '#aaaaaa';
+        let colorAfinidadReal;
 
-        if (modoVisual !== 'afinidades') {
-            if (nodo.esConocido) colorAfinidadReal = 'rgba(177, 156, 217, 1)';
-            else colorAfinidadReal = 'rgba(236, 213, 154, 1)';
+        if (modoVisual === 'afinidades') {
+            colorAfinidadReal = window.mapaColores[nodo.afinidad] ? window.mapaColores[nodo.afinidad].t : '#aaaaaa';
+        } else {
+            if (nodo.esConocido) {
+                colorAfinidadReal = 'rgba(177, 156, 217, 1)';
+            } else {
+                colorAfinidadReal = 'rgba(236, 213, 154, 1)';
+            }
         }
 
         if (nodo.isHexNode) colorAfinidadReal = '#ff4444'; 
@@ -243,14 +267,10 @@ export function dibujarFrame() {
         const esIrrelevantePlayer = isPlayerView && !tieneElHechizo && !aprendibles.has(nodo) && !rastreo.has(nodo);
 
         let colorNodoFinal = colorAfinidadReal;
-        
-        // RESTAURACIÓN ESTÉTICA DEL JUGADOR
         if (isPlayerView && tieneElHechizo && !nodo.isHexNode) {
-            colorNodoFinal = '#ffffff'; // Borde Exterior: BLANCO
-        } else if (isPlayerView && esAprendibleInmediato) {
-            colorNodoFinal = '#ffdf00'; // Borde Exterior: DORADO
-        } else if (isPlayerView && esPrecedente) {
-            colorNodoFinal = '#b19cd9'; // Borde Exterior: MORADO
+            colorNodoFinal = 'rgba(177, 156, 217, 1)';
+        } else if (isPlayerView && (esAprendibleInmediato || esPrecedente)) {
+            colorNodoFinal = esAprendibleInmediato ? 'rgba(236, 213, 154, 0.8)' : 'rgba(212, 196, 146, 0.4)';
         }
 
         if (nodoActivo) {
@@ -258,14 +278,14 @@ export function dibujarFrame() {
                 ctx.globalAlpha = 0.2;
             }
         } else if (isPlayerView && esIrrelevantePlayer) {
-            ctx.globalAlpha = 0.15; // Prácticamente invisible en el fondo
+            ctx.globalAlpha = 0.56; 
         }
 
         if (isSelected) {
             ctx.beginPath();
             ctx.arc(nodo.x, nodo.y, nodo.radio + (10/scaleFactor), 0, Math.PI * 2);
-            ctx.strokeStyle = '#00ffff'; 
-            ctx.lineWidth = 3 / scaleFactor;
+            ctx.strokeStyle = ESTETICA.lineaSaliente; 
+            ctx.lineWidth = 3.05 / scaleFactor;
             ctx.setLineDash([8/scaleFactor, 8/scaleFactor]);
             ctx.stroke();
             ctx.setLineDash([]);
@@ -283,24 +303,23 @@ export function dibujarFrame() {
             ctx.fillStyle = '#4a0000'; ctx.fill();
         } else {
             ctx.beginPath(); ctx.arc(nodo.x, nodo.y, rOuter, 0, Math.PI * 2);
-            ctx.fillStyle = '#111'; ctx.fill(); // Borde exterior negro (para dar relieve)
+            ctx.fillStyle = '#111'; ctx.fill();
 
             ctx.beginPath(); ctx.arc(nodo.x, nodo.y, rGap, 0, Math.PI * 2);
-            ctx.fillStyle = '#111'; ctx.fill(); // Hueco negro
+            ctx.fillStyle = '#111'; ctx.fill();
 
             ctx.beginPath(); ctx.arc(nodo.x, nodo.y, rCore, 0, Math.PI * 2);
             if (esPlenamenteDescubierto) {
-                // RESTAURACIÓN ESTÉTICA: Centro de afinidad puro
-                ctx.fillStyle = colorAfinidadReal; 
+                ctx.fillStyle = colorNodoFinal;
                 ctx.globalAlpha = 0.9;
                 ctx.fill();
                 ctx.globalAlpha = 1.0;
             } else if (esAprendibleInmediato) {
                 ctx.fillStyle = '#222'; ctx.fill();
-                ctx.fillStyle = 'rgba(255, 223, 0, 0.4)'; ctx.fill();
+                ctx.fillStyle = 'rgba(236, 213, 154, 0.3)'; ctx.fill();
             } else if (esPrecedente) {
                 ctx.fillStyle = '#222'; ctx.fill();
-                ctx.fillStyle = 'rgba(136, 102, 204, 0.3)'; ctx.fill();
+                ctx.fillStyle = 'rgba(212, 196, 146, 0.08)'; ctx.fill();
             } else {
                 ctx.fillStyle = '#111'; ctx.fill();
                 if (!isPlayerView) {
@@ -311,11 +330,11 @@ export function dibujarFrame() {
         }
         
         ctx.shadowBlur = 0;
-        ctx.lineWidth = ((isHovered || isSelected) ? 4 : 2) / scaleFactor;
+        ctx.lineWidth = ((isHovered || isSelected) ? 4.05 : 2.05) / scaleFactor; // +0.05
         ctx.beginPath(); ctx.arc(nodo.x, nodo.y, rOuter, 0, Math.PI * 2);
         
         if (esPlenamenteDescubierto) {
-            ctx.strokeStyle = colorNodoFinal; // Borde blanco (o su color)
+            ctx.strokeStyle = colorNodoFinal;
             ctx.setLineDash([]);
             ctx.stroke();
         } else if (isPlayerView) {
@@ -342,8 +361,9 @@ export function dibujarFrame() {
             ctx.textAlign = 'center'; ctx.textBaseline = 'top';
             
             const textY = nodo.y + nodo.radio + (15 / scaleFactor);
-            ctx.lineWidth = 6 / scaleFactor;
+            ctx.lineWidth = 6.05 / scaleFactor;
             
+            // LÓGICA MÁSTER
             const textoADibujar = estadoMapa.esAdmin && !nodo.esConocido && !nodo.isHexNode 
                                   ? `${nodo.nombreOriginal.replace(/\s*\(\d+\)$/, '').trim()} (${nodo.hex})` 
                                   : nodo.nombre;
@@ -359,23 +379,23 @@ export function dibujarFrame() {
             if (nodo.isHexNode) {
                 ctx.fillStyle = '#ffaaaa';
             } else if (isPlayerView) {
-                // RESTAURACIÓN TEXTO
-                if (tieneElHechizo) ctx.fillStyle = '#ffffff'; // Texto Blanco Brillante
-                else if (esAprendibleInmediato) ctx.fillStyle = '#ffdf00'; // Texto Dorado
-                else if (esPrecedente) ctx.fillStyle = '#b19cd9'; // Texto Morado Claro
-                else ctx.fillStyle = 'rgba(100, 100, 100, 0.3)'; // Texto Gris Apagado
+                if (tieneElHechizo) ctx.fillStyle = 'rgba(177, 156, 217, 1)'; 
+                else if (esAprendibleInmediato) ctx.fillStyle = 'rgba(236, 213, 154, 0.9)'; 
+                else if (esPrecedente) ctx.fillStyle = 'rgba(212, 196, 146, 0.4)'; 
+                else ctx.fillStyle = 'rgba(100, 100, 100, 0.2)'; 
             } else if (modoVisual === 'descubiertos') {
                 ctx.fillStyle = colorAfinidadReal;
             } else if (nodo.esConocido) {
-                ctx.fillStyle = (isHovered || isSelected) ? '#00ffff' : '#fff';
+                ctx.fillStyle = (isHovered || isSelected) ? ESTETICA.lineaSaliente : '#fff';
             } else {
                 ctx.fillStyle = (isHovered || isSelected) ? '#ddd' : (estadoMapa.esAdmin ? '#e0e0e0' : '#bbb'); 
             }
             
             ctx.fillText(textoADibujar, nodo.x, textY);
         }
+
     }); 
-}
+} 
 
 export function actualizarPanelInfo() {
     const panel = document.getElementById('panel-info');
@@ -386,7 +406,7 @@ export function actualizarPanelInfo() {
     if (!nodo) { panel.classList.add('oculto'); return; }
 
     document.getElementById('info-titulo').innerText = nodo.nombre;
-    const colorData = window.mapaColores && window.mapaColores[nodo.afinidad];
+    const colorData = window.mapaColores[nodo.afinidad];
     const colorAfinidad = colorData ? colorData.t : '#888';
     
     if (nodo.esConocido || nodo.isHexNode) {
@@ -487,6 +507,7 @@ function hacerPanelArrastrable(id) {
         if (e.type !== 'touchstart') e.preventDefault(); 
         
         el.style.cursor = 'grabbing'; 
+        
         el.style.bottom = "auto";
         el.style.right = "auto";
         el.style.transform = "none";
