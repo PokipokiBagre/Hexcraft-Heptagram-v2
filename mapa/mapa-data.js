@@ -196,19 +196,22 @@ export async function guardarPosicionesYVisibilidad(cambios) {
 // ── Guardar edición completa (desde mapa-edicion) ─────────────
 // Maneja nodos (upsert/delete), enlaces (insert/delete) y colores de afinidad
 export async function guardarEdicionCompleta(payload) {
-    // payload = { nodos: [...], enlaces: [...], afinidades: {...} }
     try {
-        // ── NODOS ─────────────────────────────────────────────
-        for (const nodo of payload.nodos) {
-            if (nodo.eliminado) {
-                await supabase.from('hechizos_nodos').delete().eq('hechizo_id', nodo.idOriginal);
+        const nodosParaUpsert = [];
+        
+        // ── 1. PREPARAR NODOS ──────────────────────────────────
+        for (const item of payload.nodos) {
+            if (item.eliminado) {
+                const { error } = await supabase.from('hechizos_nodos').delete().eq('hechizo_id', item.idOriginal);
+                if (error) throw error;
             } else {
-                const d = nodo.datos;
-                await supabase.from('hechizos_nodos').upsert({
+                const d = item.datos; // <-- ¡AQUÍ ESTABA EL ERROR! Faltaba desempacar los datos.
+                
+                nodosParaUpsert.push({
                     hechizo_id:  d.ID,
-                    nombre:      d.Nombre,
+                    nombre:      d.Nombre   || d.ID,
                     hex_cost:    d.HEX      || 0,
-                    clase:       d.Clase    || '-',
+                    clase:       d.Clase    || 'Clase 1',
                     afinidad:    d.Afinidad || '',
                     resumen:     d.Resumen  || '',
                     efecto:      d.Efecto   || '',
@@ -218,42 +221,68 @@ export async function guardarEdicionCompleta(payload) {
                     pos_x:       d.X        || 0,
                     pos_y:       d.Y        || 0,
                     es_conocido: d.Conocido === 'si'
-                }, { onConflict: 'hechizo_id' });
+                });
 
                 // Si el ID cambió, borrar el registro viejo
-                if (nodo.idOriginal && nodo.idOriginal !== d.ID) {
-                    await supabase.from('hechizos_nodos').delete().eq('hechizo_id', nodo.idOriginal);
+                if (item.idOriginal && item.idOriginal !== d.ID) {
+                    await supabase.from('hechizos_nodos').delete().eq('hechizo_id', item.idOriginal);
                 }
             }
         }
 
-        // ── ENLACES ───────────────────────────────────────────
-        for (const enlace of payload.enlaces) {
-            if (enlace.eliminado) {
-                await supabase.from('hechizos_strings')
-                    .delete()
-                    .eq('source_id', enlace.source)
-                    .eq('target_id', enlace.target);
-            } else {
-                await supabase.from('hechizos_strings').upsert({
-                    source_id: enlace.source,
-                    target_id: enlace.target
-                }, { onConflict: 'source_id,target_id' });
+        // Hacer el guardado masivo en lotes (batch) para que no crashee
+        if (nodosParaUpsert.length > 0) {
+            for (let i = 0; i < nodosParaUpsert.length; i += 50) {
+                const lote = nodosParaUpsert.slice(i, i + 50);
+                const { error } = await supabase.from('hechizos_nodos').upsert(lote, { onConflict: 'hechizo_id' });
+                if (error) throw error;
             }
         }
 
-        // ── COLORES DE AFINIDAD ───────────────────────────────
+        // ── 2. PREPARAR ENLACES ────────────────────────────────
+        const enlacesParaUpsert = [];
+        for (const enlace of payload.enlaces) {
+            if (enlace.eliminado) {
+                const { error } = await supabase.from('hechizos_strings')
+                    .delete()
+                    .eq('source_id', enlace.source)
+                    .eq('target_id', enlace.target);
+                if (error) throw error;
+            } else {
+                enlacesParaUpsert.push({
+                    source_id: enlace.source,
+                    target_id: enlace.target
+                });
+            }
+        }
+
+        if (enlacesParaUpsert.length > 0) {
+            for (let i = 0; i < enlacesParaUpsert.length; i += 50) {
+                const lote = enlacesParaUpsert.slice(i, i + 50);
+                const { error } = await supabase.from('hechizos_strings').upsert(lote, { onConflict: 'source_id,target_id' });
+                if (error) throw error;
+            }
+        }
+
+        // ── 3. COLORES DE AFINIDAD ─────────────────────────────
+        const afinidadesParaUpsert = [];
         for (const [afinidad, colores] of Object.entries(payload.afinidades || {})) {
-            await supabase.from('hechizos_afinidades').upsert({
+            afinidadesParaUpsert.push({
                 afinidad,
                 color_t: colores.t,
                 color_b: colores.b
-            }, { onConflict: 'afinidad' });
+            });
+        }
+        
+        if (afinidadesParaUpsert.length > 0) {
+            const { error } = await supabase.from('hechizos_afinidades').upsert(afinidadesParaUpsert, { onConflict: 'afinidad' });
+            if (error) throw error;
         }
 
         return true;
+        
     } catch (e) {
-        console.error("Error en guardarEdicionCompleta:", e);
+        console.error("Error crítico guardando en Supabase:", e);
         return false;
     }
 }
