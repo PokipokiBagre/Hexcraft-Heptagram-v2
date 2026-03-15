@@ -20,7 +20,13 @@ window.onload = async () => {
     estadoMapa.esAdmin = hexAuth.esAdmin();
     // -----------------------------------------------
 
-    try { // <-- ¡FALTABA ABRIR EL TRY AQUÍ!
+    // 👉 AGREGAR ESTO: Si es admin, mostramos el botón de editar automáticamente
+    if (estadoMapa.esAdmin) {
+        const btnEditar = document.getElementById('btn-editar-mapa');
+        if (btnEditar) btnEditar.classList.remove('oculto');
+    }
+
+    try { 
         inicializarCanvas();
         const barra = document.getElementById('carga-progreso');
         const loadScreen = document.getElementById('loader');
@@ -155,7 +161,7 @@ window.cerrarPanelInfo = () => {
 };
 
 // -------------------------------------------------------------
-// MOTOR FÍSICO CORREGIDO (Sin alteración rara de variables)
+// MOTOR FÍSICO CORREGIDO
 // -------------------------------------------------------------
 window.ordenarMapaYifanHu = () => {
     const nodos = estadoMapa.nodos;
@@ -226,7 +232,6 @@ window.ordenarMapaYifanHu = () => {
             const dLen = Math.sqrt(d.x*d.x + d.y*d.y);
             if(dLen > 0) {
                 const limit = Math.min(dLen, temp); 
-                // Actualiza única y exclusivamente la X e Y reales
                 u.x += (d.x / dLen) * limit;
                 u.y += (d.y / dLen) * limit;
             }
@@ -269,10 +274,10 @@ window.guardarCambiosMapa = async () => {
     btn.innerText = "Guardando..."; btn.disabled = true;
 
     const cambios = estadoMapa.nodos.filter(n => n.modificado).map(n => ({
-        id:      n.id || n.nombreOriginal,
-        x:       n.x,
-        y:       n.y,
-        conocido: n.esConocido ? 'si' : 'no'
+        hechizo_id:  n.id || n.nombreOriginal,
+        pos_x:       Math.round(n.x),
+        pos_y:       Math.round(n.y),
+        es_conocido: n.esConocido
     }));
 
     if (cambios.length === 0) {
@@ -281,7 +286,8 @@ window.guardarCambiosMapa = async () => {
         return;
     }
 
-    if (await guardarPosicionesYVisibilidad(cambios)) {
+    // Llamada directa usando db en lugar de duplicar lógica
+    if (await db.hechizos.guardarPosicionesBatch(cambios)) {
         alert("¡Éxito! Posiciones guardadas permanentemente.");
         estadoMapa.nodos.forEach(n => n.modificado = false);
         btn.classList.add('oculto');
@@ -345,7 +351,7 @@ function iniciarEventosInput() {
         actualizarPanelInfo();
     });
 
-canvas.addEventListener('mousedown', (e) => {
+    canvas.addEventListener('mousedown', (e) => {
         const worldPos = getPosicionMundo(e.clientX, e.clientY);
         const nodo = obtenerNodoEnCursor(worldPos.x, worldPos.y);
 
@@ -452,6 +458,15 @@ canvas.addEventListener('mousedown', (e) => {
             const worldPos = getPosicionMundo(touch.clientX, touch.clientY);
             const nodo = obtenerNodoEnCursor(worldPos.x, worldPos.y);
 
+            // --- HOOK DE EDICIÓN (TOUCH) ---
+            if (window.mapaEditor && window.mapaEditor.activa) {
+                window.mapaEditor.onMouseDown(e, nodo, worldPos);
+                estadoMapa.interaccion.lastMouseX = touch.clientX;
+                estadoMapa.interaccion.lastMouseY = touch.clientY;
+                return;
+            }
+            // -------------------------------
+
             if (nodo) {
                 if (estadoMapa.interaccion.selectedNode === nodo) {
                     estadoMapa.interaccion.selectedNode = null;
@@ -486,6 +501,16 @@ canvas.addEventListener('mousedown', (e) => {
             const touch = e.touches[0];
             const dx = touch.clientX - estadoMapa.interaccion.lastMouseX;
             const dy = touch.clientY - estadoMapa.interaccion.lastMouseY;
+            const worldPos = getPosicionMundo(touch.clientX, touch.clientY);
+
+            // --- HOOK DE EDICIÓN (TOUCH) ---
+            if (window.mapaEditor && window.mapaEditor.activa) {
+                window.mapaEditor.onMouseMove(e, dx, dy, worldPos);
+                estadoMapa.interaccion.lastMouseX = touch.clientX;
+                estadoMapa.interaccion.lastMouseY = touch.clientY;
+                return;
+            }
+            // -------------------------------
 
             if (estadoMapa.interaccion.isDraggingBg) {
                 estadoMapa.camara.x += dx;
@@ -525,6 +550,19 @@ canvas.addEventListener('mousedown', (e) => {
     }, { passive: false });
 
     canvas.addEventListener('touchend', (e) => {
+        // --- HOOK DE EDICIÓN (TOUCH) ---
+        if (window.mapaEditor && window.mapaEditor.activa) {
+            let nodo = null;
+            if (e.changedTouches && e.changedTouches.length > 0) {
+                const touch = e.changedTouches[0];
+                const worldPos = getPosicionMundo(touch.clientX, touch.clientY);
+                nodo = obtenerNodoEnCursor(worldPos.x, worldPos.y);
+            }
+            window.mapaEditor.onMouseUp(e, nodo);
+            return;
+        }
+        // -------------------------------
+
         estadoMapa.interaccion.isDraggingBg = false;
         estadoMapa.interaccion.draggedNode = null;
         if (e.touches.length < 2) {
