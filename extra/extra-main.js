@@ -87,22 +87,22 @@ window.cerrarUpload = () => {
     ocultarPanelUpload();
 };
 
-window.handleDrop = async (e) => {
+window.handleDrop = (e) => {
     e.preventDefault();
     document.getElementById('drop-zone').classList.remove('drag-over');
     const file = e.dataTransfer.files[0];
     if (file && file.type.startsWith('image/')) {
-        await ejecutarSubida(file); // Aseguramos la espera en Drag&Drop
+        ejecutarSubida(file); 
     }
 };
 
-// 👉 LÓGICA BLINDADA: Ahora espera a que termine TODO antes de limpiar
-window.handleFileSelect = async (e) => {
+// 👉 LIMPIEZA SÍNCRONA: Borra el input al instante para evitar cuelgues eternos
+window.handleFileSelect = (e) => {
     const file = e.target.files[0];
+    e.target.value = ''; // ¡Limpieza inmediata! Ahora puedes subir la misma foto 100 veces sin F5
     if (file) {
-        await ejecutarSubida(file); 
+        ejecutarSubida(file); 
     }
-    e.target.value = ''; // Limpiamos seguro sin cortar el flujo
 };
 
 async function ejecutarSubida(file) {
