@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HEXCRAFT HEPTAGRAM</title>
-    <link rel="icon" type="image/png" href="img/icon.png">
+    <link rel="icon" type="image/png" id="dynamic-favicon">
     <link rel="stylesheet" href="style.css?v=3.0">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
@@ -12,13 +12,11 @@
 <body>
     <div class="container-hex">
 
-        <!-- NAV CON BADGE DE SESIÓN -->
         <div style="display:flex; justify-content:flex-end; margin-bottom: 10px;">
             <div id="hex-session-badge"></div>
         </div>
 
-        <header class="hero-section"
-            style="background-image: linear-gradient(rgba(18,0,36,0.7), rgba(18,0,36,0.7)), url('img/hex-002.png');">
+        <header class="hero-section">
             <h1 style="font-size: 3.5em; margin: 0; text-shadow: 0 0 20px rgba(0,0,0,0.9);">HEXCRAFT HEPTAGRAM</h1>
             <p style="color: #fff; margin-top: 10px; letter-spacing: 2px; font-size: 1.2em; text-transform: uppercase;">
                 Campaña de rol mágica estructurada en el tablón Hisrol
@@ -35,27 +33,27 @@
         <h2 style="margin-top: 40px; margin-bottom: 20px;">Sistemas de Gestión</h2>
         <div class="main-grid">
             <a href="objetos/index.html" class="grid-item">
-                <img src="img/objetos.jpg" alt="Objetos">
+                <img data-img="objetos.jpg" alt="Objetos">
                 <span>OBJETOS</span>
             </a>
             <a href="estadisticas/index.html" class="grid-item">
-                <img src="img/estadisticas.jpg" alt="Estadísticas">
+                <img data-img="estadisticas.jpg" alt="Estadísticas">
                 <span>ESTADÍSTICAS</span>
             </a>
             <a href="misiones/index.html" class="grid-item">
-                <img src="img/misiones.png" alt="Misiones">
+                <img data-img="misiones.png" alt="Misiones">
                 <span>MISIONES</span>
             </a>
             <a href="hechizos/index.html" class="grid-item">
-                <img src="img/hechizos.jpg" alt="Hechizos">
+                <img data-img="hechizos.jpg" alt="Hechizos">
                 <span>HECHIZOS</span>
             </a>
             <a href="mapa/index.html" class="grid-item">
-                <img src="img/mapa.png" alt="Mapa">
+                <img data-img="mapa.png" alt="Mapa">
                 <span>MAPA</span>
             </a>
             <a href="extra/index.html" class="grid-item">
-                <img src="img/extra.png" alt="Extra">
+                <img data-img="extra.png" alt="Extra">
                 <span>IMAGENES</span>
             </a>
         </div>
@@ -63,11 +61,11 @@
         <h2 style="margin-top: 50px; margin-bottom: 20px;">Hilos Activos</h2>
         <section class="direct-access">
             <a href="https://8chan.moe/hisrol/res/127489.html" target="_blank" class="access-card">
-                <img src="img/hex-002.png" alt="Rol Actual">
+                <img data-img="hex-002.png" alt="Rol Actual">
                 <div class="overlay"><span>ROL ACTUAL</span></div>
             </a>
             <a href="https://8chan.moe/hisrol/res/128745.html" target="_blank" class="access-card">
-                <img src="img/met-004.png" alt="Meta">
+                <img data-img="met-004.png" alt="Meta">
                 <div class="overlay"><span>META</span></div>
             </a>
         </section>
@@ -75,54 +73,52 @@
     </div>
 
 <script type="module">
-        import { hexAuth } from './hex-auth.js';
-        import { db } from './hex-db.js';
+    import { hexAuth } from './hex-auth.js';
+    import { db } from './hex-db.js';
 
-        async function iniciar() {
-            // --- NUEVO: Inyectar el icono de la pestaña principal ---
-            const favicon = document.querySelector("link[rel='icon']");
-            if (favicon) favicon.href = db.storage.getUrlInterfaz('icon.png');
-            // --------------------------------------------------------
+    async function iniciar() {
+        // --- Inyectar el icono de la pestaña principal ---
+        const favicon = document.getElementById("dynamic-favicon");
+        if (favicon) favicon.href = db.storage.getUrlInterfaz('icon.png');
+        // --------------------------------------------------------
 
-            await hexAuth.init();
+        await hexAuth.init();
 
-            // 1. Renderizar badge de sesión
-            const badge = document.getElementById('hex-session-badge');
-            if (badge) badge.innerHTML = hexAuth.renderStatusBadge();
+        // 1. Renderizar badge de sesión
+        const badge = document.getElementById('hex-session-badge');
+        if (badge) badge.innerHTML = hexAuth.renderStatusBadge();
 
-            // 2. Cargar imágenes dinámicamente desde Supabase Storage
-            cargarImagenesNube();
-        }
-
-function cargarImagenesNube() {
-    // 1. Obtenemos el icono mágico directamente desde Supabase
-    // Así evitamos los errores 404 de tu carpeta local
-    const urlIconoNube = db.storage.getUrlInterfaz('icon.png');
-
-    // 2. Cambiar las imágenes de la grilla y los accesos directos
-    document.querySelectorAll('img[src^="img/"]').forEach(img => {
-        const nombreLocal = img.getAttribute('src').replace('img/', '');
-        const nuevaUrl = db.storage.getUrlInterfaz(nombreLocal);
-        
-        // Si la imagen original de Supabase falla por algo, ponemos el icono de Supabase
-        img.onerror = () => {
-            img.onerror = null; // Evita bucles infinitos
-            img.src = urlIconoNube;
-        };
-        
-        // Asignamos la imagen principal
-        img.src = nuevaUrl;
-    });
-
-    // 3. Cambiar la imagen de fondo del Hero Header (El rol actual)
-    const header = document.querySelector('.hero-section');
-    if (header) {
-        const bgUrl = db.storage.getUrlInterfaz('hex-002.png');
-        header.style.backgroundImage = `linear-gradient(rgba(18,0,36,0.7), rgba(18,0,36,0.7)), url('${bgUrl}')`;
+        // 2. Cargar imágenes dinámicamente desde Supabase Storage
+        cargarImagenesNube();
     }
-}
 
-        iniciar();
-    </script>
+    function cargarImagenesNube() {
+        const urlIconoNube = db.storage.getUrlInterfaz('icon.png');
+
+        // 1. Cambiar las imágenes de la grilla y los accesos directos
+        // Ahora buscamos las imágenes que tengan el atributo 'data-img'
+        document.querySelectorAll('img[data-img]').forEach(img => {
+            const nombreLocal = img.getAttribute('data-img');
+            const nuevaUrl = db.storage.getUrlInterfaz(nombreLocal);
+            
+            img.onerror = () => {
+                img.onerror = null; 
+                img.src = urlIconoNube;
+            };
+            
+            // Asignamos la ruta de Supabase al src para que recién ahora se descargue
+            img.src = nuevaUrl;
+        });
+
+        // 2. Cambiar la imagen de fondo del Hero Header
+        const header = document.querySelector('.hero-section');
+        if (header) {
+            const bgUrl = db.storage.getUrlInterfaz('hex-002.png');
+            header.style.backgroundImage = `linear-gradient(rgba(18,0,36,0.7), rgba(18,0,36,0.7)), url('${bgUrl}')`;
+        }
+    }
+
+    iniciar();
+</script>
 </body>
 </html>
