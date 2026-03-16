@@ -4,6 +4,7 @@ import { db } from '../hex-db.js';
 
 const normalizar = (str) => str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/\s+/g,'_').replace(/[^a-z0-9ñ_]/g,'');
 
+// Ruta única del fallback — igual que en el resto del proyecto
 const NO_ENCONTRADO = () => `${db.storage.urlBase}/imginterfaz/no_encontrado.png`;
 
 export function dibujarRoster() {
@@ -86,18 +87,26 @@ function generarHTMLMision(m) {
 }
 
 export function dibujarTablero() {
-    let contGrandes = 0; let contNormales = 0;
-    let contGrandesMostradas = 0; let contNormalesMostradas = 0; 
+    // Numeradores (Activas: > 0)
+    let activasGrandes = 0; let activasNormales = 0;
+    // Denominadores (Visibles: todas las que pasan el filtro)
+    let visiblesGrandes = 0; let visiblesNormales = 0; 
+    
     let htmlGrandes = ''; let htmlNormales = ''; let htmlPerso = ''; let htmlOP = '';
 
     misGlobal.forEach(m => {
-        if (m.tipo === 'Grande') contGrandes++;
-        if (m.tipo === 'Normal') contNormales++;
-
+        // Si el filtro de finalizadas está desactivado y la misión es estado 3, la ignoramos por completo
         if (!estadoUI.verFinalizadas && m.estado === 3) return; 
 
-        if (m.tipo === 'Grande') contGrandesMostradas++;
-        if (m.tipo === 'Normal') contNormalesMostradas++;
+        // Como pasó el filtro, cuenta para el DENOMINADOR (Totales Visibles)
+        if (m.tipo === 'Grande') visiblesGrandes++;
+        if (m.tipo === 'Normal') visiblesNormales++;
+
+        // Si la misión no está inactiva (estado > 0), cuenta para el NUMERADOR
+        if (m.estado > 0) {
+            if (m.tipo === 'Grande') activasGrandes++;
+            if (m.tipo === 'Normal') activasNormales++;
+        }
 
         const htmlCard = generarHTMLMision(m);
         
@@ -112,16 +121,17 @@ export function dibujarTablero() {
     document.getElementById('lista-perso').innerHTML = htmlPerso || '<p style="color:#666; font-style:italic;">No hay misiones de jugadores.</p>';
     document.getElementById('lista-op').innerHTML = htmlOP;
 
+    // Actualizamos los títulos 
     const titleGrandes = document.querySelector('#col-grandes h2');
-    if (titleGrandes) titleGrandes.innerText = `MISIONES GRANDES (${contGrandesMostradas}/${contGrandes})`;
+    if (titleGrandes) titleGrandes.innerText = `MISIONES GRANDES (${activasGrandes}/${visiblesGrandes})`;
     
     const titleNormales = document.querySelector('#col-normales h2');
-    if (titleNormales) titleNormales.innerText = `MISIONES NORMALES (${contNormalesMostradas}/${contNormales})`;
+    if (titleNormales) titleNormales.innerText = `MISIONES NORMALES (${activasNormales}/${visiblesNormales})`;
 
     const countG = document.getElementById('count-grandes');
-    if (countG) countG.innerText = contGrandes;
+    if (countG) countG.innerText = activasGrandes;
     const countN = document.getElementById('count-normales');
-    if (countN) countN.innerText = contNormales;
+    if (countN) countN.innerText = activasNormales;
 
     const colOP = document.getElementById('col-op');
     if(estadoUI.esAdmin) { colOP.classList.remove('oculto'); } else { colOP.classList.add('oculto'); }
