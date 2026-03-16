@@ -6,7 +6,7 @@ import { hexAuth, supabase } from '../hex-auth.js';
 import { db } from '../hex-db.js';
 
 // ============================================================
-// stats-main.js — VERSIÓN SUPABASE (ESTABILIDAD MÁXIMA)
+// stats-main.js — VERSIÓN SUPABASE (GUARDADO QUIRÚRGICO)
 // ============================================================
 
 if (!estadoUI.colaCambios) estadoUI.colaCambios = { stats: {} };
@@ -180,6 +180,17 @@ window.addAsistenciaGlobal = () => {
     window.sincronizarUI();
 };
 
+// BOTÓN DE ASISTENCIA INDIVIDUAL
+window.modAsistenciaInd = (nombre, amount) => {
+    const p = statsGlobal[nombre]; 
+    if(!p || !p.isPlayer) return;
+    
+    p.asistencia = Math.max(1, (p.asistencia || 1) + amount);
+    
+    window.encolarCambio(nombre);
+    window.sincronizarUI();
+};
+
 window.togglePartyMember = (nombre, isChecked) => {
     if (isChecked) { const e = estadoUI.party.indexOf(null); if (e !== -1) estadoUI.party[e] = nombre; else alert("Máximo de 6 alcanzado."); }
     else { const c = estadoUI.party.indexOf(nombre); if (c !== -1) estadoUI.party[c] = null; }
@@ -276,11 +287,12 @@ window.mostrarPaginaOP = (subvista) => { estadoUI.vistaActual = subvista; refres
 window.setFiltro = (tipo, valor) => { if(tipo==='rol') estadoUI.filtroRol=valor; if(tipo==='act') estadoUI.filtroAct=valor; window.sincronizarUI(); };
 
 // ============================================================================
-// 5. SINCRONIZACIÓN DIRECTA (A PRUEBA DE FALLOS Y ARRAYS)
+// 5. SINCRONIZACIÓN DIRECTA (GUARDADO QUIRÚRGICO DE SUPABASE)
 // ============================================================================
 window.encolarCambio = (nombre) => {
     try {
         if (!estadoUI.colaCambios.stats[nombre]) estadoUI.colaCambios.stats[nombre] = {};
+        // Solo marcamos que fue modificado
         estadoUI.colaCambios.stats[nombre].__modificado = true;
     } catch(e) { console.error("Error al encolar:", e); }
 };
@@ -296,107 +308,74 @@ window.actualizarBotonSync = () => {
     }
 };
 
-// 👉 NUEVO GUARDADO SECUENCIAL: Elude los bugs de lotes y muestra qué falló
 window.ejecutarSincronizacion = async () => {
     const btn = document.getElementById('btn-sync-global');
-    btn.innerText = "Guardando Datos..."; btn.disabled = true;
+    const textoOriginal = btn.innerText; 
+    btn.innerText = "Guardando Datos..."; 
+    btn.disabled = true;
+    let erroresGlobales = [];
 
     try {
-        // Ejecutamos upserts uno a uno a la velocidad de la luz. 
-        // Esto es 100% compatible con Supabase sin importar el tamaño del paquete.
         for (const [nombre, campos] of Object.entries(estadoUI.colaCambios.stats)) {
             if (campos.__ELIMINAR_PERSONAJE__) {
-                await db.personajes.eliminar(nombre);
+                const exito = await db.personajes.eliminar(nombre);
+                if (!exito) erroresGlobales.push(`Error borrando a: ${nombre}`);
                 continue;
             }
 
             const p = statsGlobal[nombre];
             if (!p) continue;
 
-            const payload = {
-                nombre,
-                is_player:  p.isPlayer,
-                is_active:  p.isActive,
-                icono_override: p.iconoOverride || '',
+            const payloadSeguro = {
                 hex:        p.hex        || 0,
                 asistencia: p.asistencia || 1,
                 vex:        p.isPlayer ? 0 : (p.vex || 0),
-
+                is_active:  p.isActive,
+                is_player:  p.isPlayer,
+                
                 vida_roja_actual:  p.vidaRojaActual  || 0,
                 base_vida_roja_max: p.baseVidaRojaMax || 10,
-                hechizo_vida_roja:  p.hechizos?.vidaRojaMaxExtra  || 0,
-                efecto_vida_roja:   p.hechizosEfecto?.vidaRojaMaxExtra || 0,
-                buff_vida_roja:     p.buffs?.vidaRojaMaxExtra     || 0,
-
                 base_vida_azul:    p.baseVidaAzul   || 0,
-                hechizo_vida_azul: p.hechizos?.vidaAzulExtra  || 0,
-                efecto_vida_azul:  p.hechizosEfecto?.vidaAzulExtra || 0,
-                buff_vida_azul:    p.buffs?.vidaAzulExtra     || 0,
-
                 base_guarda_dorada: p.baseGuardaDorada || 0,
-                hechizo_guarda:     p.hechizos?.guardaDoradaExtra  || 0,
-                efecto_guarda:      p.hechizosEfecto?.guardaDoradaExtra || 0,
-                buff_guarda:        p.buffs?.guardaDoradaExtra     || 0,
-
+                
                 base_dano_rojo:    p.baseDanoRojo   || 0,
-                hechizo_dano_rojo: p.hechizos?.danoRojo  || 0,
-                efecto_dano_rojo:  p.hechizosEfecto?.danoRojo || 0,
-                buff_dano_rojo:    p.buffs?.danoRojo     || 0,
-
                 base_dano_azul:    p.baseDanoAzul   || 0,
-                hechizo_dano_azul: p.hechizos?.danoAzul  || 0,
-                efecto_dano_azul:  p.hechizosEfecto?.danoAzul || 0,
-                buff_dano_azul:    p.buffs?.danoAzul     || 0,
-
                 base_elim_dorada:  p.baseElimDorada || 0,
-                hechizo_elim:      p.hechizos?.elimDorada  || 0,
-                efecto_elim:       p.hechizosEfecto?.elimDorada || 0,
-                buff_elim:         p.buffs?.elimDorada     || 0,
-
+                
                 af_fisica:     p.afinidadesBase?.fisica     || 0,
                 af_energetica: p.afinidadesBase?.energetica || 0,
                 af_espiritual: p.afinidadesBase?.espiritual || 0,
                 af_mando:      p.afinidadesBase?.mando      || 0,
                 af_psiquica:   p.afinidadesBase?.psiquica   || 0,
-                af_oscura:     p.afinidadesBase?.oscura     || 0,
-
-                hz_fisica:     p.hechizos?.fisica     || 0,
-                hz_energetica: p.hechizos?.energetica || 0,
-                hz_espiritual: p.hechizos?.espiritual || 0,
-                hz_mando:      p.hechizos?.mando      || 0,
-                hz_psiquica:   p.hechizos?.psiquica   || 0,
-                hz_oscura:     p.hechizos?.oscura     || 0,
-
-                ef_fisica:     p.hechizosEfecto?.fisica     || 0,
-                ef_energetica: p.hechizosEfecto?.energetica || 0,
-                ef_espiritual: p.hechizosEfecto?.espiritual || 0,
-                ef_mando:      p.hechizosEfecto?.mando      || 0,
-                ef_psiquica:   p.hechizosEfecto?.psiquica   || 0,
-                ef_oscura:     p.hechizosEfecto?.oscura     || 0,
-
-                bf_fisica:     p.buffs?.fisica     || 0,
-                bf_energetica: p.buffs?.energetica || 0,
-                bf_espiritual: p.buffs?.espiritual || 0,
-                bf_mando:      p.buffs?.mando      || 0,
-                bf_psiquica:   p.buffs?.psiquica   || 0,
-                bf_oscura:     p.buffs?.oscura     || 0,
-
-                estados: p.estados || {}
+                af_oscura:     p.afinidadesBase?.oscura     || 0
             };
 
-            const exito = await db.personajes.upsert(payload);
-            if (!exito) throw new Error(`Rechazo del servidor al guardar datos de: ${nombre}`);
+            const { error } = await supabase
+                .from('personajes')
+                .update(payloadSeguro)
+                .eq('nombre', nombre);
+
+            if (error) {
+                console.error(`Supabase rechazó la actualización de ${nombre}:`, error);
+                erroresGlobales.push(`[${nombre}]: ${error.message}`);
+            }
         }
 
-        estadoUI.colaCambios.stats = {};
-        const alertBox = document.createElement('div');
-        alertBox.innerHTML = "¡Guardado Exitoso! ✅";
-        alertBox.style.cssText = "position:fixed; top:30px; left:50%; transform:translateX(-50%); background:var(--gold); color:#000; padding:15px 40px; border-radius:8px; font-weight:bold; font-size:1.2em; z-index:99999; box-shadow:0 0 20px var(--gold);";
-        document.body.appendChild(alertBox);
-        setTimeout(() => window.location.reload(), 1000);
+        if (erroresGlobales.length > 0) {
+            alert("⚠️ Supabase rechazó la operación:\\n\\n" + erroresGlobales.join('\\n'));
+            btn.innerText = "Reintentar Guardado";
+            btn.disabled = false;
+        } else {
+            estadoUI.colaCambios.stats = {};
+            const alertBox = document.createElement('div');
+            alertBox.innerHTML = "¡Guardado Exitoso! ✅";
+            alertBox.style.cssText = "position:fixed; top:30px; left:50%; transform:translateX(-50%); background:var(--gold); color:#000; padding:15px 40px; border-radius:8px; font-weight:bold; font-size:1.2em; z-index:99999; box-shadow:0 0 20px var(--gold);";
+            document.body.appendChild(alertBox);
+            setTimeout(() => window.location.reload(), 1000);
+        }
 
     } catch(e) {
-        alert("Error crítico al guardar:\n" + e.message);
+        alert("Error crítico al guardar:\\n" + e.message);
         console.error(e);
         btn.innerText = "Reintentar Guardado";
         btn.disabled = false;
@@ -501,7 +480,7 @@ window.ejecutarCreacionNPC = async () => {
 
 window.borrarPersonaje = async (nombre, event) => {
     if(event) event.stopPropagation();
-    if(confirm(`⚠️ ADVERTENCIA CRÍTICA ⚠️\n\n¿Estás absolutamente seguro de que deseas DESTRUIR a [${nombre.toUpperCase()}] de la base de datos?\n\nEsta acción es irreversible y borrará sus stats de la existencia.`)) {
+    if(confirm(`⚠️ ADVERTENCIA CRÍTICA ⚠️\\n\\n¿Estás absolutamente seguro de que deseas DESTRUIR a [${nombre.toUpperCase()}] de la base de datos?\\n\\nEsta acción es irreversible y borrará sus stats de la existencia.`)) {
         try {
             const exito = await db.personajes.eliminar(nombre);
             if (exito) {
