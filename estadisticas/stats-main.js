@@ -192,8 +192,18 @@ window.modAsistenciaInd = (nombre, amount) => {
 };
 
 window.togglePartyMember = (nombre, isChecked) => {
-    if (isChecked) { const e = estadoUI.party.indexOf(null); if (e !== -1) estadoUI.party[e] = nombre; else alert("Máximo de 6 alcanzado."); }
-    else { const c = estadoUI.party.indexOf(nombre); if (c !== -1) estadoUI.party[c] = null; }
+    if (isChecked) {
+        // Usuario público solo puede añadir NPCs a la party
+        if (!estadoUI.esAdmin && statsGlobal[nombre]?.isPlayer) {
+            return alert("Solo puedes añadir NPCs a la party en modo público.");
+        }
+        const e = estadoUI.party.indexOf(null);
+        if (e !== -1) estadoUI.party[e] = nombre;
+        else alert("Máximo de 6 alcanzado.");
+    } else {
+        const c = estadoUI.party.indexOf(nombre);
+        if (c !== -1) estadoUI.party[c] = null;
+    }
     window.sincronizarUI();
 };
 window.vaciarParty = () => { estadoUI.party = [null,null,null,null,null,null]; window.sincronizarUI(); };
@@ -283,6 +293,13 @@ window.abrirMenuOP = () => {
     }
 };
 
+// Botón de Gestión público: accesible para todos.
+// Admin → panel completo. Público → solo HEX/Party de NPCs.
+window.abrirGestion = () => {
+    estadoUI.vistaActual = 'hex';
+    refrescarVistas();
+};
+
 window.mostrarPaginaOP = (subvista) => { estadoUI.vistaActual = subvista; refrescarVistas(); };
 window.setFiltro = (tipo, valor) => { if(tipo==='rol') estadoUI.filtroRol=valor; if(tipo==='act') estadoUI.filtroAct=valor; window.sincronizarUI(); };
 
@@ -317,6 +334,12 @@ window.ejecutarSincronizacion = async () => {
 
     try {
         for (const [nombre, campos] of Object.entries(estadoUI.colaCambios.stats)) {
+            // ── Guard: usuario público solo puede guardar NPCs ──────────────
+            if (!estadoUI.esAdmin && statsGlobal[nombre]?.isPlayer) {
+                console.warn(`Acceso bloqueado: no se puede guardar al jugador "${nombre}" en modo público.`);
+                continue;
+            }
+
             if (campos.__ELIMINAR_PERSONAJE__) {
                 const exito = await db.personajes.eliminar(nombre);
                 if (!exito) erroresGlobales.push(`Error borrando a: ${nombre}`);
@@ -414,7 +437,7 @@ if (dragHeader && modalContent) {
     window.onmouseup = () => { isDragging = false; };
 }
 
-window.descargarAumentada = () => { descargarArchivoCSV(generarCSVExportacion(), "HEX_ESTADOS_AUMENTADO.csv"); };
+// window.descargarAumentada eliminado — funcionalidad CSV obsoleta
 
 // ============================================================================
 // 7. CREACIÓN Y BORRADO DIRECTO EN SUPABASE
