@@ -4,18 +4,13 @@ import { db } from '../hex-db.js';
 
 const normalizar = (str) => str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/\s+/g,'_').replace(/[^a-z0-9ñ_]/g,'');
 
-// Ruta única del fallback — igual que en el resto del proyecto
 const NO_ENCONTRADO = () => `${db.storage.urlBase}/imginterfaz/no_encontrado.png`;
-
-// 🔥 ELIMINAMOS getAfColor. ¡Ahora los colores vienen directamente de Supabase!
 
 export function dibujarRoster() {
     const container = document.getElementById('roster-jugadores');
     let html = '';
     jugadoresActivos.forEach(j => {
-        // Usamos directamente el color inyectado desde la base de datos
         const color = j.color || '#888'; 
-        
         html += `<img src="${db.storage.urlBase}/imgpersonajes/${normalizar(j.icon)}icon.png" 
                       class="drag-char" 
                       style="border-color:${color};"
@@ -36,7 +31,6 @@ function renderBadgeEstado(estado) {
 }
 
 function generarHTMLMision(m) {
-    // BLINDAJE CONTRA COMILLAS SIMPLES EN LOS TÍTULOS (Ej: "Howl's Moving Castle")
     const safeId = m.id.replace(/'/g, "\\'"); 
 
     const btnEditar = (estadoUI.esAdmin || m.tipo === 'Personalizada') 
@@ -48,7 +42,6 @@ function generarHTMLMision(m) {
     m.jugadores.forEach(j => {
         const targetJug = jugadoresActivos.find(jug => jug.nombre === j);
         const icon = targetJug?.icon || j;
-        // Usamos directamente el color inyectado desde la base de datos
         const color = targetJug?.color || '#888'; 
         
         htmlJugadores += `<div class="assigned-char" title="Clic o arrastrar fuera para quitar a ${j}" draggable="true" ondragstart="window.dragStart(event, '${j}', '${safeId}')" onclick="window.quitarJugador('${safeId}', '${j}')">
@@ -94,15 +87,17 @@ function generarHTMLMision(m) {
 
 export function dibujarTablero() {
     let contGrandes = 0; let contNormales = 0;
+    let contGrandesMostradas = 0; let contNormalesMostradas = 0; 
     let htmlGrandes = ''; let htmlNormales = ''; let htmlPerso = ''; let htmlOP = '';
 
     misGlobal.forEach(m => {
+        if (m.tipo === 'Grande') contGrandes++;
+        if (m.tipo === 'Normal') contNormales++;
+
         if (!estadoUI.verFinalizadas && m.estado === 3) return; 
 
-        if (m.estado === 1 || m.estado === 2) {
-            if (m.tipo.trim() === 'Grande') contGrandes++;
-            if (m.tipo.trim() === 'Normal') contNormales++;
-        }
+        if (m.tipo === 'Grande') contGrandesMostradas++;
+        if (m.tipo === 'Normal') contNormalesMostradas++;
 
         const htmlCard = generarHTMLMision(m);
         
@@ -117,8 +112,16 @@ export function dibujarTablero() {
     document.getElementById('lista-perso').innerHTML = htmlPerso || '<p style="color:#666; font-style:italic;">No hay misiones de jugadores.</p>';
     document.getElementById('lista-op').innerHTML = htmlOP;
 
-    document.getElementById('count-grandes').innerText = contGrandes;
-    document.getElementById('count-normales').innerText = contNormales;
+    const titleGrandes = document.querySelector('#col-grandes h2');
+    if (titleGrandes) titleGrandes.innerText = `MISIONES GRANDES (${contGrandesMostradas}/${contGrandes})`;
+    
+    const titleNormales = document.querySelector('#col-normales h2');
+    if (titleNormales) titleNormales.innerText = `MISIONES NORMALES (${contNormalesMostradas}/${contNormales})`;
+
+    const countG = document.getElementById('count-grandes');
+    if (countG) countG.innerText = contGrandes;
+    const countN = document.getElementById('count-normales');
+    if (countN) countN.innerText = contNormales;
 
     const colOP = document.getElementById('col-op');
     if(estadoUI.esAdmin) { colOP.classList.remove('oculto'); } else { colOP.classList.add('oculto'); }
