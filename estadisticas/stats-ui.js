@@ -342,13 +342,19 @@ export function dibujarDetalle() {
             </div>
         </div>
 
-        ${(estadoUI.esAdmin || p.isNPC) ? `
+        ${(() => {
+            if (!estadoUI.esAdmin && !p.isNPC) return '';
+            const btnStyle = estadoUI.esAdmin
+                ? 'background: linear-gradient(135deg, #4a004a 0%, #2e004f 100%); border: 2px solid #ff00ff; box-shadow: 0 0 15px rgba(255,0,255,0.3);'
+                : 'background: linear-gradient(135deg, #001a33 0%, #002244 100%); border: 2px solid #00aaff; box-shadow: 0 0 15px rgba(0,170,255,0.3);';
+            const btnLabel  = estadoUI.esAdmin ? '⚙️ PANEL DE MÁSTER' : '🎭 EDITAR ESTE NPC';
+            const badgeText = estadoUI.esAdmin ? 'Modo Edición Activado' : 'Edición de NPC disponible';
+            return `
         <div style="display: flex; flex-direction: column; gap: 10px; align-items: flex-end;">
-            <button onclick="window.abrirModalOP()" style="background: linear-gradient(135deg, ${estadoUI.esAdmin ? '#4a004a 0%, #2e004f 100%); border: 2px solid #ff00ff; box-shadow: 0 0 15px rgba(255,0,255,0.3)' : '#001a33 0%, #002244 100%); border: 2px solid #00aaff; box-shadow: 0 0 15px rgba(0,170,255,0.3)'}; padding: 15px 25px; font-size: 1.1em; color: white; font-weight: bold; border-radius: 8px; transition: 0.3s; cursor: pointer;" onmouseover="this.style.filter='brightness(1.3)'" onmouseout="this.style.filter='brightness(1)'">
-                ${estadoUI.esAdmin ? '⚙️ PANEL DE MÁSTER' : '🎭 EDITAR ESTE NPC'}
-            </button>
-            <span style="color: #666; font-size: 0.8em; font-style: italic;">${estadoUI.esAdmin ? 'Modo Edición Activado' : 'Edición de NPC disponible'}</span>
-        </div>` : ''}
+            <button onclick="window.abrirModalOP()" style="${btnStyle} padding: 15px 25px; font-size: 1.1em; color: white; font-weight: bold; border-radius: 8px; transition: 0.3s; cursor: pointer;" onmouseover="this.style.filter='brightness(1.3)'" onmouseout="this.style.filter='brightness(1)'">${btnLabel}</button>
+            <span style="color: #666; font-size: 0.8em; font-style: italic;">${badgeText}</span>
+        </div>`;
+        })()}
     </div>
 
     <div class="circle-wrap" style="margin: 40px 0; display: flex; justify-content: center; gap: 50px;">
@@ -498,7 +504,10 @@ export function dibujarPanelEdicionOP() {
 
     let html = `
         <div style="display:flex; justify-content:center; gap:15px; margin-bottom:25px; background: #0a0a0a; padding: 15px; border-radius: 8px; border: 1px solid #333;">
-            <button type="button" onclick="window.toggleIdentidad('isPlayer')" style="flex: 1; padding: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; border: 2px solid ${p.isPlayer ? '#00e676' : '#ff1744'}; background: ${p.isPlayer ? '#003300' : '#330000'}; color: white; transition: 0.2s;">🎭 ${p.isPlayer ? 'ROL: JUGADOR' : 'ROL: NPC'}</button>
+            ${estadoUI.esAdmin
+                ? `<button type="button" onclick="window.toggleIdentidad('isPlayer')" style="flex: 1; padding: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; border: 2px solid ${p.isPlayer ? '#00e676' : '#ff1744'}; background: ${p.isPlayer ? '#003300' : '#330000'}; color: white; transition: 0.2s;">🎭 ${p.isPlayer ? 'ROL: JUGADOR' : 'ROL: NPC'}</button>`
+                : `<div style="flex: 1; padding: 12px; font-weight: bold; border-radius: 6px; border: 2px solid #ff1744; background: #330000; color: #aaa; text-align:center; font-size:0.95em;">🎭 ROL: NPC <span style="font-size:0.7em; display:block; color:#666;">(solo OP puede cambiar)</span></div>`
+            }
             <button type="button" onclick="window.toggleIdentidad('isActive')" style="flex: 1; padding: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; border: 2px solid ${p.isActive ? '#00e676' : '#ff1744'}; background: ${p.isActive ? '#003300' : '#330000'}; color: white; transition: 0.2s;">🌟 ${p.isActive ? 'ESTADO: ACTIVO' : 'ESTADO: INACTIVO'}</button>
         </div>
         
@@ -620,9 +629,7 @@ export function dibujarPanelEdicionOP() {
 
 export function dibujarMenuOP() {
     const titulo = estadoUI.esAdmin ? 'PANEL GENERAL MÁSTER' : 'GESTIÓN DE NPCs';
-    const tabForjar = estadoUI.esAdmin
-        ? `<button type="button" onclick="window.mostrarPaginaOP('crear')" style="background: linear-gradient(135deg, #004a4a 0%, #008080 100%); color: white; font-weight: bold; border: none; padding: 12px 25px; border-radius: 8px; font-size: 1.1em; cursor: pointer; box-shadow: 0 4px 10px rgba(0,128,128,0.3); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">🛠️ Forjar Nuevo NPC</button>`
-        : '';
+    const tabForjar = `<button type="button" onclick="window.mostrarPaginaOP('crear')" style="background: linear-gradient(135deg, #004a4a 0%, #008080 100%); color: white; font-weight: bold; border: none; padding: 12px 25px; border-radius: 8px; font-size: 1.1em; cursor: pointer; box-shadow: 0 4px 10px rgba(0,128,128,0.3); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">🛠️ Forjar Nuevo Personaje</button>`;
     return `
         <h3 style="color: var(--gold); font-family: 'Cinzel'; text-align: center; font-size: 2em; margin-bottom: 30px; text-transform: uppercase; text-shadow: 0 0 10px rgba(212,175,55,0.5);">${titulo}</h3>
         <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-bottom: 30px;">
@@ -798,7 +805,10 @@ export function dibujarFormularioCrear() {
         <div style="background:#1a0033; padding:20px; border-radius:12px; margin-bottom:30px; border:1px solid var(--gold); max-width:600px; margin-left:auto; margin-right:auto;">
             <h3 style="color:var(--gold); margin-top:0; font-family: 'Cinzel';">Identidad Inicial</h3>
             <div style="display:flex; justify-content:center; gap:20px;">
-                <button type="button" id="btn-crear-rol" onclick="window.toggleCrearRol()" data-val="npc" style="flex: 1; padding: 15px; background:#4a0000; border: 2px solid #ff0000; border-radius: 8px; color:white; font-weight: bold; font-size: 1.1em; cursor: pointer; transition: 0.2s;">🎭 ROL: NPC</button>
+                ${estadoUI.esAdmin
+                    ? `<button type="button" id="btn-crear-rol" onclick="window.toggleCrearRol()" data-val="npc" style="flex: 1; padding: 15px; background:#4a0000; border: 2px solid #ff0000; border-radius: 8px; color:white; font-weight: bold; font-size: 1.1em; cursor: pointer; transition: 0.2s;">🎭 ROL: NPC</button>`
+                    : `<button type="button" id="btn-crear-rol" data-val="npc" disabled style="flex: 1; padding: 15px; background:#2a0000; border: 2px dashed #ff1744; border-radius: 8px; color:#aaa; font-weight: bold; font-size: 1.1em; cursor: not-allowed;">🎭 ROL: NPC <span style="font-size:0.65em; display:block; color:#666;">(solo OP puede cambiar)</span></button>`
+                }
                 <button type="button" id="btn-crear-act" onclick="window.toggleCrearAct()" data-val="activo" style="flex: 1; padding: 15px; background:#004a00; border: 2px solid #00ff00; border-radius: 8px; color:white; font-weight: bold; font-size: 1.1em; cursor: pointer; transition: 0.2s;">🌟 ESTADO: ACTIVO</button>
             </div>
         </div>
