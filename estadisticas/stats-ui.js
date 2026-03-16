@@ -76,10 +76,6 @@ function generarGeometriaSVG(tipo, valor, maxVex, nroLados) {
     `;
 }
 
-// ============================================================================
-// VISTAS PRINCIPALES
-// ============================================================================
-
 export function dibujarCatalogo() {
     const contenedor = document.getElementById('vista-catalogo'); contenedor.className = ''; 
     estadoUI.filtroRol = estadoUI.filtroRol || 'Todos'; estadoUI.filtroAct = estadoUI.filtroAct || 'Todos';
@@ -436,10 +432,6 @@ export function dibujarDetalle() {
     contenedor.innerHTML = html;
 }
 
-// ============================================================================
-// COMPONENTES DEL PANEL MÁSTER (OP)
-// ============================================================================
-
 function genCard(f, tipoAccion) {
     let clickMod = '';
     if (tipoAccion === 'buff') clickMod = 'window.modificarBuff'; 
@@ -647,7 +639,10 @@ export function dibujarHexOP() {
     for(let i=0; i<6; i++) {
         const char = estadoUI.party[i];
         if(char && statsGlobal[char]) {
-            const icono = normalizar(statsGlobal[char]?.iconoOverride || char);
+            const p = statsGlobal[char];
+            const asisTexto = p.isPlayer ? `(${p.asistencia || 1}/7)` : `(NPC)`;
+            const icono = normalizar(p.iconoOverride || char);
+            
             html += `<div style="width:90px; height:90px; border:3px solid var(--gold); border-radius:10px; background:url('${db.storage.urlBase}/imgpersonajes/${icono}icon.png') center/cover; position:relative; box-shadow: 0 4px 8px rgba(0,0,0,0.5);" title="${char}">
                 <button onclick="window.togglePartyMember('${char}', false)" style="position:absolute; top:-10px; right:-10px; background:#ff0000; color:white; border-radius:50%; width:28px; height:28px; font-size:16px; font-weight:bold; border:2px solid #fff; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center; transition: 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">X</button>
                 <div style="position:absolute; bottom:0; background:rgba(0,0,0,0.8); width:100%; font-size:0.7em; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:4px 0; border-radius:0 0 7px 7px; color: var(--gold); font-weight: bold;">${char}</div>
@@ -718,7 +713,13 @@ export function dibujarHexOP() {
                     <div style="text-align:left;">
                         <h4 style="margin:0 0 5px 0; font-size:1.1em; color: #fff;">${nombre}</h4>
                         <div style="color:var(--gold); font-size:1.1em; font-weight:bold;">HEX: ${p.hex}</div>
-                        <div style="color:#aaa; font-size:0.8em; margin-top: 2px;">Asistencia: ${asisTexto}</div>
+                        <div style="color:#aaa; font-size:0.8em; margin-top: 2px; display: flex; align-items: center; gap: 5px;">
+                            Asistencia: ${asisTexto}
+                            ${p.isPlayer ? `
+                            <button type="button" onclick="window.modAsistenciaInd('${nombre}', 1)" style="background:#1b5e20; border:none; color:white; padding:2px 8px; border-radius:4px; cursor:pointer; font-weight:bold; box-shadow: 0 2px 4px rgba(0,0,0,0.5);">+</button>
+                            <button type="button" onclick="window.modAsistenciaInd('${nombre}', -1)" style="background:#b71c1c; border:none; color:white; padding:2px 8px; border-radius:4px; cursor:pointer; font-weight:bold; box-shadow: 0 2px 4px rgba(0,0,0,0.5);">-</button>
+                            ` : ''}
+                        </div>
                     </div>
                 </div>
                 
