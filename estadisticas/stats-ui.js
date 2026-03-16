@@ -650,7 +650,7 @@ export function dibujarHexOP() {
         
         <div style="background:#1a0033; padding:20px; border-radius:12px; border:1px solid var(--gold); margin-bottom:25px; box-shadow: 0 0 15px rgba(212,175,55,0.1);">
             <h3 style="color:var(--gold); margin-top:0;">Party Activa (Máx 6 Slots)</h3>
-            <div style="display:flex; justify-content:center; gap:15px; flex-wrap:wrap; margin-bottom:20px;">`;`;
+            <div style="display:flex; justify-content:center; gap:15px; flex-wrap:wrap; margin-bottom:20px;">`;
     
     for(let i=0; i<6; i++) {
         const char = estadoUI.party[i];
