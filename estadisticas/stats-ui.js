@@ -829,7 +829,7 @@ export function dibujarFormularioCrear() {
         <div class="edit-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 15px;">
             ${afinGridHtml}
         </div>
-        <div id="creation-affinity-sum-display" style="text-align:center; color:var(--gold); background: #111; padding: 10px; border-radius: 6px; border: 1px dashed var(--gold); font-weight:bold; font-size:1.2em; margin-bottom:40px; font-family:monospace; max-width: 300px; margin-left: auto; margin-right: auto;">Total Afinidades: 0</div>
+        <div id="creation-affinity-sum-display" style="text-align:center; color:var(--gold); background: #111; padding: 15px; border-radius: 8px; border: 1px dashed var(--gold); font-weight:bold; font-size:1.2em; margin-bottom:40px; font-family:monospace; max-width: 500px; margin-left: auto; margin-right: auto;">Total Afinidades: 0</div>
         
         <button type="button" onclick="window.ejecutarCreacionNPC()" style="width:100%; max-width:500px; background: linear-gradient(135deg, #b8860b 0%, #d4af37 100%); border: none; color:black; font-weight:bold; font-size:1.5em; padding:20px; border-radius:8px; font-family:'Cinzel'; cursor: pointer; box-shadow: 0 5px 15px rgba(212,175,55,0.4); transition: 0.2s;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">✨ FORJAR PERSONAJE ✨</button>
     </div>`;
