@@ -688,16 +688,17 @@ export function dibujarHexOP() {
                     <span style="color:white; font-size:0.9em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:bold; flex:1;">${nombre}</span>
                 </label>
             `;
-        }
     });
+
+    const botonesAdminParty = esAdmin
+        ? '<button type="button" onclick="window.establecerPartyActiva()" style="background: linear-gradient(135deg, #004a00 0%, #006600 100%); border: none; color: white; font-weight: bold; padding: 12px 20px; border-radius: 6px; cursor: pointer; transition: 0.2s;" onmouseover="this.style.filter=\'brightness(1.2)\'" onmouseout="this.style.filter=\'brightness(1)\'">✓ ESTABLECER COMO ÚNICOS ACTIVOS</button>'
+        + '<button type="button" onclick="window.addAsistenciaGlobal()" style="background: linear-gradient(135deg, #4a004a 0%, #660066 100%); border: none; color: white; font-weight: bold; padding: 12px 20px; border-radius: 6px; cursor: pointer; transition: 0.2s;" onmouseover="this.style.filter=\'brightness(1.2)\'" onmouseout="this.style.filter=\'brightness(1)\'">⭐ SUMAR ASISTENCIA (+1) A PARTY</button>'
+        : '';
 
     html += `   </div>
             </div>
             <div style="display:flex; justify-content:center; gap:15px; flex-wrap:wrap; margin-top:25px;">
-                ${esAdmin ? `
-                <button type="button" onclick="window.establecerPartyActiva()" style="background: linear-gradient(135deg, #004a00 0%, #006600 100%); border: none; color: white; font-weight: bold; padding: 12px 20px; border-radius: 6px; cursor: pointer; transition: 0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">✓ ESTABLECER COMO ÚNICOS ACTIVOS</button>
-                <button type="button" onclick="window.addAsistenciaGlobal()" style="background: linear-gradient(135deg, #4a004a 0%, #660066 100%); border: none; color: white; font-weight: bold; padding: 12px 20px; border-radius: 6px; cursor: pointer; transition: 0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">⭐ SUMAR ASISTENCIA (+1) A PARTY</button>
-                ` : ''}
+                ${botonesAdminParty}
                 <button type="button" onclick="window.vaciarParty()" style="background: linear-gradient(135deg, #4a0000 0%, #660000 100%); border: none; color: white; padding: 12px 20px; border-radius: 6px; cursor: pointer; transition: 0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">🗑️ VACIAR SLOTS</button>
             </div>
         </div>
@@ -724,7 +725,11 @@ export function dibujarHexOP() {
     estadoUI.party.forEach(nombre => {
         if (nombre && statsGlobal[nombre]) {
             const p = statsGlobal[nombre];
-            const asisTexto = p.isPlayer ? `(${p.asistencia || 1}/7)` : `(NPC)`;
+            const asisTexto = p.isPlayer ? '(' + (p.asistencia || 1) + '/7)' : '(NPC)';
+            const botonesAsis = p.isPlayer
+                ? '<button type="button" onclick="window.modAsistenciaInd(\'' + nombre + '\', 1)" style="background:#1b5e20; border:none; color:white; padding:2px 8px; border-radius:4px; cursor:pointer; font-weight:bold;">+</button>'
+                + '<button type="button" onclick="window.modAsistenciaInd(\'' + nombre + '\', -1)" style="background:#b71c1c; border:none; color:white; padding:2px 8px; border-radius:4px; cursor:pointer; font-weight:bold;">-</button>'
+                : '';
             const iconoMuestra = normalizar(p.iconoOverride || nombre);
             html += `
             <div class="edit-card" style="background: #111; border: 1px solid var(--gold); border-radius: 12px; padding: 20px;">
@@ -735,10 +740,7 @@ export function dibujarHexOP() {
                         <div style="color:var(--gold); font-size:1.1em; font-weight:bold;">HEX: ${p.hex}</div>
                         <div style="color:#aaa; font-size:0.8em; margin-top: 2px; display: flex; align-items: center; gap: 5px;">
                             Asistencia: ${asisTexto}
-                            ${p.isPlayer ? `
-                            <button type="button" onclick="window.modAsistenciaInd('${nombre}', 1)" style="background:#1b5e20; border:none; color:white; padding:2px 8px; border-radius:4px; cursor:pointer; font-weight:bold; box-shadow: 0 2px 4px rgba(0,0,0,0.5);">+</button>
-                            <button type="button" onclick="window.modAsistenciaInd('${nombre}', -1)" style="background:#b71c1c; border:none; color:white; padding:2px 8px; border-radius:4px; cursor:pointer; font-weight:bold; box-shadow: 0 2px 4px rgba(0,0,0,0.5);">-</button>
-                            ` : ''}
+                            ${botonesAsis}
                         </div>
                     </div>
                 </div>
