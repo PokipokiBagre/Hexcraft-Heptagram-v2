@@ -7,7 +7,6 @@ import { hexAuth } from '../hex-auth.js';
 
 estadoUI.colaCambios.hexCasts = estadoUI.colaCambios.hexCasts || [];
 
-// Utilidad local para normalizar textos en búsquedas
 const textNorm = (str) => str ? str.toString().trim().toLowerCase() : '';
 
 window.onload = async () => {
@@ -129,7 +128,6 @@ window.descargarCSVHex = () => { alert("La exportación a CSV está deshabilitad
 window.toggleCastConsumo = (val) => { estadoUI.consumoCast = val; };
 window.toggleCastEfectos = (val) => { estadoUI.efectosCast = val; };
 
-// 👉 REPARACIÓN: Recálculo de Estadísticas Nativo para Supabase
 function recalcularEstadisticasPersonaje(pj) {
     const charData = db.personajes[pj];
     if (!charData) return;
@@ -165,7 +163,6 @@ function recalcularEstadisticasPersonaje(pj) {
     }
 }
 
-// 👉 REPARACIÓN: Resta de Hex Nativa para Supabase sin rawRows
 function restarHexPersonaje(pj, hex) {
     const charObj = db.personajes[pj];
     if(!charObj) return;
@@ -260,12 +257,16 @@ function actualizarBotonSync() {
     if (h > 0) { btn.classList.remove('oculto'); btn.innerText = `🔥 GUARDAR CAMBIOS AL SERVIDOR (${h}) 🔥`; } else btn.classList.add('oculto');
 }
 
+// 👉 REPARACIÓN: Control de Errores Seguro para evitar botón colgado
 window.ejecutarSincronizacion = async () => {
-    const btn = document.getElementById('btn-sync-global'); 
+    const btn = document.getElementById('btn-sync-global');
+    const textoOriginal = btn.innerText; 
     btn.innerText = "Sincronizando..."; 
     btn.disabled = true;
     
-    if(await sincronizarColaBD(estadoUI.colaCambios)) {
+    const resultado = await sincronizarColaBD(estadoUI.colaCambios);
+    
+    if(resultado && resultado.success) {
         estadoUI.colaCambios = { agregar: [], quitar: [], toggleConocido: [], hexCasts: [], stats: {} };
         
         const cartelito = document.createElement('div');
@@ -280,8 +281,11 @@ window.ejecutarSincronizacion = async () => {
         }, 500);
         
     } else {
-        alert("Error de conexión. Reintenta.");
-        actualizarBotonSync();
+        const msjError = resultado && resultado.errors ? resultado.errors.join('\n\n') : 'Error de conexión desconocido.';
+        alert("⚠️ Supabase rechazó la operación:\n\n" + msjError);
+        
+        // Si falla, restauramos el botón para que no parezca colgado
+        btn.innerText = textoOriginal;
         btn.disabled = false;
     }
 };
@@ -421,7 +425,6 @@ window.actualizarAfinidadCasteo = (idx) => {
     if (info && info.Afinidad) {
         label.innerText = info.Afinidad.toUpperCase();
         
-        // 👉 REPARACIÓN: Extraer afinidad en casteo
         let afiVal = 0;
         if(charData && charData.afinidades) {
             const keyAfMap = {
@@ -616,7 +619,6 @@ window.conjurarHechizos = () => {
         if (toggleLog && toggleLog.checked && (totalVexConsumed > 0 || totalHexConsumed > 0)) {
             charData.hex = availableHex;
             
-            // 👉 REPARACIÓN: Actualización Nativa
             if(!estadoUI.colaCambios.stats) estadoUI.colaCambios.stats = {};
             if(!estadoUI.colaCambios.stats[pj]) estadoUI.colaCambios.stats[pj] = {};
             estadoUI.colaCambios.stats[pj].hex = availableHex;
