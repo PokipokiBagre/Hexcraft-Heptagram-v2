@@ -210,7 +210,7 @@ export function renderFormularioModal(mision = null) {
     </div>
 
     <div class="form-group">
-        <label>Descripción de la Misión</label>
+        <label>Descripción/Recompensa de la Misión</label>
         <textarea id="form-desc" class="form-input">${m.desc}</textarea>
     </div>
 
