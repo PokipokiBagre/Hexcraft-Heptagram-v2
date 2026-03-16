@@ -342,10 +342,12 @@ export function dibujarDetalle() {
             </div>
         </div>
 
-        ${estadoUI.esAdmin ? `
+        ${(estadoUI.esAdmin || p.isNPC) ? `
         <div style="display: flex; flex-direction: column; gap: 10px; align-items: flex-end;">
-            <button onclick="window.abrirModalOP()" style="background: linear-gradient(135deg, #4a004a 0%, #2e004f 100%); border: 2px solid #ff00ff; padding: 15px 25px; font-size: 1.1em; color: white; font-weight: bold; border-radius: 8px; box-shadow: 0 0 15px rgba(255,0,255,0.3); transition: 0.3s; cursor: pointer;" onmouseover="this.style.boxShadow='0 0 25px rgba(255,0,255,0.6)'" onmouseout="this.style.boxShadow='0 0 15px rgba(255,0,255,0.3)'">⚙️ PANEL DE MÁSTER</button>
-            <span style="color: #666; font-size: 0.8em; font-style: italic;">Modo Edición Activado</span>
+            <button onclick="window.abrirModalOP()" style="background: linear-gradient(135deg, ${estadoUI.esAdmin ? '#4a004a 0%, #2e004f 100%); border: 2px solid #ff00ff; box-shadow: 0 0 15px rgba(255,0,255,0.3)' : '#001a33 0%, #002244 100%); border: 2px solid #00aaff; box-shadow: 0 0 15px rgba(0,170,255,0.3)'}; padding: 15px 25px; font-size: 1.1em; color: white; font-weight: bold; border-radius: 8px; transition: 0.3s; cursor: pointer;" onmouseover="this.style.filter='brightness(1.3)'" onmouseout="this.style.filter='brightness(1)'">
+                ${estadoUI.esAdmin ? '⚙️ PANEL DE MÁSTER' : '🎭 EDITAR ESTE NPC'}
+            </button>
+            <span style="color: #666; font-size: 0.8em; font-style: italic;">${estadoUI.esAdmin ? 'Modo Edición Activado' : 'Edición de NPC disponible'}</span>
         </div>` : ''}
     </div>
 
@@ -617,24 +619,31 @@ export function dibujarPanelEdicionOP() {
 }
 
 export function dibujarMenuOP() {
+    const titulo = estadoUI.esAdmin ? 'PANEL GENERAL MÁSTER' : 'GESTIÓN DE NPCs';
+    const tabForjar = estadoUI.esAdmin
+        ? `<button type="button" onclick="window.mostrarPaginaOP('crear')" style="background: linear-gradient(135deg, #004a4a 0%, #008080 100%); color: white; font-weight: bold; border: none; padding: 12px 25px; border-radius: 8px; font-size: 1.1em; cursor: pointer; box-shadow: 0 4px 10px rgba(0,128,128,0.3); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">🛠️ Forjar Nuevo NPC</button>`
+        : '';
     return `
-        <h3 style="color: var(--gold); font-family: 'Cinzel'; text-align: center; font-size: 2em; margin-bottom: 30px; text-transform: uppercase; text-shadow: 0 0 10px rgba(212,175,55,0.5);">PANEL GENERAL MÁSTER</h3>
+        <h3 style="color: var(--gold); font-family: 'Cinzel'; text-align: center; font-size: 2em; margin-bottom: 30px; text-transform: uppercase; text-shadow: 0 0 10px rgba(212,175,55,0.5);">${titulo}</h3>
         <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-bottom: 30px;">
             <button type="button" onclick="window.mostrarPaginaOP('hex')" style="background: linear-gradient(135deg, #b8860b 0%, #d4af37 100%); color: #000; font-weight: bold; border: none; padding: 12px 25px; border-radius: 8px; font-size: 1.1em; cursor: pointer; box-shadow: 0 4px 10px rgba(212,175,55,0.3); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">⚔️ Gestión de HEX y Party</button>
-            <button type="button" onclick="window.mostrarPaginaOP('crear')" style="background: linear-gradient(135deg, #004a4a 0%, #008080 100%); color: white; font-weight: bold; border: none; padding: 12px 25px; border-radius: 8px; font-size: 1.1em; cursor: pointer; box-shadow: 0 4px 10px rgba(0,128,128,0.3); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">🛠️ Forjar Nuevo NPC</button>
-            <button type="button" onclick="window.descargarAumentada()" style="background: linear-gradient(135deg, #333 0%, #555 100%); color: white; font-weight: bold; border: none; padding: 12px 25px; border-radius: 8px; font-size: 1.1em; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">📥 Descargar CSV Aumentado</button>
+            ${tabForjar}
         </div>
         <div id="sub-vista-op"></div>
     `;
 }
 
 export function dibujarHexOP() {
+    const esAdmin = estadoUI.esAdmin;
+    const tituloPanel = esAdmin ? 'Gestión de HEX y Party (MÁSTER)' : 'Gestión de HEX de NPCs';
+    const labelSelector = esAdmin ? 'Seleccionar Jugadores de la Lista' : 'Seleccionar NPCs de la Lista';
+
     let html = `<div style="text-align:center; max-width:1200px; margin:0 auto;">
-        <h2 style="color:var(--gold); margin-top:0; font-family: 'Cinzel';">Gestión de HEX y Party (MÁSTER)</h2>
+        <h2 style="color:var(--gold); margin-top:0; font-family: 'Cinzel';">${tituloPanel}</h2>
         
         <div style="background:#1a0033; padding:20px; border-radius:12px; border:1px solid var(--gold); margin-bottom:25px; box-shadow: 0 0 15px rgba(212,175,55,0.1);">
             <h3 style="color:var(--gold); margin-top:0;">Party Activa (Máx 6 Slots)</h3>
-            <div style="display:flex; justify-content:center; gap:15px; flex-wrap:wrap; margin-bottom:20px;">`;
+            <div style="display:flex; justify-content:center; gap:15px; flex-wrap:wrap; margin-bottom:20px;">`;`;
     
     for(let i=0; i<6; i++) {
         const char = estadoUI.party[i];
@@ -655,15 +664,17 @@ export function dibujarHexOP() {
     html += `</div>
             
             <div style="margin: 15px auto; max-width: 800px; background: #050510; border: 1px solid #4a90e2; border-radius: 8px; padding: 20px; text-align: left;">
-                <h4 style="margin: 0 0 15px 0; color: #4a90e2; text-align: center;">Seleccionar Jugadores de la Lista</h4>
+                <h4 style="margin: 0 0 15px 0; color: #4a90e2; text-align: center;">${labelSelector}</h4>
                 <div style="max-height: 200px; overflow-y: auto; padding-right: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px;">`;
     
     Object.keys(statsGlobal).sort().forEach(nombre => {
         const p = statsGlobal[nombre];
-        if (p.isPlayer) {
-            const isChecked = estadoUI.party.includes(nombre) ? 'checked' : '';
-            const iconoMuestra = normalizar(p.iconoOverride || nombre);
-            html += `
+        // Admin ve jugadores; público ve NPCs
+        const mostrar = esAdmin ? p.isPlayer : (p.isNPC && p.isActive);
+        if (!mostrar) return;
+        const isChecked = estadoUI.party.includes(nombre) ? 'checked' : '';
+        const iconoMuestra = normalizar(p.iconoOverride || nombre);
+        html += `
                 <label style="display:flex; align-items:center; gap:10px; background:#111; padding:10px; border-radius:6px; border:1px solid #333; cursor:pointer; transition:0.2s; user-select:none;" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='#333'">
                     <input type="checkbox" ${isChecked} onchange="window.togglePartyMember('${nombre}', this.checked)" style="transform:scale(1.4); cursor:pointer; margin-left: 5px;">
                     <img src="${db.storage.urlBase}/imgpersonajes/${iconoMuestra}icon.png" style="width:35px; height:35px; border-radius:50%; border:1px solid #fff; object-fit:cover;" onerror="${imgError}">
@@ -676,9 +687,11 @@ export function dibujarHexOP() {
     html += `   </div>
             </div>
             <div style="display:flex; justify-content:center; gap:15px; flex-wrap:wrap; margin-top:25px;">
+                ${esAdmin ? `
                 <button type="button" onclick="window.establecerPartyActiva()" style="background: linear-gradient(135deg, #004a00 0%, #006600 100%); border: none; color: white; font-weight: bold; padding: 12px 20px; border-radius: 6px; cursor: pointer; transition: 0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">✓ ESTABLECER COMO ÚNICOS ACTIVOS</button>
-                <button type="button" onclick="window.vaciarParty()" style="background: linear-gradient(135deg, #4a0000 0%, #660000 100%); border: none; color: white; padding: 12px 20px; border-radius: 6px; cursor: pointer; transition: 0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">🗑️ VACIAR SLOTS</button>
                 <button type="button" onclick="window.addAsistenciaGlobal()" style="background: linear-gradient(135deg, #4a004a 0%, #660066 100%); border: none; color: white; font-weight: bold; padding: 12px 20px; border-radius: 6px; cursor: pointer; transition: 0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">⭐ SUMAR ASISTENCIA (+1) A PARTY</button>
+                ` : ''}
+                <button type="button" onclick="window.vaciarParty()" style="background: linear-gradient(135deg, #4a0000 0%, #660000 100%); border: none; color: white; padding: 12px 20px; border-radius: 6px; cursor: pointer; transition: 0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">🗑️ VACIAR SLOTS</button>
             </div>
         </div>
         
