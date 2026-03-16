@@ -6,35 +6,30 @@ import { hexAuth } from '../hex-auth.js';
 import { db }      from '../hex-db.js';
 
 // ============================================================
-// mis-main.js — VERSIÓN SUPABASE
+// mis-main.js — VERSIÓN SUPABASE (LIMPIO Y CORREGIDO)
 // ============================================================
 
 window.onload = async () => {
-    // Buscar el favicon o crearlo si no existe
     let favicon = document.querySelector("link[rel='icon']");
     if (!favicon) {
         favicon = document.createElement("link");
         favicon.rel = "icon";
         document.head.appendChild(favicon);
     }
-    // Asignar la ruta de Supabase
     favicon.href = `${db.storage.urlBase}/imginterfaz/icon.png`;
 
     const perf = performance.getEntriesByType("navigation")[0];
     if (perf && perf.type === "reload") localStorage.removeItem('hex_mis_v1');
 
-    // Inicializar auth — detecta si ya hay sesión activa
     await hexAuth.init();
     estadoUI.esAdmin = hexAuth.esAdmin();
 
-    // Actualizar badge en nav si existe
     const badge = document.getElementById('hex-session-badge');
     if (badge) badge.innerHTML = hexAuth.renderStatusBadge();
 
     await cargarDatos();
     dibujarRoster();
 
-    // Restaurar orden de columnas
     const savedOrder = localStorage.getItem('hex_col_order');
     if (savedOrder) {
         const orderArr = JSON.parse(savedOrder);
@@ -42,67 +37,40 @@ window.onload = async () => {
         orderArr.forEach(id => { const el = document.getElementById(id); if(el) parent.appendChild(el); });
     }
 
-   export function dibujarTablero() {
-    let contGrandes = 0; let contNormales = 0;
-    // Variables para el conteo de misiones mostradas en pantalla
-    let contGrandesMostradas = 0; let contNormalesMostradas = 0; 
-    let htmlGrandes = ''; let htmlNormales = ''; let htmlPerso = ''; let htmlOP = '';
+    dibujarTablero();
 
-    misGlobal.forEach(m => {
-        // Contamos el total absoluto para el denominador (siempre sumamos a menos que sea personalizada/OP)
-        if (m.tipo === 'Grande') contGrandes++;
-        if (m.tipo === 'Normal') contNormales++;
+    const dragHeader = document.getElementById('modal-drag-header');
+    const modalContent = document.getElementById('modal-content-window');
+    let isDragging = false, startX, startY, initialX, initialY;
 
-        // Si el filtro de finalizadas está oculto y la misión está finalizada (estado 3), nos la saltamos
-        if (!estadoUI.verFinalizadas && m.estado === 3) return; 
+    dragHeader.onmousedown = (e) => {
+        if(e.target.classList.contains('close-btn')) return;
+        isDragging = true; startX = e.clientX; startY = e.clientY;
+        const rect = modalContent.getBoundingClientRect();
+        modalContent.style.position = 'absolute';
+        modalContent.style.left = rect.left + 'px';
+        modalContent.style.top  = rect.top  + 'px';
+        modalContent.style.transform = 'none';
+        modalContent.style.margin = '0';
+        initialX = rect.left; initialY = rect.top;
+        e.preventDefault();
+    };
+    window.onmousemove = (e) => {
+        if (!isDragging) return;
+        modalContent.style.left = (initialX + (e.clientX - startX)) + 'px';
+        modalContent.style.top  = (initialY + (e.clientY - startY)) + 'px';
+    };
+    window.onmouseup = () => { isDragging = false; };
+};
 
-        // Si la misión pasó el filtro, sumamos al contador de "mostradas"
-        if (m.tipo === 'Grande') contGrandesMostradas++;
-        if (m.tipo === 'Normal') contNormalesMostradas++;
-
-        // Generamos el HTML de la tarjeta
-        const htmlCard = generarHTMLMision(m);
-        
-        if (m.tipo === 'Grande') htmlGrandes += htmlCard;
-        else if (m.tipo === 'Normal') htmlNormales += htmlCard;
-        else if (m.tipo === 'Personalizada') htmlPerso += htmlCard;
-        else if (m.tipo === 'OP' && estadoUI.esAdmin) htmlOP += htmlCard;
-    });
-
-    document.getElementById('lista-grandes').innerHTML = htmlGrandes || '<p style="color:#666; font-style:italic;">No hay misiones publicadas.</p>';
-    document.getElementById('lista-normales').innerHTML = htmlNormales || '<p style="color:#666; font-style:italic;">No hay misiones publicadas.</p>';
-    document.getElementById('lista-perso').innerHTML = htmlPerso || '<p style="color:#666; font-style:italic;">No hay misiones de jugadores.</p>';
-    document.getElementById('lista-op').innerHTML = htmlOP;
-
-    // Actualizamos los títulos para que muestren la relación Mostradas/Total
-    const titleGrandes = document.querySelector('#col-grandes h2');
-    if (titleGrandes) titleGrandes.innerText = `MISIONES GRANDES (${contGrandesMostradas}/${contGrandes})`;
-    
-    const titleNormales = document.querySelector('#col-normales h2');
-    if (titleNormales) titleNormales.innerText = `MISIONES NORMALES (${contNormalesMostradas}/${contNormales})`;
-
-    // Actualizamos el viejo contador por compatibilidad
-    const countG = document.getElementById('count-grandes');
-    if (countG) countG.innerText = contGrandes;
-    const countN = document.getElementById('count-normales');
-    if (countN) countN.innerText = contNormales;
-
-    const colOP = document.getElementById('col-op');
-    if(estadoUI.esAdmin) { colOP.classList.remove('oculto'); } else { colOP.classList.add('oculto'); }
-}
-
-// ── LOGIN CON SUPABASE en lugar de prompt+atob ───────────────
 window.abrirMenuOP = async () => {
     if (hexAuth.esAdmin()) {
-        // Toggle: si ya es admin, desactivar
         estadoUI.esAdmin = !estadoUI.esAdmin;
         if (!estadoUI.esAdmin) alert("Modo OP Desactivado");
         dibujarTablero();
         return;
     }
-    // Si no está logueado como admin, mostrar modal de login
     hexAuth._mostrarModalLogin();
-    // Al hacer login exitoso la página se recarga y hexAuth.init() detecta la sesión
 };
 
 window.cambiarFiltroFinalizadas = () => {
