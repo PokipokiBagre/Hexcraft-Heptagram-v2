@@ -444,8 +444,48 @@ if (dragHeader && modalContent) {
 // ============================================================================
 window.toggleCrearRol = () => { const btn=document.getElementById('btn-crear-rol'); if(btn.dataset.val==='npc'){btn.dataset.val='jugador';btn.innerText='🎭 ROL: JUGADOR';btn.style.background='#003300';btn.style.borderColor='#00e676';}else{btn.dataset.val='npc';btn.innerText='🎭 ROL: NPC';btn.style.background='#330000';btn.style.borderColor='#ff1744';} };
 window.toggleCrearAct = () => { const btn=document.getElementById('btn-crear-act'); if(btn.dataset.val==='activo'){btn.dataset.val='inactivo';btn.innerText='🌟 ESTADO: INACTIVO';btn.style.background='#330000';btn.style.borderColor='#ff1744';}else{btn.dataset.val='activo';btn.innerText='🌟 ESTADO: ACTIVO';btn.style.background='#003300';btn.style.borderColor='#00e676';} };
-window.updateCreationAfinitySum = () => { const s=['fis','ene','esp','man','psi','osc'].reduce((acc,id)=>acc+(parseInt(document.getElementById('npc-'+id)?.value)||0),0); const d=document.getElementById('creation-affinity-sum-display'); if(d) d.innerText=`Total Afinidades: ${s}`; };
-window.modForm = (inputId, cantidad) => { const input=document.getElementById(inputId); if(input){input.value=Math.max(0,(parseInt(input.value)||0)+cantidad); if(inputId.startsWith('npc-')) window.updateCreationAfinitySum();} };
+window.updateCreationAfinitySum = () => {
+    const gv = (id) => parseInt(document.getElementById(id)?.value) || 0;
+    const fis = gv('npc-fis');
+    const ene = gv('npc-ene');
+    const esp = gv('npc-esp');
+    const man = gv('npc-man');
+    const psi = gv('npc-psi');
+    const osc = gv('npc-osc');
+    const suma = fis + ene + esp + man + psi + osc;
+
+    // Cálculos derivados (misma lógica que calcularVidaRojaMax / calcularVexMax)
+    const vidaRoja  = 10 + Math.floor(fis / 2);
+    const vidaAzul  = Math.floor((ene + esp + man + psi) / 4);
+    const vexMax    = Math.round((osc * 300) / 4 / 50) * 50;
+
+    const d = document.getElementById('creation-affinity-sum-display');
+    if (d) d.innerHTML =
+        `<span style="color:#aaa; font-size:0.85em;">Total Afinidades:</span> <strong>${suma}</strong>`
+        + `<div style="display:flex; justify-content:center; gap:20px; margin-top:8px; font-size:0.9em; flex-wrap:wrap;">`
+        + `<span>❤️ Vida Roja: <b style="color:#ff4444;">${vidaRoja}</b></span>`
+        + `<span>💙 Vida Azul: <b style="color:#4a90e2;">${vidaAzul}</b></span>`
+        + `<span>🔮 VEX Máx: <b style="color:#b3a0ff;">${vexMax}</b></span>`
+        + `</div>`;
+
+    // También actualiza los inputs de vitalidad si el usuario no los ha tocado manualmente
+    const vrActual = document.getElementById('npc-vra');
+    const vrMax    = document.getElementById('npc-vrm');
+    const va       = document.getElementById('npc-va');
+    if (vrActual && vrActual.dataset.manual !== 'true') vrActual.value = vidaRoja;
+    if (vrMax    && vrMax.dataset.manual    !== 'true') vrMax.value    = vidaRoja;
+    if (va       && va.dataset.manual       !== 'true') va.value       = vidaAzul;
+};
+window.modForm = (inputId, cantidad) => {
+    const input = document.getElementById(inputId);
+    if (input) {
+        input.value = Math.max(0, (parseInt(input.value) || 0) + cantidad);
+        // Marcar como "editado manualmente" para que el auto-cálculo no lo sobreescriba
+        const vidaIds = ['npc-vra', 'npc-vrm', 'npc-va'];
+        if (vidaIds.includes(inputId)) input.dataset.manual = 'true';
+        if (inputId.startsWith('npc-')) window.updateCreationAfinitySum();
+    }
+};
 
 window.ejecutarCreacionNPC = async () => {
     const btn = document.querySelector('button[onclick="window.ejecutarCreacionNPC()"]');
