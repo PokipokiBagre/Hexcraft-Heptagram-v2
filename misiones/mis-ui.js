@@ -7,16 +7,15 @@ const normalizar = (str) => str.toString().trim().toLowerCase().replace(/[áàä
 // Ruta única del fallback — igual que en el resto del proyecto
 const NO_ENCONTRADO = () => `${db.storage.urlBase}/imginterfaz/no_encontrado.png`;
 
-function getAfColor(af) {
-    const colors = { 'Física': '#e2a673', 'Energética': '#f3b67a', 'Espiritual': '#7df0a7', 'Mando': '#a4d3f2', 'Psíquica': '#dcb1f0', 'Oscura': '#c285ff' };
-    return colors[af] || '#888';
-}
+// 🔥 ELIMINAMOS getAfColor. ¡Ahora los colores vienen directamente de Supabase!
 
 export function dibujarRoster() {
     const container = document.getElementById('roster-jugadores');
     let html = '';
     jugadoresActivos.forEach(j => {
-        const color = getAfColor(j.afinidad);
+        // Usamos directamente el color inyectado desde la base de datos
+        const color = j.color || '#888'; 
+        
         html += `<img src="${db.storage.urlBase}/imgpersonajes/${normalizar(j.icon)}icon.png" 
                       class="drag-char" 
                       style="border-color:${color};"
@@ -49,7 +48,8 @@ function generarHTMLMision(m) {
     m.jugadores.forEach(j => {
         const targetJug = jugadoresActivos.find(jug => jug.nombre === j);
         const icon = targetJug?.icon || j;
-        const color = getAfColor(targetJug?.afinidad);
+        // Usamos directamente el color inyectado desde la base de datos
+        const color = targetJug?.color || '#888'; 
         
         htmlJugadores += `<div class="assigned-char" title="Clic o arrastrar fuera para quitar a ${j}" draggable="true" ondragstart="window.dragStart(event, '${j}', '${safeId}')" onclick="window.quitarJugador('${safeId}', '${j}')">
                             <img src="${db.storage.urlBase}/imgpersonajes/${normalizar(icon)}icon.png" style="border-color:${color}" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'">
