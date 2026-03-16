@@ -1,12 +1,7 @@
-// ============================================================
-// inventario-data.js — VERSIÓN SUPABASE (CORREGIDA)
-// ============================================================
-
 import { db as localDB } from './inventario-state.js';
 import { db as hexDB }   from '../hex-db.js';
-import { supabase }      from '../hex-auth.js'; // 👉 IMPORTANTE: Agregado para poder hacer UPDATE directos
+import { supabase }      from '../hex-auth.js';
 
-// ── Carga inicial desde Supabase ─────────────────────────────
 export async function inicializarDatos(barraProgreso) {
     try {
         if (barraProgreso) barraProgreso.style.width = '30%';
@@ -18,17 +13,14 @@ export async function inicializarDatos(barraProgreso) {
 
         if (barraProgreso) barraProgreso.style.width = '70%';
 
-        // ── PROCESAR PERSONAJES ───────────────────────────────
         for (let k in localDB.personajes) delete localDB.personajes[k];
 
         personajesArr.forEach(p => {
-            // Afinidades desglosadas para recalcular tras asignar hechizos
             const base = { fisica: p.af_fisica||0, energetica: p.af_energetica||0, espiritual: p.af_espiritual||0, mando: p.af_mando||0, psiquica: p.af_psiquica||0, oscura: p.af_oscura||0 };
             const hz   = { fisica: p.hz_fisica||0, energetica: p.hz_energetica||0, espiritual: p.hz_espiritual||0, mando: p.hz_mando||0, psiquica: p.hz_psiquica||0, oscura: p.hz_oscura||0 };
             const ef   = { fisica: p.ef_fisica||0, energetica: p.ef_energetica||0, espiritual: p.ef_espiritual||0, mando: p.ef_mando||0, psiquica: p.ef_psiquica||0, oscura: p.ef_oscura||0 };
             const bf   = { fisica: p.bf_fisica||0, energetica: p.bf_energetica||0, espiritual: p.bf_espiritual||0, mando: p.bf_mando||0, psiquica: p.bf_psiquica||0, oscura: p.bf_oscura||0 };
 
-            // Totales para lectura rápida (casteo, VEX, etc.)
             const totales = {
                 fisica:     base.fisica     + hz.fisica     + ef.fisica     + bf.fisica,
                 energetica: base.energetica + hz.energetica + ef.energetica + bf.energetica,
@@ -38,7 +30,6 @@ export async function inicializarDatos(barraProgreso) {
                 oscura:     base.oscura     + hz.oscura     + ef.oscura     + bf.oscura
             };
 
-            // Afinidad primaria
             const mapNombres = { 'Física': totales.fisica, 'Energética': totales.energetica, 'Espiritual': totales.espiritual, 'Mando': totales.mando, 'Psíquica': totales.psiquica, 'Oscura': totales.oscura };
             let mayorAfinidad = 'Ninguna'; let maxVal = -1;
             for (const [key, val] of Object.entries(mapNombres)) { if (val > maxVal && val > 0) { maxVal = val; mayorAfinidad = key; } }
@@ -50,15 +41,14 @@ export async function inicializarDatos(barraProgreso) {
                 hex:            p.hex        || 0,
                 asistencia:     p.asistencia || 1,
                 mayorAfinidad,
-                afinidades:     totales,   // totales — usado en casteo y renderHeaders
-                afinidadesBase: base,      // solo base — sin hechizos ni efectos
-                afinidadesHz:   hz,        // hechizo bonus — recalculable
+                afinidades:     totales,
+                afinidadesBase: base,
+                afinidadesHz:   hz,
                 afinidadesEf:   ef,
                 afinidadesBf:   bf
             };
         });
 
-        // ── PROCESAR HECHIZOS ─────────────────────────────────
         localDB.hechizos = hechizosData;
 
         if (barraProgreso) barraProgreso.style.width = '100%';
@@ -70,55 +60,61 @@ export async function inicializarDatos(barraProgreso) {
     }
 }
 
-// ── Sincronización de la cola de cambios → Supabase ──────────
 export async function sincronizarColaBD(cola) {
+    let logErrores = [];
     try {
-        let success = true;
-
-        // 1. Agregar hechizos al inventario
+        // 1. Agregar Hechizos
         for (const item of cola.agregar) {
-            const ok = await hexDB.hechizos.agregarHechizo(item[0], {
-                nombre:   item[1],
-                afinidad: item[2],
-                hex:      item[3],
-                tipo:     item[4] || 'Normal',
-                origen:   item[5] || 'OP Admin'
+            await supabase.from('hechizos_inventario').delete()
+                .eq('personaje_nombre', item[0])
+                .eq('hechizo_nombre', item[1]);
+
+            // 🔥 ELIMINAMOS 'origen' DE AQUÍ PORQUE NO EXISTE EN LA TABLA DE SUPABASE 🔥
+            const { error } = await supabase.from('hechizos_inventario').insert({
+                personaje_nombre: item[0],
+                hechizo_nombre:   item[1],
+                hechizo_afinidad: item[2] || '',
+                hechizo_hex:      item[3] || 0,
+                tipo:             item[4] || 'Normal'
             });
-            if (!ok) success = false;
+            if (error) logErrores.push("Error Asignando Hechizo: " + error.message);
         }
 
-        // 2. Quitar hechizos del inventario
+        // 2. Quitar Hechizos
         for (const item of cola.quitar) {
-            const ok = await hexDB.hechizos.quitarHechizo(item.Personaje, item.Hechizo);
-            if (!ok) success = false;
+            const { error } = await supabase.from('hechizos_inventario').delete()
+                .eq('personaje_nombre', item.Personaje)
+                .eq('hechizo_nombre', item.Hechizo);
+            if (error) logErrores.push("Error Quitando Hechizo: " + error.message);
         }
 
-        // 3. Cambiar visibilidad de nodos del mapa
+        // 3. Cambiar Visibilidad del Mapa
         for (const item of cola.toggleConocido) {
-            const ok = await hexDB.hechizos.toggleConocido(item.ID, item.Estado === 'si');
-            if (!ok) success = false;
+            const { error } = await supabase.from('hechizos_nodos')
+                .update({ es_conocido: item.Estado === 'si' })
+                .eq('hechizo_id', item.ID);
+            if (error) logErrores.push("Error Visibilidad Mapa: " + error.message);
         }
 
-        // 👉 4. CORRECCIÓN CRÍTICA: Actualizar estadísticas con UPDATE (esquiva el rechazo de Supabase)
+        // 4. Actualizar Estadísticas
         if (cola.stats && Object.keys(cola.stats).length > 0) {
             for (const [pj, cambios] of Object.entries(cola.stats)) {
-                // Actualizamos directamente solo los campos que cambiaron (Ej: hex y hz_oscura)
-                const { error } = await supabase
-                    .from('personajes')
+                const { error } = await supabase.from('personajes')
                     .update(cambios)
                     .eq('nombre', pj);
-                    
-                if (error) {
-                    console.error(`Error actualizando stats de ${pj}:`, error);
-                    success = false;
-                }
+                if (error) logErrores.push(`Error Actualizando Stats de ${pj}: ` + error.message);
             }
         }
 
-        return success;
+        if (logErrores.length > 0) {
+            console.error("Super-Log de Errores:", logErrores);
+            return { success: false, errors: logErrores };
+        }
+
+        return { success: true };
 
     } catch (e) {
-        console.error("Error en sincronizarColaBD:", e);
-        return false;
+        console.error("Crash Crítico en sincronizarColaBD:", e);
+        return { success: false, errors: [e.message] };
     }
 }
