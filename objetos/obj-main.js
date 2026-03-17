@@ -26,7 +26,7 @@ window.ejecutarSincronizacion = async () => {
     const btn = document.getElementById('btn-sync-global');
     btn.innerText = "Sincronizando..."; btn.disabled = true;
     
-    if(await sincronizarObjetosBD(estadoUI.colaCambios)) {
+    if(await sincronizarObjetosBD(estadoUI.colaCambios, estadoUI.esAdmin)) {
         estadoUI.colaCambios = {}; 
         guardar();
         
