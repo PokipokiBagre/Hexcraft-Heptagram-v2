@@ -598,14 +598,26 @@ window.ejecutarCreacionNPC = async () => {
 
 window.borrarPersonaje = async (nombre, event) => {
     if(event) event.stopPropagation();
-    if(confirm(`⚠️ ADVERTENCIA CRÍTICA ⚠️\\n\\n¿Estás absolutamente seguro de que deseas DESTRUIR a [${nombre.toUpperCase()}] de la base de datos?\\n\\nEsta acción es irreversible y borrará sus stats de la existencia.`)) {
+    const p = statsGlobal[nombre];
+    if (!estadoUI.esAdmin && p?.isPlayer) {
+        return alert("Solo el Máster puede eliminar personajes jugadores.");
+    }
+    const msg = estadoUI.esAdmin
+        ? `⚠️ ADVERTENCIA CRÍTICA ⚠️\n\n¿Estás absolutamente seguro de que deseas DESTRUIR a [${nombre.toUpperCase()}] de la base de datos?\n\nEsta acción borrará sus stats, hechizos e inventario de objetos.`
+        : `¿Eliminar al NPC [${nombre.toUpperCase()}]?\n\nEsta acción también borrará sus hechizos e inventario.`;
+    if(confirm(msg)) {
         try {
-            const exito = await db.personajes.eliminar(nombre);
-            if (exito) {
-                alert(`El personaje ${nombre} ha sido erradicado de Supabase.`);
+            // Borrado en cascada: hechizos, objetos y personaje en paralelo
+            const [exitoH, exitoO, exitoP] = await Promise.all([
+                supabase.from('hechizos_inventario').delete().eq('personaje_nombre', nombre),
+                supabase.from('inventario_objetos').delete().eq('personaje_nombre', nombre),
+                db.personajes.eliminar(nombre)
+            ]);
+            if (exitoP) {
+                alert(`${nombre} eliminado correctamente junto con su inventario.`);
                 window.location.reload();
             } else {
-                alert("Hubo un problema al intentar eliminar al personaje desde la base de datos.");
+                alert("Hubo un problema al eliminar el personaje de la base de datos.");
             }
         } catch (error) {
             alert("Error crítico al eliminar: " + error.message);
