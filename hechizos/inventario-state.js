@@ -1,6 +1,7 @@
 export let db = {
     personajes: {},
-    hechizos: { nodos: [], nodosOcultos: [], inventario: [], string: [] }
+    hechizos: { nodos: [], nodosOcultos: [], inventario: [], string: [] },
+    colorMap: {}   // { 'Física': '#e2a673', 'Oscura': '#ff526f', ... } — cargado desde hechizos_afinidades
 };
 
 export let estadoUI = {
