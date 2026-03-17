@@ -1,290 +1,102 @@
-import { statsGlobal, listaEstados, estadoUI, dbExtra } from './stats-state.js';
-import { cargarTodoDesdeCSV, procesarTextoCSV, cargarDiccionarioEstados } from './stats-data.js';
-import { dibujarCatalogo, dibujarResumenVisual, dibujarDetalle, dibujarMenuOP, dibujarHexOP, dibujarFormularioCrear, dibujarPanelEdicionOP } from './stats-ui.js';
-import { generarCSVExportacion, descargarArchivoCSV, calcularVidaRojaMax, getMysticBonus } from './stats-logic.js';
-import { hexAuth, supabase } from '../hex-auth.js';
-import { db } from '../hex-db.js';
+import { estadoUI, db } from './inventario-state.js';
+import { inicializarDatos, sincronizarColaBD } from './inventario-data.js'; 
+import { dibujarCatalogo, renderHeaders, dibujarGrimorioGrid, dibujarGestionGrid, dibujarAprendizajeGrid, dibujarCatalogoHechizos, getValInfo } from './inventario-ui.js';
+import { getInventarioCombinado } from './inventario-logic.js';
+import { db as hexDB } from '../hex-db.js';
+import { hexAuth, supabase } from '../hex-auth.js'; 
 
-// ============================================================
-// stats-main.js — VERSIÓN SUPABASE (GUARDADO QUIRÚRGICO)
-// ============================================================
+estadoUI.colaCambios.hexCasts = estadoUI.colaCambios.hexCasts || [];
 
-if (!estadoUI.colaCambios) estadoUI.colaCambios = { stats: {} };
-if (!estadoUI.colaCambios.stats) estadoUI.colaCambios.stats = {};
-if (!estadoUI.hexLog) estadoUI.hexLog = {};
+const textNorm = (str) => str ? str.toString().trim().toLowerCase() : '';
 
-// ============================================================================
-// 1. MOTOR DE RENDERIZADO UNIVERSAL
-// ============================================================================
-window.sincronizarUI = () => {
-    localStorage.setItem('hex_stats_v2', JSON.stringify({ stats: statsGlobal, party: estadoUI.party }));
-    window.actualizarBotonSync();
+window.onload = async () => {
+    let favicon = document.querySelector("link[rel='icon']");
+    if (!favicon) {
+        favicon = document.createElement("link");
+        favicon.rel = "icon";
+        document.head.appendChild(favicon);
+    }
+    favicon.href = `${hexDB.storage.urlBase}/imginterfaz/icon.png`;
 
-    const scrollVentana = window.scrollY;
-
-    if (estadoUI.vistaActual === 'detalle') {
-        const contenedor = document.getElementById('vista-detalle');
-        if (contenedor && !contenedor.classList.contains('oculto')) {
-            const h = contenedor.getBoundingClientRect().height;
-            contenedor.style.minHeight = h + 'px';
-            dibujarDetalle();
-            requestAnimationFrame(() => contenedor.style.minHeight = '');
-        }
-    } else if (estadoUI.vistaActual === 'catalogo') {
-        dibujarCatalogo();
-    } else if (estadoUI.vistaActual === 'resumen') {
-        dibujarResumenVisual();
-    } else if (estadoUI.vistaActual === 'hex' || estadoUI.vistaActual === 'crear') {
-        const sub = document.getElementById('sub-vista-op');
-        if (sub) {
-            sub.innerHTML = estadoUI.vistaActual === 'hex' ? dibujarHexOP() : dibujarFormularioCrear();
-            if (estadoUI.vistaActual === 'hex') updateHexLogText();
-        }
+    const perf = performance.getEntriesByType("navigation")[0];
+    if (perf && perf.type === "reload") {
+        localStorage.removeItem('hex_hechizos_cache');
     }
 
-    const modal = document.getElementById('modal-op');
-    if (modal && !modal.classList.contains('oculto')) {
-        const modalBody = document.getElementById('modal-op-body');
-        if (modalBody) {
-            const scrollModal = modalBody.scrollTop;
-            modalBody.innerHTML = dibujarPanelEdicionOP();
-            modalBody.scrollTop = scrollModal;
-        }
-    }
+    await hexAuth.init();
+    estadoUI.esAdmin = hexAuth.esAdmin();
 
-    const _badge = document.getElementById('hex-session-badge');
-    if (_badge) {
-        if (hexAuth.esAdmin()) {
-            _badge.innerHTML = `<span style="background:#4a004a; color:#d4af37; border:1px dashed #d4af37; padding:8px 14px; border-radius:4px; font-weight:bold; font-family:'Cinzel'; cursor:pointer; font-size:0.85em;" onclick="window.abrirMenuOP()">⚙️ MÁSTER</span>`;
-        } else {
-            _badge.innerHTML = hexAuth.renderStatusBadge();
-        }
-    }
+    const loader = document.getElementById('loader');
+    const barra = document.getElementById('carga-progreso');
 
-    window.scrollTo(0, scrollVentana);
-};
+    const enrutarPorURL = () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const pjQuery = urlParams.get('pj');
+        let hashQuery = window.location.hash.replace('#grimorio-', '');
+        if (hashQuery) hashQuery = decodeURIComponent(hashQuery).replace(/_/g, ' ');
 
-// ============================================================================
-// 2. LÓGICA DE ACTUALIZACIÓN DE ESTADÍSTICAS Y VIDAS
-// ============================================================================
-function recalcularVidas(p, accionMutadora) {
-    const calcFisT = () => (p.afinidadesBase.fisica||0) + (p.hechizos.fisica||0) + (p.hechizosEfecto.fisica||0) + (p.buffs.fisica||0);
-    const preFisBase = p.afinidadesBase.fisica || 0;
-    const preFis = calcFisT();
+        const target = pjQuery || hashQuery;
 
-    const calcMagT = () => ['energetica','espiritual','mando','psiquica'].reduce((acc,k)=>acc+(p.afinidadesBase[k]||0)+(p.hechizos[k]||0)+(p.hechizosEfecto[k]||0)+(p.buffs[k]||0), 0);
-    const preMagBase = ['energetica','espiritual','mando','psiquica'].reduce((acc,k)=>acc+(p.afinidadesBase[k]||0), 0);
-    const preMag = calcMagT();
-
-    accionMutadora();
-
-    const postFisBase = p.afinidadesBase.fisica || 0;
-    const postFis = calcFisT();
-    const postMagBase = ['energetica','espiritual','mando','psiquica'].reduce((acc,k)=>acc+(p.afinidadesBase[k]||0), 0);
-    const postMag = calcMagT();
-
-    const dbFis = Math.floor(postFisBase/2) - Math.floor(preFisBase/2);
-    if(dbFis!==0) p.baseVidaRojaMax = Math.max(0, (p.baseVidaRojaMax||10) + dbFis);
-
-    const dbMag = Math.floor(postMagBase/4) - Math.floor(preMagBase/4);
-    if(dbMag!==0) p.baseVidaAzul = Math.max(0, (p.baseVidaAzul||0) + dbMag);
-
-    const dTf = Math.floor(postFis/2) - Math.floor(preFis/2);
-    if(dTf!==0) p.vidaRojaActual = Math.max(0, (p.vidaRojaActual||0) + dTf);
-
-    const dTm = Math.floor(postMag/4) - Math.floor(preMag/4);
-    if(dTm!==0) p.vidaAzul = Math.max(0, (p.vidaAzul||0) + dTm);
-
-    const fMax = calcularVidaRojaMax(p);
-    if (p.vidaRojaActual > fMax) p.vidaRojaActual = fMax;
-}
-
-window.recalcularBases = () => {
-    const n = estadoUI.personajeSeleccionado; const p = statsGlobal[n]; if(!p) return;
-    if(confirm(`¿Recalcular Corazones Óptimos de ${n.toUpperCase()}?`)) {
-        const fisBase = p.afinidadesBase?.fisica || 0;
-        p.baseVidaRojaMax = 10 + Math.floor(fisBase / 2);
-        p.vidaRojaActual = calcularVidaRojaMax(p); 
-        const magBase = (p.afinidadesBase?.energetica||0) + (p.afinidadesBase?.espiritual||0) + (p.afinidadesBase?.mando||0) + (p.afinidadesBase?.psiquica||0);
-        p.baseVidaAzul = Math.floor(magBase / 4);
-        p.vidaAzul = p.baseVidaAzul; 
-        window.encolarCambio(n); window.sincronizarUI();
-    }
-};
-
-window.modificarBuff       = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; recalcularVidas(p,()=>p.buffs[s]=(p.buffs[s]||0)+c); window.encolarCambio(n); window.sincronizarUI(); };
-window.modBaseTop          = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; recalcularVidas(p,()=>{ const pr=`base${s.charAt(0).toUpperCase()+s.slice(1)}`; p[pr]=Math.max(0,(p[pr]||0)+c); }); window.encolarCambio(n); window.sincronizarUI(); };
-window.modBaseAfin         = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; recalcularVidas(p,()=>p.afinidadesBase[s]=Math.max(0,(p.afinidadesBase[s]||0)+c)); window.encolarCambio(n); window.sincronizarUI(); };
-window.modSpellEffTop      = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; recalcularVidas(p,()=>p.hechizosEfecto[s]=(p.hechizosEfecto[s]||0)+c); window.encolarCambio(n); window.sincronizarUI(); };
-window.modSpellEffAfin     = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; recalcularVidas(p,()=>p.hechizosEfecto[s]=(p.hechizosEfecto[s]||0)+c); window.encolarCambio(n); window.sincronizarUI(); };
-window.modLibre            = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; p[s]=Math.max(0,(p[s]||0)+c); window.encolarCambio(n); window.sincronizarUI(); };
-window.modEstado           = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; p.estados[s]=Math.max(0,(p.estados[s]||0)+c); window.encolarCambio(n); window.sincronizarUI(); };
-window.toggleEstado        = (s)   => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; p.estados[s]=!p.estados[s]; window.encolarCambio(n); window.sincronizarUI(); };
-window.toggleIdentidad     = (pr)  => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; p[pr]=!p[pr]; if(pr==='isPlayer') p.isNPC=!p.isPlayer; window.encolarCambio(n); window.sincronizarUI(); };
-
-window.ejecutarClonacion = (tipo) => {
-    const s = document.getElementById('clon-source'); if(!s) return; const sn = s.value; if(!sn) return alert("Selecciona origen.");
-    const tn = estadoUI.personajeSeleccionado; const orig = statsGlobal[sn]; const dest = statsGlobal[tn];
-    if(!confirm(`¿Clonar de ${sn} hacia ${tn}?`)) return;
-    if (['estados','completo','stats_puros'].includes(tipo)) dest.estados = JSON.parse(JSON.stringify(orig.estados));
-    if (['efectosExtras','completo'].includes(tipo)) { dest.buffs = JSON.parse(JSON.stringify(orig.buffs)); dest.hechizosEfecto = JSON.parse(JSON.stringify(orig.hechizosEfecto||{})); }
-    if (['hex','completo','stats_puros'].includes(tipo)) dest.hex = orig.hex;
-    if (['completo','stats_puros'].includes(tipo)) {
-        dest.vidaRojaActual = orig.vidaRojaActual; dest.baseVidaRojaMax = orig.baseVidaRojaMax; dest.vidaRojaMax = orig.vidaRojaMax;
-        dest.vidaAzul = orig.vidaAzul; dest.baseVidaAzul = orig.baseVidaAzul; dest.guardaDorada = orig.guardaDorada; dest.baseGuardaDorada = orig.baseGuardaDorada;
-        dest.afinidadesBase = JSON.parse(JSON.stringify(orig.afinidadesBase)); dest.afinidades = JSON.parse(JSON.stringify(orig.afinidades));
-        dest.vex = orig.vex; if(tipo==='completo') dest.iconoOverride = orig.iconoOverride || sn;
-    }
-    window.encolarCambio(tn); window.sincronizarUI(); s.value = "";
-};
-
-// ============================================================================
-// 3. SISTEMA DE HEX Y PARTY
-// ============================================================================
-window.modHexInd = (nombre, amount) => {
-    const p = statsGlobal[nombre]; if(!p) return;
-    p.hex = Math.max(0, p.hex + amount);
-    window.addHexLogEntry(nombre, amount, false);
-    window.encolarCambio(nombre); window.sincronizarUI();
-};
-
-window.modHexGlobal = (amount) => {
-    if (!estadoUI.party.some(n => n !== null)) return alert("La Party está vacía.");
-    estadoUI.party.forEach(nombre => {
-        if (nombre && statsGlobal[nombre]) {
-            statsGlobal[nombre].hex = Math.max(0, statsGlobal[nombre].hex + amount);
-            window.addHexLogEntry(nombre, amount, false);
-            window.encolarCambio(nombre);
-        }
-    });
-    window.sincronizarUI();
-};
-
-window.addAsistenciaGlobal = () => {
-    if (!estadoUI.party.some(n => n !== null)) return alert("La Party está vacía.");
-    let leveledUp = [];
-    estadoUI.party.forEach(nombre => {
-        if (nombre && statsGlobal[nombre]) {
-            const p = statsGlobal[nombre];
-            p.asistencia = (p.asistencia || 1) + 1;
-            if (p.asistencia >= 8) {
-                p.asistencia = 1; p.hex += 1000;
-                window.addHexLogEntry(nombre, 1000, true); leveledUp.push(nombre);
-            } else {
-                window.addHexLogEntry(nombre, 0, false);
+        if (target) {
+            const exactMatch = Object.keys(db.personajes).find(k => k.toLowerCase() === target.toLowerCase());
+            if (exactMatch) {
+                window.abrirGrimorio(exactMatch);
+                return;
             }
-            window.encolarCambio(nombre);
         }
-    });
-    if (leveledUp.length > 0) alert(`¡ASISTENCIA MÁXIMA!\n${leveledUp.join(', ')} regresan a Asistencia 1 y ganan +1000 HEX.`);
-    window.sincronizarUI();
-};
+        window.cambiarVista('catalogo');
+    };
 
-// BOTÓN DE ASISTENCIA INDIVIDUAL
-window.modAsistenciaInd = (nombre, amount) => {
-    const p = statsGlobal[nombre]; 
-    if(!p || !p.isPlayer) return;
-    
-    p.asistencia = Math.max(1, (p.asistencia || 1) + amount);
-    
-    window.encolarCambio(nombre);
-    window.sincronizarUI();
-};
-
-window.togglePartyMember = (nombre, isChecked) => {
-    if (isChecked) {
-        // Usuario público solo puede añadir NPCs a la party
-        if (!estadoUI.esAdmin && statsGlobal[nombre]?.isPlayer) {
-            return alert("Solo puedes añadir NPCs a la party en modo público.");
-        }
-        const e = estadoUI.party.indexOf(null);
-        if (e !== -1) estadoUI.party[e] = nombre;
-        else alert("Máximo de 6 alcanzado.");
-    } else {
-        const c = estadoUI.party.indexOf(nombre);
-        if (c !== -1) estadoUI.party[c] = null;
+    const cacheData = localStorage.getItem('hex_hechizos_cache');
+    if(cacheData) {
+        try {
+            const parsed = JSON.parse(cacheData);
+            db.personajes = parsed.personajes; db.hechizos = parsed.hechizos;
+            if(loader) loader.style.display = 'none'; 
+            
+            enrutarPorURL(); 
+            
+            await inicializarDatos(null);
+            localStorage.setItem('hex_hechizos_cache', JSON.stringify({ personajes: db.personajes, hechizos: db.hechizos }));
+            if (estadoUI.vistaActual !== 'catalogo') window.cambiarVista(estadoUI.vistaActual); 
+            return; 
+        } catch(e) { console.warn("Caché obsoleto, recargando..."); }
     }
-    window.sincronizarUI();
-};
-window.vaciarParty = () => { estadoUI.party = [null,null,null,null,null,null]; window.sincronizarUI(); };
-window.establecerPartyActiva = () => {
-    if (!estadoUI.party.some(n => n !== null)) return alert("La Party está vacía.");
-    if(!confirm("¿Marcar a esta Party como los únicos Activos/Jugadores?")) return;
-    Object.keys(statsGlobal).forEach(n => { if (statsGlobal[n].isPlayer) { statsGlobal[n].isActive = false; window.encolarCambio(n); } });
-    estadoUI.party.forEach(n => { if (n && statsGlobal[n]) { statsGlobal[n].isPlayer = true; statsGlobal[n].isNPC = false; statsGlobal[n].isActive = true; window.encolarCambio(n); } });
-    alert("Party actualizada exitosamente.");
-    window.sincronizarUI();
+
+    const ok = await inicializarDatos(barra);
+    if(!ok) { if(loader) loader.innerHTML = "<span style='color:red'>Fallo Crítico al cargar Servidores.</span>"; return; }
+    localStorage.setItem('hex_hechizos_cache', JSON.stringify({ personajes: db.personajes, hechizos: db.hechizos }));
+    setTimeout(() => { 
+        if(loader) loader.style.display = 'none'; 
+        enrutarPorURL(); 
+    }, 400); 
 };
 
-function updateHexLogText() {
-    const textarea = document.getElementById('hex-log-textarea');
-    if (!textarea) return;
-    let finalOutput = "";
-    Object.keys(estadoUI.hexLog).sort().forEach(char => {
-        const log = estadoUI.hexLog[char];
-        const p = statsGlobal[char];
-        if (!p) return;
-        const asisStr = p.isPlayer ? ` (${p.asistencia || 1}/7)` : "";
-        log.order.forEach(actionType => {
-            if (actionType === 'pos' && log.pos.amount >= 0) finalOutput += `${char} +${log.pos.amount} Hex (${log.pos.finalHex})${asisStr}\n`;
-            else if (actionType === 'neg' && log.neg.amount > 0) finalOutput += `${char} -${log.neg.amount} Hex (${log.neg.finalHex})${asisStr}\n`;
-            else if (actionType === 'extra' && log.extra.amount > 0) finalOutput += `${char} +${log.extra.amount} Hex ¡EXTRA! (${log.extra.finalHex})${asisStr}\n`;
-        });
-    });
-    textarea.value = finalOutput;
-    textarea.scrollTop = textarea.scrollHeight;
-}
+window.cambiarVista = (vista) => {
+    estadoUI.vistaActual = vista;
+    document.querySelectorAll('.vista-seccion').forEach(el => el.classList.add('oculto'));
+    const sec = document.getElementById(`c-${vista}`);
+    if(sec) sec.classList.remove('oculto');
+    
+    const btnCat = document.getElementById('btn-nav-catalogo');
+    const btnAll = document.getElementById('btn-nav-all-hechizos');
+    
+    if(btnCat) { if(vista === 'catalogo') btnCat.classList.add('oculto'); else btnCat.classList.remove('oculto'); }
+    if(btnAll) { if(vista === 'catalogo-hechizos') btnAll.classList.add('oculto'); else btnAll.classList.remove('oculto'); }
 
-window.addHexLogEntry = (nombre, amount, isExtra = false) => {
-    const p = statsGlobal[nombre]; if (!p) return;
-    if (!estadoUI.hexLog[nombre]) estadoUI.hexLog[nombre] = { pos: { amount: 0, finalHex: 0 }, neg: { amount: 0, finalHex: 0 }, extra: { amount: 0, finalHex: 0 }, order: [] };
-    const log = estadoUI.hexLog[nombre];
-    if (isExtra) { log.extra.amount += amount; log.extra.finalHex = p.hex; log.order = log.order.filter(k=>k!=='extra'); log.order.push('extra'); }
-    else if (amount > 0) { log.pos.amount += amount; log.pos.finalHex = p.hex; log.order = log.order.filter(k=>k!=='pos'); log.order.push('pos'); }
-    else if (amount < 0) { log.neg.amount += Math.abs(amount); log.neg.finalHex = p.hex; log.order = log.order.filter(k=>k!=='neg'); log.order.push('neg'); }
-    else if (amount === 0) { if (log.order.length === 0) { log.pos.amount = 0; log.pos.finalHex = p.hex; log.order.push('pos'); } }
-};
-window.limpiarHexLog = () => { estadoUI.hexLog = {}; updateHexLogText(); };
-
-// ============================================================================
-// 4. FLUJO DE VENTANAS Y MODALES
-// ============================================================================
-window.abrirModalOP = () => {
-    const modal = document.getElementById('modal-op');
-    const headerText = document.getElementById('modal-header-title');
-    if (modal) {
-        if(headerText) headerText.innerText = `🛠️ MÁSTER: ${estadoUI.personajeSeleccionado.toUpperCase()}`;
-        modal.classList.remove('oculto');
-        const content = document.getElementById('hex-modal-content');
-        content.style.left = ''; content.style.top = '';
-        content.style.position = 'relative'; content.style.transform = 'none';
-        window.sincronizarUI();
-    }
-};
-
-window.cerrarModalOP = () => {
-    const modal = document.getElementById('modal-op');
-    if (modal) modal.classList.add('oculto');
-};
-
-function refrescarVistas() {
-    ['vista-catalogo', 'vista-resumen', 'vista-detalle', 'vista-op'].forEach(id => document.getElementById(id).classList.add('oculto'));
-    window.cerrarModalOP();
-
-    if (estadoUI.vistaActual === 'catalogo') document.getElementById('vista-catalogo').classList.remove('oculto');
-    else if (estadoUI.vistaActual === 'resumen') document.getElementById('vista-resumen').classList.remove('oculto');
-    else if (estadoUI.vistaActual === 'detalle') document.getElementById('vista-detalle').classList.remove('oculto');
+    if (vista === 'catalogo') { dibujarCatalogo(); } 
+    else if (vista === 'catalogo-hechizos') { dibujarCatalogoHechizos(); }
     else {
-        const op = document.getElementById('vista-op');
-        op.classList.remove('oculto');
-        op.innerHTML = dibujarMenuOP();
+        renderHeaders(); 
+        if (vista === 'grimorio') dibujarGrimorioGrid();
+        if (vista === 'gestion') { actualizarTextoLogOP(); dibujarGestionGrid(); }
+        if (vista === 'aprendizaje') dibujarAprendizajeGrid();
+        if (vista === 'casteo') window.generarFilasCasteo();
     }
-    window.sincronizarUI();
-}
+    actualizarBotonSync();
+};
 
-window.mostrarCatalogo = () => { estadoUI.vistaActual = 'catalogo'; refrescarVistas(); window.scrollTo(0,0); };
-window.mostrarResumen  = () => { estadoUI.vistaActual = 'resumen';  refrescarVistas(); window.scrollTo(0,0); };
-window.abrirDetalle    = (nombre) => { estadoUI.personajeSeleccionado = nombre; estadoUI.vistaActual = 'detalle'; refrescarVistas(); window.scrollTo(0,0); };
+window.abrirGrimorio = (pj) => { estadoUI.personajeSeleccionado = pj; estadoUI.filtrosGrimorio = { afinidad: 'Todos', busqueda: '' }; window.cambiarVista('grimorio'); window.scrollTo(0,0); };
 
 window.abrirMenuOP = () => {
     if (estadoUI.esAdmin) {
@@ -293,23 +105,153 @@ window.abrirMenuOP = () => {
     }
 };
 
-// Botón de Gestión público: accesible para todos.
-// Admin → panel completo. Público → solo HEX/Party de NPCs.
 window.abrirGestion = () => {
     estadoUI.vistaActual = 'hex';
     refrescarVistas();
 };
 
 window.mostrarPaginaOP = (subvista) => { estadoUI.vistaActual = subvista; refrescarVistas(); };
-window.setFiltro = (tipo, valor) => { if(tipo==='rol') estadoUI.filtroRol=valor; if(tipo==='act') estadoUI.filtroAct=valor; window.sincronizarUI(); };
 
-// ============================================================================
-// 5. SINCRONIZACIÓN DIRECTA (GUARDADO QUIRÚRGICO DE SUPABASE)
-// ============================================================================
+window.setFiltro = (tipo, valor) => {
+    if(tipo === 'rol') { estadoUI.filtroRol = valor; ['Todos','Jugador','NPC'].forEach(k => document.getElementById('btn-rol-'+k)?.classList.remove('btn-active')); document.getElementById('btn-rol-'+valor)?.classList.add('btn-active'); }
+    if(tipo === 'act') { estadoUI.filtroAct = valor; ['Todos','Activo','Inactivo'].forEach(k => document.getElementById('btn-act-'+k)?.classList.remove('btn-active')); document.getElementById('btn-act-'+valor)?.classList.add('btn-active'); }
+    dibujarCatalogo();
+};
+
+window.aplicarFiltrosGrimorio = () => { estadoUI.filtrosGrimorio.afinidad = document.getElementById('f-grim-afinidad').value; estadoUI.filtrosGrimorio.busqueda = document.getElementById('f-grim-texto').value; dibujarGrimorioGrid(); };
+window.aplicarFiltrosGestion = () => { estadoUI.filtrosGestion.afinidad = document.getElementById('op-f-afinidad').value; estadoUI.filtrosGestion.clase = document.getElementById('op-f-clase').value; estadoUI.filtrosGestion.busqueda = document.getElementById('op-f-texto').value; dibujarGestionGrid(); };
+window.aplicarFiltrosAprendizaje = () => { estadoUI.filtrosAprendizaje.afinidad = document.getElementById('f-apr-afinidad').value; estadoUI.filtrosAprendizaje.clase = document.getElementById('f-apr-clase').value; estadoUI.filtrosAprendizaje.busqueda = document.getElementById('f-apr-texto').value; dibujarAprendizajeGrid(); };
+window.aplicarFiltrosAll = () => { estadoUI.filtrosAll.afinidad = document.getElementById('f-all-afinidad').value; estadoUI.filtrosAll.clase = document.getElementById('f-all-clase').value; estadoUI.filtrosAll.estado = document.getElementById('f-all-estado').value; estadoUI.filtrosAll.busqueda = document.getElementById('f-all-texto').value; dibujarCatalogoHechizos(); };
+
+window.toggleRestarHex = (c) => { estadoUI.restarHexAsignacion = c; };
+window.descargarCSVHex = () => { alert("La exportación a CSV está deshabilitada en la versión de la base de datos en la nube."); };
+window.toggleCastConsumo = (val) => { estadoUI.consumoCast = val; };
+window.toggleCastEfectos = (val) => { estadoUI.efectosCast = val; };
+
+function recalcularEstadisticasPersonaje(pj) {
+    const charData = db.personajes[pj];
+    if (!charData) return;
+
+    const inv = getInventarioCombinado(pj);
+    const todosNodos = [...(db.hechizos.nodos || []), ...(db.hechizos.nodosOcultos || [])];
+    
+    const conteo = { 'Física': 0, 'Energética': 0, 'Espiritual': 0, 'Mando': 0, 'Psíquica': 0, 'Oscura': 0 };
+    inv.forEach(item => {
+        const itemNorm = textNorm(item.Hechizo);
+        const info = todosNodos.find(n => textNorm(n.Nombre) === itemNorm || textNorm(n.ID) === itemNorm) || {};
+        const af = item["Hechizo Afinidad"] || info.Afinidad;
+        if (conteo[af] !== undefined) conteo[af]++;
+    });
+
+    if(!estadoUI.colaCambios.stats) estadoUI.colaCambios.stats = {};
+    if(!estadoUI.colaCambios.stats[pj]) estadoUI.colaCambios.stats[pj] = {};
+
+    const mapAfinBaseDatos = { 
+        'Física': 'hz_fisica', 
+        'Energética': 'hz_energetica', 
+        'Espiritual': 'hz_espiritual', 
+        'Mando': 'hz_mando', 
+        'Psíquica': 'hz_psiquica', 
+        'Oscura': 'hz_oscura' 
+    };
+
+    for (const [af, count] of Object.entries(conteo)) {
+        const dbKey = mapAfinBaseDatos[af];
+        if (dbKey) {
+            estadoUI.colaCambios.stats[pj][dbKey] = count;
+        }
+    }
+}
+
+function restarHexPersonaje(pj, hex) {
+    const charObj = db.personajes[pj];
+    if(!charObj) return;
+    
+    charObj.hex = Math.max(0, (charObj.hex || 0) - hex); 
+    
+    if(!estadoUI.colaCambios.stats) estadoUI.colaCambios.stats = {};
+    if(!estadoUI.colaCambios.stats[pj]) estadoUI.colaCambios.stats[pj] = {};
+    
+    estadoUI.colaCambios.stats[pj].hex = charObj.hex;
+}
+
+function actualizarTextoLogOP() {
+    const textarea = document.getElementById('op-log-textarea'); if(!textarea) return;
+    const pj = estadoUI.personajeSeleccionado; const char = db.personajes[pj];
+    let out = "";
+    
+    estadoUI.logOP.descubiertos.forEach(d => { out += `Hechizo descubierto: ${d}\n`; });
+
+    const cobrados = estadoUI.logOP.aprendidos.filter(a => a.cobrado);
+    const gratuitos = estadoUI.logOP.aprendidos.filter(a => !a.cobrado);
+
+    if(cobrados.length > 0) {
+        const list = cobrados.map(c => c.spell).join(", ");
+        out += `Hechizo aprendido: ${list} -${estadoUI.logOP.hexGastado} Hex (${char ? char.hex : 0})\n`;
+    }
+
+    gratuitos.forEach(g => {
+        out += `${pj} | Hechizo aprendido | ${g.spell}\n`; 
+    });
+
+    textarea.value = out; textarea.scrollTop = textarea.scrollHeight;
+}
+
+window.copiarLogOP = () => { 
+    const t = document.getElementById('op-log-textarea'); 
+    if(t) { t.select(); document.execCommand('copy'); } 
+};
+window.limpiarLogOP = () => { estadoUI.logOP = { descubiertos: [], aprendidos: [], hexGastado: 0 }; actualizarTextoLogOP(); };
+
+window.toggleVisibilidad = (idHechizo, nombreHechizo, nuevoEstado) => {
+    estadoUI.colaCambios.toggleConocido.push({ ID: idHechizo, Nombre: nombreHechizo, Estado: nuevoEstado });
+    
+    const todosNodos = [...(db.hechizos.nodos || []), ...(db.hechizos.nodosOcultos || [])];
+    const info = todosNodos.find(n => n.ID === idHechizo || n.Nombre === nombreHechizo);
+    if (info) info.Conocido = nuevoEstado;
+
+    if(estadoUI.vistaActual === 'gestion') { renderHeaders(); dibujarGestionGrid(); actualizarTextoLogOP(); }
+    else if(estadoUI.vistaActual === 'grimorio') { dibujarGrimorioGrid(); }
+    else if(estadoUI.vistaActual === 'catalogo-hechizos') { dibujarCatalogoHechizos(); }
+    actualizarBotonSync();
+};
+
+window.accionCola = (accion, nombreHechizo, afinidad = '', hex = 0) => {
+    const pj = estadoUI.personajeSeleccionado;
+    const todosNodos = [...(db.hechizos.nodos || []), ...(db.hechizos.nodosOcultos || [])];
+    const info = todosNodos.find(n => n.Nombre === nombreHechizo);
+    
+    if(accion === 'agregar') {
+        const origen = document.getElementById('slicer-origen')?.value || 'OP Admin';
+        estadoUI.colaCambios.agregar.push([pj, nombreHechizo, afinidad, hex, "Normal", origen]);
+        
+        estadoUI.logOP.aprendidos.push({ spell: nombreHechizo, cost: hex, cobrado: estadoUI.restarHexAsignacion });
+        
+        if(estadoUI.restarHexAsignacion) {
+            restarHexPersonaje(pj, hex);
+            estadoUI.logOP.hexGastado += hex;
+        }
+
+        if(info && (!info.Conocido || info.Conocido.toString().trim().toLowerCase() !== 'si')) {
+            estadoUI.colaCambios.toggleConocido.push({ ID: info.ID, Nombre: info.Nombre, Estado: 'si' });
+            info.Conocido = 'si';
+            estadoUI.logOP.descubiertos.push(`${info.ID} - ${info.Nombre}`);
+        }
+
+    } else if (accion === 'quitar') {
+        estadoUI.colaCambios.quitar.push({ Personaje: pj, Hechizo: nombreHechizo });
+    }
+    
+    recalcularEstadisticasPersonaje(pj); 
+    
+    if(estadoUI.vistaActual === 'gestion') { renderHeaders(); dibujarGestionGrid(); actualizarTextoLogOP(); }
+    else if(estadoUI.vistaActual === 'grimorio') { dibujarGrimorioGrid(); }
+    actualizarBotonSync();
+};
+
 window.encolarCambio = (nombre) => {
     try {
         if (!estadoUI.colaCambios.stats[nombre]) estadoUI.colaCambios.stats[nombre] = {};
-        // Solo marcamos que fue modificado
         estadoUI.colaCambios.stats[nombre].__modificado = true;
     } catch(e) { console.error("Error al encolar:", e); }
 };
@@ -334,19 +276,18 @@ window.ejecutarSincronizacion = async () => {
 
     try {
         for (const [nombre, campos] of Object.entries(estadoUI.colaCambios.stats)) {
-            // ── Guard: usuario público solo puede guardar NPCs ──────────────
-            if (!estadoUI.esAdmin && statsGlobal[nombre]?.isPlayer) {
+            if (!estadoUI.esAdmin && db.personajes[nombre]?.isPlayer) {
                 console.warn(`Acceso bloqueado: no se puede guardar al jugador "${nombre}" en modo público.`);
                 continue;
             }
 
             if (campos.__ELIMINAR_PERSONAJE__) {
-                const exito = await db.personajes.eliminar(nombre);
+                const exito = await hexDB.personajes.eliminar(nombre);
                 if (!exito) erroresGlobales.push(`Error borrando a: ${nombre}`);
                 continue;
             }
 
-            const p = statsGlobal[nombre];
+            const p = db.personajes[nombre];
             if (!p) continue;
 
             const hz  = p.hechizos       || {};
@@ -354,78 +295,74 @@ window.ejecutarSincronizacion = async () => {
             const bf  = p.buffs          || {};
             const afB = p.afinidadesBase || {};
 
+            // 🔥 CORRECCIÓN: Stringify a los estados y fallback numérico a todo 🔥
             const payloadSeguro = {
-                // ── Identidad ──────────────────────────────────────────
-                hex:        p.hex        || 0,
-                asistencia: p.asistencia || 1,
-                vex:        p.isPlayer ? 0 : (p.vex || 0),
+                hex:        parseInt(p.hex)        || 0,
+                asistencia: parseInt(p.asistencia) || 1,
+                vex:        p.isPlayer ? 0 : (parseInt(p.vex) || 0),
                 is_active:  p.isActive  ?? true,
                 is_player:  p.isPlayer  ?? false,
                 icono_override: p.iconoOverride || '',
 
-                // ── Vida y defensa (BASE) ───────────────────────────────
-                vida_roja_actual:   p.vidaRojaActual   || 0,
-                base_vida_roja_max: p.baseVidaRojaMax  || 10,
-                base_vida_azul:     p.baseVidaAzul     || 0,
-                base_guarda_dorada: p.baseGuardaDorada || 0,
+                vida_roja_actual:   parseInt(p.vidaRojaActual)   || 0,
+                base_vida_roja_max: parseInt(p.baseVidaRojaMax)  || 10,
+                base_vida_azul:     parseInt(p.baseVidaAzul)     || 0,
+                base_guarda_dorada: parseInt(p.baseGuardaDorada) || 0,
 
-                // ── Ataque (BASE) ───────────────────────────────────────
-                base_dano_rojo:   p.baseDanoRojo   || 0,
-                base_dano_azul:   p.baseDanoAzul   || 0,
-                base_elim_dorada: p.baseElimDorada || 0,
+                base_dano_rojo:   parseInt(p.baseDanoRojo)   || 0,
+                base_dano_azul:   parseInt(p.baseDanoAzul)   || 0,
+                base_elim_dorada: parseInt(p.baseElimDorada) || 0,
 
-                // ── Afinidades BASE ────────────────────────────────────
-                af_fisica:     afB.fisica     || 0,
-                af_energetica: afB.energetica || 0,
-                af_espiritual: afB.espiritual || 0,
-                af_mando:      afB.mando      || 0,
-                af_psiquica:   afB.psiquica   || 0,
-                af_oscura:     afB.oscura     || 0,
+                af_fisica:     parseInt(afB.fisica)     || 0,
+                af_energetica: parseInt(afB.energetica) || 0,
+                af_espiritual: parseInt(afB.espiritual) || 0,
+                af_mando:      parseInt(afB.mando)      || 0,
+                af_psiquica:   parseInt(afB.psiquica)   || 0,
+                af_oscura:     parseInt(afB.oscura)     || 0,
 
-                // ── Bonos de Hechizos (hz_*) ───────────────────────────
-                hz_fisica:     hz.fisica     || 0,
-                hz_energetica: hz.energetica || 0,
-                hz_espiritual: hz.espiritual || 0,
-                hz_mando:      hz.mando      || 0,
-                hz_psiquica:   hz.psiquica   || 0,
-                hz_oscura:     hz.oscura     || 0,
-                hechizo_vida_roja:  hz.vidaRojaMaxExtra  || 0,
-                hechizo_vida_azul:  hz.vidaAzulExtra     || 0,
-                hechizo_guarda:     hz.guardaDoradaExtra || 0,
-                hechizo_dano_rojo:  hz.danoRojo          || 0,
-                hechizo_dano_azul:  hz.danoAzul          || 0,
-                hechizo_elim:       hz.elimDorada        || 0,
+                hz_fisica:     parseInt(hz.fisica)     || 0,
+                hz_energetica: parseInt(hz.energetica) || 0,
+                hz_espiritual: parseInt(hz.espiritual) || 0,
+                hz_mando:      parseInt(hz.mando)      || 0,
+                hz_psiquica:   parseInt(hz.psiquica)   || 0,
+                hz_oscura:     parseInt(hz.oscura)     || 0,
+                
+                hechizo_vida_roja:  parseInt(hz.vidaRojaMaxExtra)  || 0,
+                hechizo_vida_azul:  parseInt(hz.vidaAzulExtra)     || 0,
+                hechizo_guarda:     parseInt(hz.guardaDoradaExtra) || 0,
+                hechizo_dano_rojo:  parseInt(hz.danoRojo)          || 0,
+                hechizo_dano_azul:  parseInt(hz.danoAzul)          || 0,
+                hechizo_elim:       parseInt(hz.elimDorada)        || 0,
 
-                // ── Bonos de Efectos/Alteraciones (ef_*) ───────────────
-                ef_fisica:     ef.fisica     || 0,
-                ef_energetica: ef.energetica || 0,
-                ef_espiritual: ef.espiritual || 0,
-                ef_mando:      ef.mando      || 0,
-                ef_psiquica:   ef.psiquica   || 0,
-                ef_oscura:     ef.oscura     || 0,
-                efecto_vida_roja:  ef.vidaRojaMaxExtra  || 0,
-                efecto_vida_azul:  ef.vidaAzulExtra     || 0,
-                efecto_guarda:     ef.guardaDoradaExtra || 0,
-                efecto_dano_rojo:  ef.danoRojo          || 0,
-                efecto_dano_azul:  ef.danoAzul          || 0,
-                efecto_elim:       ef.elimDorada        || 0,
+                ef_fisica:     parseInt(ef.fisica)     || 0,
+                ef_energetica: parseInt(ef.energetica) || 0,
+                ef_espiritual: parseInt(ef.espiritual) || 0,
+                ef_mando:      parseInt(ef.mando)      || 0,
+                ef_psiquica:   parseInt(ef.psiquica)   || 0,
+                ef_oscura:     parseInt(ef.oscura)     || 0,
+                
+                efecto_vida_roja:  parseInt(ef.vidaRojaMaxExtra)  || 0,
+                efecto_vida_azul:  parseInt(ef.vidaAzulExtra)     || 0,
+                efecto_guarda:     parseInt(ef.guardaDoradaExtra) || 0,
+                efecto_dano_rojo:  parseInt(ef.danoRojo)          || 0,
+                efecto_dano_azul:  parseInt(ef.danoAzul)          || 0,
+                efecto_elim:       parseInt(ef.elimDorada)        || 0,
 
-                // ── Buffs externos/temporales (bf_*) ───────────────────
-                bf_fisica:     bf.fisica     || 0,
-                bf_energetica: bf.energetica || 0,
-                bf_espiritual: bf.espiritual || 0,
-                bf_mando:      bf.mando      || 0,
-                bf_psiquica:   bf.psiquica   || 0,
-                bf_oscura:     bf.oscura     || 0,
-                buff_vida_roja:  bf.vidaRojaMaxExtra  || 0,
-                buff_vida_azul:  bf.vidaAzulExtra     || 0,
-                buff_guarda:     bf.guardaDoradaExtra || 0,
-                buff_dano_rojo:  bf.danoRojo          || 0,
-                buff_dano_azul:  bf.danoAzul          || 0,
-                buff_elim:       bf.elimDorada        || 0,
+                bf_fisica:     parseInt(bf.fisica)     || 0,
+                bf_energetica: parseInt(bf.energetica) || 0,
+                bf_espiritual: parseInt(bf.espiritual) || 0,
+                bf_mando:      parseInt(bf.mando)      || 0,
+                bf_psiquica:   parseInt(bf.psiquica)   || 0,
+                bf_oscura:     parseInt(bf.oscura)     || 0,
+                
+                buff_vida_roja:  parseInt(bf.vidaRojaMaxExtra)  || 0,
+                buff_vida_azul:  parseInt(bf.vidaAzulExtra)     || 0,
+                buff_guarda:     parseInt(bf.guardaDoradaExtra) || 0,
+                buff_dano_rojo:  parseInt(bf.danoRojo)          || 0,
+                buff_dano_azul:  parseInt(bf.danoAzul)          || 0,
+                buff_elim:       parseInt(bf.elimDorada)        || 0,
 
-                // ── Estados (JSON) ─────────────────────────────────────
-                estados: p.estados || {}
+                estados: p.estados ? JSON.parse(JSON.stringify(p.estados)) : {}
             };
 
             const { error } = await supabase
@@ -440,7 +377,7 @@ window.ejecutarSincronizacion = async () => {
         }
 
         if (erroresGlobales.length > 0) {
-            alert("⚠️ Supabase rechazó la operación:\\n\\n" + erroresGlobales.join('\\n'));
+            alert("⚠️ Supabase rechazó la operación:\n\n" + erroresGlobales.join('\n'));
             btn.innerText = "Reintentar Guardado";
             btn.disabled = false;
         } else {
@@ -453,7 +390,7 @@ window.ejecutarSincronizacion = async () => {
         }
 
     } catch(e) {
-        alert("Error crítico al guardar:\\n" + e.message);
+        alert("Error crítico al guardar:\n" + e.message);
         console.error(e);
         btn.innerText = "Reintentar Guardado";
         btn.disabled = false;
@@ -461,260 +398,347 @@ window.ejecutarSincronizacion = async () => {
     }
 };
 
-// ============================================================================
-// 6. UTILIDADES
-// ============================================================================
-window.copySilently = (texto, event) => {
-    try {
-        if(event) { event.preventDefault(); event.stopPropagation(); }
-        navigator.clipboard.writeText(texto);
-        const tooltip = document.createElement('div');
-        tooltip.innerText = "✨ Copiado!";
-        tooltip.className = 'floating-tooltip';
-        tooltip.style.left = event.pageX + 'px';
-        tooltip.style.top = (event.pageY - 20) + 'px';
-        document.body.appendChild(tooltip);
-        setTimeout(() => tooltip.remove(), 600);
-    } catch (e) {}
+window.copiarLogCasteo = () => { 
+    const t = document.getElementById('log-casteo-textarea'); 
+    if(t) { t.select(); document.execCommand('copy'); } 
+};
+window.limpiarLogCasteo = () => { 
+    const t = document.getElementById('log-casteo-textarea'); 
+    if(t) t.value = ''; 
 };
 
-const dragHeader = document.getElementById('modal-drag-header');
-const modalContent = document.getElementById('hex-modal-content');
-let isDragging = false, startX, startY, initialX, initialY;
-if (dragHeader && modalContent) {
-    dragHeader.onmousedown = (e) => {
-        isDragging = true; startX = e.clientX; startY = e.clientY;
-        const rect = modalContent.getBoundingClientRect();
-        modalContent.style.position = 'absolute'; modalContent.style.left = rect.left+'px'; modalContent.style.top = rect.top+'px'; modalContent.style.transform = 'none'; modalContent.style.margin = '0';
-        initialX = rect.left; initialY = rect.top; e.preventDefault();
-    };
-    window.onmousemove = (e) => { if (!isDragging) return; modalContent.style.left=(initialX+(e.clientX-startX))+'px'; modalContent.style.top=(initialY+(e.clientY-startY))+'px'; };
-    window.onmouseup = () => { isDragging = false; };
-}
-
-// window.descargarAumentada eliminado — funcionalidad CSV obsoleta
-
-// ============================================================================
-// 7. CREACIÓN Y BORRADO DIRECTO EN SUPABASE
-// ============================================================================
-window.toggleCrearRol = () => { const btn=document.getElementById('btn-crear-rol'); if(btn.dataset.val==='npc'){btn.dataset.val='jugador';btn.innerText='🎭 ROL: JUGADOR';btn.style.background='#003300';btn.style.borderColor='#00e676';}else{btn.dataset.val='npc';btn.innerText='🎭 ROL: NPC';btn.style.background='#330000';btn.style.borderColor='#ff1744';} };
-window.toggleCrearAct = () => { const btn=document.getElementById('btn-crear-act'); if(btn.dataset.val==='activo'){btn.dataset.val='inactivo';btn.innerText='🌟 ESTADO: INACTIVO';btn.style.background='#330000';btn.style.borderColor='#ff1744';}else{btn.dataset.val='activo';btn.innerText='🌟 ESTADO: ACTIVO';btn.style.background='#003300';btn.style.borderColor='#00e676';} };
-window.updateCreationAfinitySum = () => {
-    const gv = (id) => parseInt(document.getElementById(id)?.value) || 0;
-    const fis = gv('npc-fis');
-    const ene = gv('npc-ene');
-    const esp = gv('npc-esp');
-    const man = gv('npc-man');
-    const psi = gv('npc-psi');
-    const osc = gv('npc-osc');
-    const suma = fis + ene + esp + man + psi + osc;
-
-    // Cálculos derivados (misma lógica que calcularVidaRojaMax / calcularVexMax)
-    const vidaRoja  = 10 + Math.floor(fis / 2);
-    const vidaAzul  = Math.floor((ene + esp + man + psi) / 4);
-    const vexMax    = Math.round((osc * 300) / 4 / 50) * 50;
-
-    const d = document.getElementById('creation-affinity-sum-display');
-    if (d) d.innerHTML =
-        `<span style="color:#aaa; font-size:0.85em;">Total Afinidades:</span> <strong>${suma}</strong>`
-        + `<div style="display:flex; justify-content:center; gap:20px; margin-top:8px; font-size:0.9em; flex-wrap:wrap;">`
-        + `<span>❤️ Vida Roja: <b style="color:#ff4444;">${vidaRoja}</b></span>`
-        + `<span>💙 Vida Azul: <b style="color:#4a90e2;">${vidaAzul}</b></span>`
-        + `<span>🔮 VEX Máx: <b style="color:#b3a0ff;">${vexMax}</b></span>`
-        + `</div>`;
-
-    // También actualiza los inputs de vitalidad si el usuario no los ha tocado manualmente
-    const vrActual = document.getElementById('npc-vra');
-    const vrMax    = document.getElementById('npc-vrm');
-    const va       = document.getElementById('npc-va');
-    if (vrActual && vrActual.dataset.manual !== 'true') vrActual.value = vidaRoja;
-    if (vrMax    && vrMax.dataset.manual    !== 'true') vrMax.value    = vidaRoja;
-    if (va       && va.dataset.manual       !== 'true') va.value       = vidaAzul;
-};
-window.modForm = (inputId, cantidad) => {
-    const input = document.getElementById(inputId);
-    if (input) {
-        input.value = Math.max(0, (parseInt(input.value) || 0) + cantidad);
-        // Marcar como "editado manualmente" para que el auto-cálculo no lo sobreescriba
-        const vidaIds = ['npc-vra', 'npc-vrm', 'npc-va'];
-        if (vidaIds.includes(inputId)) input.dataset.manual = 'true';
-        if (inputId.startsWith('npc-')) window.updateCreationAfinitySum();
+window.scrollCasteo = (e) => {
+    e.preventDefault();
+    const input = document.getElementById('cast-num');
+    if(!input) return;
+    let val = parseInt(input.value) || 3;
+    if (e.deltaY < 0) val++; 
+    else val--;              
+    
+    val = Math.max(1, Math.min(50, val));
+    if(input.value != val) {
+        input.value = val;
+        window.generarFilasCasteo();
     }
 };
 
-window.ejecutarCreacionNPC = async () => {
-    const btn = document.querySelector('button[onclick="window.ejecutarCreacionNPC()"]');
-    const txtOriginal = btn ? btn.innerText : 'FORJAR';
-    if (btn) { btn.innerText = '⏳ FORJANDO EN SUPABASE...'; btn.disabled = true; }
-
-    try {
-        const nombre = document.getElementById('npc-nombre').value.trim(); 
-        if(!nombre) { alert("Falta el nombre."); if(btn){btn.innerText=txtOriginal; btn.disabled=false;} return; }
-        if(statsGlobal[nombre]) { alert("Ya existe un personaje con ese nombre."); if(btn){btn.innerText=txtOriginal; btn.disabled=false;} return; }
-        
-        const pV = (id) => parseInt(document.getElementById(id)?.value) || 0;
-        let stInit = {}; listaEstados.forEach(e => { stInit[e.id] = (e.tipo==='numero') ? 0 : false; });
-        
-        const isPlayer = document.getElementById('btn-crear-rol').dataset.val === 'jugador';
-        const isActive = document.getElementById('btn-crear-act').dataset.val === 'activo';
-
-        const nuevoPJ = {
-            nombre: nombre,
-            is_player: isPlayer,
-            is_active: isActive,
-            icono_override: "",
-            hex: pV('npc-hex'),
-            asistencia: 1,
-            vex: pV('npc-vex'),
-            vida_roja_actual: pV('npc-vra'),
-            base_vida_roja_max: pV('npc-vrm'),
-            base_vida_azul: pV('npc-va'),
-            base_guarda_dorada: pV('npc-gd'),
-            base_dano_rojo: pV('npc-dr'),
-            base_dano_azul: pV('npc-da'),
-            base_elim_dorada: pV('npc-ed'),
-            af_fisica: pV('npc-fis'),
-            af_energetica: pV('npc-ene'),
-            af_espiritual: pV('npc-esp'),
-            af_mando: pV('npc-man'),
-            af_psiquica: pV('npc-psi'),
-            af_oscura: pV('npc-osc'),
-            estados: stInit
-        };
-
-        const exito = await db.personajes.upsert(nuevoPJ);
-
-        if (exito) {
-            alert('¡Personaje forjado con éxito!');
-            window.location.reload(); 
-        } else {
-            throw new Error("Conexión rechazada por Supabase.");
+window.onGridKeydown = (e, row, col) => {
+    const num = parseInt(document.getElementById('cast-num').value) || 3;
+    
+    if (e.key === 'Tab' && col === 1) {
+        const input = document.getElementById(`spell-${row}`);
+        const val = input.value.toLowerCase();
+        if (val) {
+            const pj = estadoUI.personajeSeleccionado;
+            const invReal = db.hechizos.inventario.filter(i => i.Personaje === pj).map(i => i.Hechizo);
+            invReal.sort((a, b) => a.localeCompare(b)); 
+            
+            const match = invReal.find(h => h.toLowerCase().startsWith(val));
+            if (match && match.toLowerCase() !== val) {
+                e.preventDefault(); 
+                input.value = match; 
+                window.actualizarAfinidadCasteo(row); 
+                document.getElementById(`afinidad-${row}`)?.focus(); 
+                return;
+            }
         }
-    } catch (error) {
-        alert("Error al forjar: " + error.message);
-        if(btn) { btn.innerText = txtOriginal; btn.disabled = false; }
+    }
+
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault(); 
+        let nextRow = e.key === 'ArrowUp' ? Math.max(0, row - 1) : Math.min(num - 1, row + 1);
+        const mapCol = {0: 'dado', 1: 'spell', 2: 'afinidad'};
+        document.getElementById(`${mapCol[col]}-${nextRow}`)?.focus();
+    } 
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const target = e.target;
+        let shouldMove = false;
+        
+        if (target.type === 'number') {
+            shouldMove = true; 
+        } else if (target.type === 'text') {
+            if (e.key === 'ArrowLeft' && target.selectionStart === 0) shouldMove = true;
+            if (e.key === 'ArrowRight' && target.selectionEnd === target.value.length) shouldMove = true;
+        }
+
+        if (shouldMove) {
+            e.preventDefault();
+            const mapCol = {0: 'dado', 1: 'spell', 2: 'afinidad'};
+            let nextCol = e.key === 'ArrowLeft' ? Math.max(0, col - 1) : Math.min(2, col + 1);
+            document.getElementById(`${mapCol[nextCol]}-${row}`)?.focus();
+        }
     }
 };
 
-window.borrarPersonaje = async (nombre, event) => {
-    if(event) event.stopPropagation();
-    const p = statsGlobal[nombre];
-    if (!estadoUI.esAdmin && p?.isPlayer) {
-        return alert("Solo el Máster puede eliminar personajes jugadores.");
+window.generarFilasCasteo = () => {
+    const contenedor = document.getElementById('casteo-filas');
+    if (!contenedor) return;
+    const num = parseInt(document.getElementById('cast-num').value) || 3;
+    const pj = estadoUI.personajeSeleccionado;
+    
+    const invReal = db.hechizos.inventario.filter(i => i.Personaje === pj).map(i => i.Hechizo);
+    if(invReal.length === 0) {
+        contenedor.innerHTML = `<p style="color:#ff4444; text-align:center; padding:20px;">El personaje no tiene hechizos para lanzar.</p>`;
+        return;
     }
-    const msg = estadoUI.esAdmin
-        ? `⚠️ ADVERTENCIA CRÍTICA ⚠️\n\n¿Estás absolutamente seguro de que deseas DESTRUIR a [${nombre.toUpperCase()}] de la base de datos?\n\nEsta acción borrará sus stats, hechizos e inventario de objetos.`
-        : `¿Eliminar al NPC [${nombre.toUpperCase()}]?\n\nEsta acción también borrará sus hechizos e inventario.`;
-    if(confirm(msg)) {
-        try {
-            // Calcular el key normalizado de la imagen (misma lógica que el resto del proyecto)
-            const norm = (str) => str.toString().trim().toLowerCase()
-                .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
-                .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
-                .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n')
-                .replace(/\s+/g,'_').replace(/[^a-z0-9_\-]/g,'');
-            const iconoKey = norm(p?.iconoOverride || nombre) + 'icon';
 
-            // Borrado en cascada: hechizos, objetos, imágenes y personaje en paralelo
-            const [, , exitoP] = await Promise.all([
-                supabase.from('hechizos_inventario').delete().eq('personaje_nombre', nombre),
-                supabase.from('inventario_objetos').delete().eq('personaje_nombre', nombre),
-                db.personajes.eliminar(nombre),
-                // Borrar imágenes del bucket (PNG y JPG)
-                supabase.storage.from('imagenes-hex').remove([
-                    `imgpersonajes/${iconoKey}.png`,
-                    `imgpersonajes/${iconoKey}.jpg`
-                ])
-            ]);
-            if (exitoP) {
-                alert(`${nombre} eliminado correctamente junto con su inventario.`);
-                window.location.reload();
+    invReal.sort((a, b) => a.localeCompare(b));
+    let datalistHtml = `<datalist id="spells-list-${pj}">`;
+    invReal.forEach(h => datalistHtml += `<option value="${h}">`);
+    datalistHtml += `</datalist>`;
+
+    let html = datalistHtml;
+    for(let i=0; i<num; i++) {
+        html += `
+        <div class="casteo-row" id="row-${i}">
+            <div class="casteo-input-group" style="flex: 0.5;">
+                <label style="color:var(--gold); font-size:0.8em;">DADO (1-100)</label>
+                <div style="display:flex; gap:5px;">
+                    <button onclick="window.lanzarDado(${i})" class="dice-btn" title="Lanzar Dado">🎲</button>
+                    <input type="number" id="dado-${i}" class="input-casteo" placeholder="0" min="1" max="100" onkeydown="window.onGridKeydown(event, ${i}, 0)">
+                </div>
+            </div>
+            <div class="casteo-input-group" style="flex: 2;">
+                <label style="color:var(--gold); font-size:0.8em;">BUSCAR HECHIZO</label>
+                <input type="text" list="spells-list-${pj}" id="spell-${i}" class="input-casteo" placeholder="Escribe o selecciona..." onchange="window.actualizarAfinidadCasteo(${i})" onkeydown="window.onGridKeydown(event, ${i}, 1)">
+            </div>
+            <div class="casteo-input-group" style="flex: 0.8;">
+                <label style="color:var(--gold); font-size:0.8em;" id="afinidad-label-${i}">AFINIDAD</label>
+                <input type="number" id="afinidad-${i}" class="input-casteo" value="0" onkeydown="window.onGridKeydown(event, ${i}, 2)">
+            </div>
+            <div class="casteo-result" id="result-${i}">
+                <span style="color:#888; text-align:center; font-style:italic;">Esperando conjuro...</span>
+            </div>
+        </div>`;
+    }
+    contenedor.innerHTML = html;
+};
+
+window.lanzarDado = (idx) => {
+    const input = document.getElementById(`dado-${idx}`);
+    if (input) input.value = Math.floor(Math.random() * 100) + 1;
+};
+
+window.actualizarAfinidadCasteo = (idx) => {
+    const pj = estadoUI.personajeSeleccionado;
+    const charData = db.personajes[pj];
+    const spellName = document.getElementById(`spell-${idx}`).value;
+    
+    const todosNodos = [...(db.hechizos.nodos || []), ...(db.hechizos.nodosOcultos || [])];
+    const info = todosNodos.find(n => n.Nombre.trim().toLowerCase() === spellName.trim().toLowerCase());
+    
+    const label = document.getElementById(`afinidad-label-${idx}`);
+    const input = document.getElementById(`afinidad-${idx}`);
+    
+    if (info && info.Afinidad) {
+        label.innerText = info.Afinidad.toUpperCase();
+        
+        let afiVal = 0;
+        if(charData && charData.afinidades) {
+            const keyAfMap = {
+                'Física': 'fisica',
+                'Energética': 'energetica',
+                'Espiritual': 'espiritual',
+                'Mando': 'mando',
+                'Psíquica': 'psiquica',
+                'Oscura': 'oscura'
+            };
+            const keyReal = keyAfMap[info.Afinidad];
+            if(keyReal && charData.afinidades[keyReal]) {
+                afiVal = charData.afinidades[keyReal];
+            }
+        }
+        input.value = afiVal;
+    } else {
+        label.innerText = "AFINIDAD";
+        input.value = 0;
+    }
+};
+
+window.copiarPrimerHechizo = () => {
+    const num = parseInt(document.getElementById('cast-num').value) || 3;
+    const baseSpell = document.getElementById(`spell-0`)?.value;
+    if (!baseSpell) return;
+    for(let i=1; i<num; i++) {
+        const input = document.getElementById(`spell-${i}`);
+        if(input) { input.value = baseSpell; window.actualizarAfinidadCasteo(i); }
+    }
+};
+
+window.copiarPrimerDado = () => {
+    const num = parseInt(document.getElementById('cast-num').value) || 3;
+    const baseDado = document.getElementById(`dado-0`)?.value;
+    if (!baseDado) return;
+    for(let i=1; i<num; i++) {
+        const input = document.getElementById(`dado-${i}`);
+        if(input) input.value = baseDado;
+    }
+};
+
+window.conjurarHechizos = () => {
+    const num = parseInt(document.getElementById('cast-num').value) || 3;
+    const pj = estadoUI.personajeSeleccionado;
+    const charData = db.personajes[pj];
+    const todosNodos = [...(db.hechizos.nodos || []), ...(db.hechizos.nodosOcultos || [])];
+    
+    const afOscura = charData.afinidades?.oscura || 0;
+    const maxVex = Math.round(((afOscura * 300) / 4) / 50) * 50;
+    
+    let availableVex = maxVex;
+    let availableHex = charData.hex || 0;
+
+    let totalVexConsumed = 0;
+    let totalHexConsumed = 0;
+    
+    let agrupacionLogs = {};
+    let conjurosRealizados = 0;
+
+    for(let i=0; i<num; i++) {
+        const dadoVal = parseInt(document.getElementById(`dado-${i}`).value);
+        const afinVal = parseInt(document.getElementById(`afinidad-${i}`).value) || 0;
+        const spellName = document.getElementById(`spell-${i}`).value;
+        const resDiv = document.getElementById(`result-${i}`);
+        const rowDiv = document.getElementById(`row-${i}`);
+
+        if(!spellName) continue; 
+        if(isNaN(dadoVal) || dadoVal <= 0) {
+            resDiv.innerHTML = `<span style="color:#ff4444;">Falta valor de Dado.</span>`;
+            rowDiv.style.borderColor = "#ff4444";
+            continue;
+        }
+
+        const spellNorm = spellName.trim().toLowerCase();
+        const info = todosNodos.find(n => (n.Nombre && n.Nombre.trim().toLowerCase() === spellNorm) || (n.ID && n.ID.trim().toLowerCase() === spellNorm));
+        if(!info) { resDiv.innerHTML = "Hechizo no encontrado."; continue; }
+
+        const hexCost = parseInt(info.HEX) || 0;
+        const NC = dadoVal * afinVal;
+        conjurosRealizados++;
+        
+        const checkColaVis = estadoUI.colaCambios.toggleConocido.slice().reverse().find(c => c.ID === info.ID || c.Nombre === info.Nombre);
+        const isPublicBase = info.Conocido && info.Conocido.toString().trim().toLowerCase() === 'si';
+        const isKnown = checkColaVis ? (checkColaVis.Estado === 'si') : isPublicBase;
+        
+        const isHidden = !estadoUI.esAdmin && !isKnown;
+
+        let effect = getValInfo(info, ['efecto', 'Efecto']) || 'Ningún efecto base.';
+        let over = getValInfo(info, ['overcast 100%', 'overcast']);
+        let under = getValInfo(info, ['undercast 50%', 'undercast']);
+        let esp = getValInfo(info, ['especial', 'especiales']);
+
+        if (isHidden) {
+            effect = '<i style="color:#888;">Efecto desconocido (Hechizo sellado).</i>';
+            over = over ? '<i style="color:#888;">Efecto oculto.</i>' : null;
+            under = under ? '<i style="color:#888;">Efecto oculto.</i>' : null;
+            esp = esp ? '<i style="color:#888;">Efecto oculto.</i>' : null;
+        }
+
+        let htmlUI = `<div style="margin-bottom:5px;"><strong>Nivel de Casteo: <span style="font-size:1.2em; color:white;">${NC}</span></strong> <span style="color:#aaa; font-size:0.8em;">(Costo: ${hexCost})</span></div>`;
+        let logStatus = "";
+        let logExtra = "";
+        let isSuccess = false;
+
+        if ((availableVex + availableHex) < hexCost) {
+            htmlUI += `<div style="color:#ff4444; font-weight:bold; font-size:1.1em; margin-bottom:5px;">FALLO ❌ (Falta de Hex/Vex)</div>`;
+            rowDiv.style.borderColor = "#ff4444";
+            logStatus = "FALLO (Sin energía)";
+            isSuccess = false;
+        } else {
+            if (NC >= hexCost * 2 && over) {
+                htmlUI += `<div style="color:var(--gold); font-weight:bold; font-size:1.1em; margin-bottom:5px;">¡OVERCAST! ✨</div>
+                         <div style="color:var(--cyan-magic); margin-bottom:5px;">${effect}</div>
+                         <div style="color:var(--gold);"><strong>Efecto Overcast:</strong> ${over}</div>`;
+                if(esp) htmlUI += `<div style="color:#dcb1f0; margin-top:5px;"><strong>Especial:</strong> ${esp}</div>`;
+                rowDiv.style.borderColor = "var(--gold)";
+                logStatus = "ÉXITO (+Overcast)";
+                logExtra = ` | Efecto Overcast: ${over}${esp ? ' | Especial: ' + esp : ''}`;
+                isSuccess = true;
+                
+            } else if (NC >= hexCost) {
+                htmlUI += `<div style="color:var(--cyan-magic); font-weight:bold; font-size:1.1em; margin-bottom:5px;">¡ÉXITO! ✔️</div>
+                         <div style="color:var(--cyan-magic);">${effect}</div>`;
+                if(esp) htmlUI += `<div style="color:#dcb1f0; margin-top:5px;"><strong>Especial:</strong> ${esp}</div>`;
+                rowDiv.style.borderColor = "var(--cyan-magic)";
+                logStatus = "ÉXITO";
+                logExtra = esp ? ` | Especial: ${esp}` : '';
+                isSuccess = true;
+                
+            } else if (NC >= hexCost * 0.5 && under) {
+                htmlUI += `<div style="color:#ffaa00; font-weight:bold; font-size:1.1em; margin-bottom:5px;">UNDERCAST ⚠️</div>
+                         <div style="color:#888; text-decoration:line-through; margin-bottom:5px;">${effect}</div>
+                         <div style="color:#ffaa00;"><strong>Efecto Parcial:</strong> ${under}</div>`;
+                rowDiv.style.borderColor = "#ffaa00";
+                logStatus = "ÉXITO (-Undercast)";
+                logExtra = ` | Efecto Parcial: ${under}`;
+                isSuccess = true;
+                
             } else {
-                alert("Hubo un problema al eliminar el personaje de la base de datos.");
+                htmlUI += `<div style="color:#ff4444; font-weight:bold; font-size:1.1em; margin-bottom:5px;">FALLO ❌</div>`;
+                rowDiv.style.borderColor = "#ff4444";
+                logStatus = "FALLO";
+                isSuccess = false;
             }
-        } catch (error) {
-            alert("Error crítico al eliminar: " + error.message);
-        }
-    }
-};
 
-// ============================================================================
-// 8. INICIO
-// ============================================================================
-async function iniciar() {
-    try {
-        const favicon = document.querySelector("link[rel='icon']");
-        if (favicon) favicon.href = `${db.storage.urlBase}/imginterfaz/icon.png`;
+            if (isSuccess) {
+                let costoRestante = hexCost;
+                
+                let consumoVexAca = Math.min(availableVex, costoRestante);
+                availableVex -= consumoVexAca;
+                totalVexConsumed += consumoVexAca;
+                costoRestante -= consumoVexAca;
 
-        if (performance.getEntriesByType("navigation")[0]?.type === "reload") localStorage.removeItem('hex_stats_v2');
-
-        await hexAuth.init();
-
-        if (hexAuth.estaLogueado() && !hexAuth.esAdmin()) {
-            try {
-                const { data: { user } } = await supabase.auth.getUser();
-                if (user) {
-                    const { data: perfil } = await supabase.from('perfiles_usuario').select('rol, personaje_nombre').eq('id', user.id).single();
-                    if (perfil) hexAuth._perfil = perfil;
-                }
-            } catch(e) { console.warn('No se pudo cargar perfil:', e); }
-        }
-
-        estadoUI.esAdmin = hexAuth.esAdmin();
-
-        const badge = document.getElementById('hex-session-badge');
-        const actualizarBadge = () => {
-            if (!badge) return;
-            if (hexAuth.esAdmin()) {
-                badge.innerHTML = `<span style="background:#4a004a; color:#d4af37; border:1px dashed #d4af37; padding:8px 14px; border-radius:4px; font-weight:bold; font-family:'Cinzel'; cursor:pointer; font-size:0.85em;" onclick="window.abrirMenuOP()">⚙️ MÁSTER</span>`;
-            } else if (hexAuth.estaLogueado()) {
-                badge.innerHTML = hexAuth.renderStatusBadge();
+                let consumoHexAca = Math.min(availableHex, costoRestante);
+                availableHex -= consumoHexAca;
+                totalHexConsumed += consumoHexAca;
+                costoRestante -= consumoHexAca; 
             }
-        };
-        actualizarBadge();
-
-        const loader = document.getElementById('loader');
-        const barra  = document.getElementById('carga-progreso');
-
-        await cargarDiccionarioEstados();
-
-        const cache = localStorage.getItem('hex_stats_v2');
-        if (!cache) {
-            await cargarTodoDesdeCSV(barra);
-        } else {
-            const parsed = JSON.parse(cache);
-            Object.assign(statsGlobal, parsed.stats);
-            if(parsed.party) estadoUI.party = parsed.party;
-            cargarTodoDesdeCSV(barra); 
         }
+        resDiv.innerHTML = htmlUI;
 
-        if (loader) setTimeout(() => loader.classList.add('oculto'), 500);
-
-        setTimeout(() => {
-            const wasAdmin = estadoUI.esAdmin;
-            estadoUI.esAdmin = hexAuth.esAdmin();
-            if (estadoUI.esAdmin !== wasAdmin) window.sincronizarUI();
-        }, 1500);
-
-        const target = new URLSearchParams(window.location.search).get('pj') || decodeURIComponent(window.location.hash.replace('#detalle-','').replace('#inventario-','').replace(/_/g,' '));
-        if (target) {
-            const exactMatch = Object.keys(statsGlobal).find(k => k.toLowerCase() === target.toLowerCase());
-            if (exactMatch) { estadoUI.personajeSeleccionado = exactMatch; estadoUI.vistaActual = 'detalle'; }
+        const keyGroup = `${spellName}|${logStatus}`;
+        if(!agrupacionLogs[keyGroup]) {
+            agrupacionLogs[keyGroup] = { spell: spellName, count: 0, status: logStatus, effect: effect, extra: logExtra };
         }
-    } catch (error) {
-        console.error("Error crítico:", error);
-    } finally {
-        refrescarVistas();
+        agrupacionLogs[keyGroup].count++;
     }
-}
 
-iniciar();
+    if(conjurosRealizados === 0) return;
 
-window.copiarHexLog = (event) => {
-    const textarea = document.getElementById('hex-log-textarea');
-    if (!textarea) return;
-    navigator.clipboard.writeText(textarea.value).then(() => {
-        const btn = event?.target;
-        if (btn) { const orig = btn.innerText; btn.innerText = '✅ COPIADO'; setTimeout(() => btn.innerText = orig, 1500); }
-    });
+    if (estadoUI.esAdmin) {
+        let textoLog = "";
+        const mostrarEfectos = estadoUI.efectosCast !== false;
+
+        Object.values(agrupacionLogs).forEach(g => {
+            if (g.status.includes("FALLO") || !mostrarEfectos) {
+                textoLog += `${pj} | ${g.spell} x${g.count} | ${g.status}\n`;
+            } else {
+                textoLog += `${pj} | ${g.spell} x${g.count} | ${g.status} | ${g.effect}${g.extra}\n`;
+            }
+        });
+        
+        if(totalVexConsumed > 0 || maxVex > 0) textoLog += `Vex: -${totalVexConsumed} (${maxVex}) (Regenerable)\n`;
+        textoLog += `Hex: -${totalHexConsumed} (${availableHex})\n\n`;
+
+        const textareaElement = document.getElementById('log-casteo-textarea');
+        const oldLog = textareaElement ? textareaElement.value : "";
+        const logFinal = textoLog + oldLog;
+
+        const toggleLog = document.getElementById('toggle-cast-consumo');
+        if (toggleLog && toggleLog.checked && (totalVexConsumed > 0 || totalHexConsumed > 0)) {
+            charData.hex = availableHex;
+            
+            if(!estadoUI.colaCambios.stats) estadoUI.colaCambios.stats = {};
+            if(!estadoUI.colaCambios.stats[pj]) estadoUI.colaCambios.stats[pj] = {};
+            estadoUI.colaCambios.stats[pj].hex = availableHex;
+
+            estadoUI.colaCambios.hexCasts.push(1); 
+            actualizarBotonSync();
+        }
+
+        renderHeaders(); 
+        const newTextarea = document.getElementById('log-casteo-textarea');
+        if(newTextarea) newTextarea.value = logFinal;
+    } else {
+        renderHeaders();
+    }
 };
