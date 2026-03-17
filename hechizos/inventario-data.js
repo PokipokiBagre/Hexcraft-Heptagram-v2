@@ -70,48 +70,60 @@ export async function inicializarDatos(barraProgreso) {
 export async function sincronizarColaBD(cola) {
     let logErrores = [];
     try {
-        // 1. Agregar Hechizos
-        for (const item of cola.agregar) {
-            await supabase.from('hechizos_inventario').delete()
-                .eq('personaje_nombre', item[0])
-                .eq('hechizo_nombre', item[1]);
+        const promesas = [];
 
-            // 🔥 ELIMINAMOS 'origen' DE AQUÍ PORQUE NO EXISTE EN LA TABLA DE SUPABASE 🔥
-            const { error } = await supabase.from('hechizos_inventario').insert({
+        // 1. Agregar Hechizos — upsert en batch en lugar de delete+insert secuencial
+        if (cola.agregar.length > 0) {
+            const registros = cola.agregar.map(item => ({
                 personaje_nombre: item[0],
                 hechizo_nombre:   item[1],
                 hechizo_afinidad: item[2] || '',
                 hechizo_hex:      item[3] || 0,
                 tipo:             item[4] || 'Normal'
-            });
-            if (error) logErrores.push("Error Asignando Hechizo: " + error.message);
+            }));
+            promesas.push(
+                supabase.from('hechizos_inventario')
+                    .upsert(registros, { onConflict: 'personaje_nombre,hechizo_nombre' })
+                    .then(({ error }) => { if (error) logErrores.push("Error Asignando Hechizos: " + error.message); })
+            );
         }
 
-        // 2. Quitar Hechizos
+        // 2. Quitar Hechizos — en paralelo
         for (const item of cola.quitar) {
-            const { error } = await supabase.from('hechizos_inventario').delete()
-                .eq('personaje_nombre', item.Personaje)
-                .eq('hechizo_nombre', item.Hechizo);
-            if (error) logErrores.push("Error Quitando Hechizo: " + error.message);
+            promesas.push(
+                supabase.from('hechizos_inventario').delete()
+                    .eq('personaje_nombre', item.Personaje)
+                    .eq('hechizo_nombre', item.Hechizo)
+                    .then(({ error }) => { if (error) logErrores.push("Error Quitando Hechizo: " + error.message); })
+            );
         }
 
-        // 3. Cambiar Visibilidad del Mapa
-        for (const item of cola.toggleConocido) {
-            const { error } = await supabase.from('hechizos_nodos')
-                .update({ es_conocido: item.Estado === 'si' })
-                .eq('hechizo_id', item.ID);
-            if (error) logErrores.push("Error Visibilidad Mapa: " + error.message);
+        // 3. Visibilidad del Mapa — upsert en batch
+        if (cola.toggleConocido.length > 0) {
+            // Deduplicar: si hay varios toggles del mismo ID, quedarse con el último
+            const mapaVis = {};
+            cola.toggleConocido.forEach(item => { mapaVis[item.ID] = item.Estado === 'si'; });
+            const visUpdates = Object.entries(mapaVis).map(([id, conocido]) =>
+                supabase.from('hechizos_nodos')
+                    .update({ es_conocido: conocido })
+                    .eq('hechizo_id', id)
+                    .then(({ error }) => { if (error) logErrores.push("Error Visibilidad: " + error.message); })
+            );
+            promesas.push(...visUpdates);
         }
 
-        // 4. Actualizar Estadísticas
+        // 4. Estadísticas — en paralelo
         if (cola.stats && Object.keys(cola.stats).length > 0) {
             for (const [pj, cambios] of Object.entries(cola.stats)) {
-                const { error } = await supabase.from('personajes')
-                    .update(cambios)
-                    .eq('nombre', pj);
-                if (error) logErrores.push(`Error Actualizando Stats de ${pj}: ` + error.message);
+                promesas.push(
+                    supabase.from('personajes').update(cambios).eq('nombre', pj)
+                        .then(({ error }) => { if (error) logErrores.push(`Error Stats ${pj}: ` + error.message); })
+                );
             }
         }
+
+        // Ejecutar TODO en paralelo
+        await Promise.all(promesas);
 
         if (logErrores.length > 0) {
             console.error("Super-Log de Errores:", logErrores);
