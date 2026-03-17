@@ -114,8 +114,11 @@ export function dibujarCatalogo() {
         const claseInactiva = p.isActive ? '' : 'inactive-card';
         
         let btnEliminar = '';
-        if (estadoUI.esAdmin) {
-            btnEliminar = `<button onclick="window.borrarPersonaje('${nombre}', event)" style="position: absolute; top: 12px; right: 12px; background: rgba(255, 0, 0, 0.1); color: #ff5555; border: 1px solid rgba(255, 0, 0, 0.3); border-radius: 6px; width: 32px; height: 32px; font-size: 1.1em; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; z-index: 10;" onmouseover="this.style.background='#ff0000'; this.style.color='#fff'; this.style.borderColor='#ff0000';" onmouseout="this.style.background='rgba(255, 0, 0, 0.1)'; this.style.color='#ff5555'; this.style.borderColor='rgba(255, 0, 0, 0.3)';" title="Eliminar Personaje">🗑️</button>`;
+        if (estadoUI.esAdmin || p.isNPC) {
+            const estiloBtn = estadoUI.esAdmin
+                ? 'background: rgba(255, 0, 0, 0.1); color: #ff5555; border: 1px solid rgba(255, 0, 0, 0.3);'
+                : 'background: rgba(255, 0, 0, 0.07); color: #ff7777; border: 1px solid rgba(255, 0, 0, 0.2);';
+            btnEliminar = `<button onclick="window.borrarPersonaje('${nombre}', event)" style="position: absolute; top: 12px; right: 12px; ${estiloBtn} border-radius: 6px; width: 32px; height: 32px; font-size: 1.1em; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; z-index: 10;" onmouseover="this.style.background='#ff0000'; this.style.color='#fff'; this.style.borderColor='#ff0000';" onmouseout="this.style.background='rgba(255, 0, 0, 0.1)'; this.style.color='#ff5555'; this.style.borderColor='rgba(255, 0, 0, 0.3)';" title="Eliminar NPC">🗑️</button>`;
         }
 
         html += `
