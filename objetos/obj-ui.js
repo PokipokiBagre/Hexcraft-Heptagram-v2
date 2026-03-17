@@ -16,7 +16,7 @@ function drawnHEXPreserveFocus(containerId, html) {
 }
 
 const raridadValor = { "Legendario": 3, "Raro": 2, "Común": 1, "-": 0 };
-const normalizarNombre = (str) => str ? str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/\s+/g,'_').replace(/[^a-z0-9ñ_]/g,'') : "";
+const normalizarNombre = (str) => str ? str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n').replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'') : "";
 
 // RUTA ÚNICA del fallback — se usa en TODOS los onerror
 const NO_ENCONTRADO = () => `${db.storage.urlBase}/imginterfaz/no_encontrado.png`;
