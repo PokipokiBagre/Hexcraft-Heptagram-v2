@@ -46,7 +46,8 @@ export async function cargarDatos() {
             tipoIcono:  'imgpersonajes',
             urlStorage: `${STORAGE_URL}/imgpersonajes/${key}.png`,
             urlGithub:  `../img/imgpersonajes/${key}.png`,
-            existe:     setPersonajes.has(key)
+            existe:     setPersonajes.has(key),
+            isPlayer:   p.is_player   // ← necesario para distinguir NPC de jugador
         });
     });
 
