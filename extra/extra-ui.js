@@ -49,8 +49,12 @@ export function renderGrid() {
         const btnBorder = item.existe ? '#00ff00' : '#ff4444';
         const safeNombre = item.nombre.replace(/'/g, "\\'");
 
-        // LÓGICA DE PERMISOS: Puede editar si está logueado, o si es la categoría de objetos
-        const puedeEditar = hexAuth.estaLogueado() || item.tipoIcono === 'imgobjetos';
+        // Puede editar si:
+        // - Está logueado (admin o usuario)
+        // - Es la categoría de objetos
+        // - Es un personaje NPC (no jugador)
+        const esNPC = item.tipoIcono === 'imgpersonajes' && item.isPlayer === false;
+        const puedeEditar = hexAuth.estaLogueado() || item.tipoIcono === 'imgobjetos' || esNPC;
 
         // Desactivar el click en la imagen si no tiene permisos
         const clickAction = puedeEditar ? `onclick="window.abrirUpload('${item.keyNorm}','${item.tipoIcono}','${safeNombre}')"` : '';
