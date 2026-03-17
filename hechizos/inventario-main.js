@@ -98,6 +98,18 @@ window.cambiarVista = (vista) => {
 
 window.abrirGrimorio = (pj) => { estadoUI.personajeSeleccionado = pj; estadoUI.filtrosGrimorio = { afinidad: 'Todos', busqueda: '' }; window.cambiarVista('grimorio'); window.scrollTo(0,0); };
 
+// Abre la vista de gestión de hechizos para un NPC — accesible sin ser OP
+window.abrirGestionNPC = (pj) => {
+    const char = db.personajes[pj];
+    if (!char || char.isPlayer) {
+        return alert("Solo se pueden asignar hechizos a NPCs en modo público.");
+    }
+    estadoUI.personajeSeleccionado = pj;
+    estadoUI.filtrosGestion = { afinidad: 'Todos', clase: 'Todos', busqueda: '' };
+    window.cambiarVista('gestion');
+    window.scrollTo(0, 0);
+};
+
 window.abrirMenuOP = () => {
     if (hexAuth.esAdmin()) {
         estadoUI.esAdmin = !estadoUI.esAdmin;
@@ -219,23 +231,29 @@ window.toggleVisibilidad = (idHechizo, nombreHechizo, nuevoEstado) => {
 window.accionCola = (accion, nombreHechizo, afinidad = '', hex = 0) => {
     const pj = estadoUI.personajeSeleccionado;
     const todosNodos = [...(db.hechizos.nodos || []), ...(db.hechizos.nodosOcultos || [])];
-    const info = todosNodos.find(n => n.Nombre === nombreHechizo);
+    const info = todosNodos.find(n => n.Nombre === nombreHechizo || n.ID === nombreHechizo);
     
     if(accion === 'agregar') {
-        const origen = document.getElementById('slicer-origen')?.value || 'OP Admin';
-        estadoUI.colaCambios.agregar.push([pj, nombreHechizo, afinidad, hex, "Normal", origen]);
+        const origen = document.getElementById('slicer-origen')?.value || (estadoUI.esAdmin ? 'OP Admin' : 'Asignación Pública');
+        // Usar el nombre real si está disponible, o el ID si es un hechizo oculto
+        const nombreReal = (info && info.Nombre && info.Nombre.trim() !== '') ? info.Nombre : nombreHechizo;
+        const afinReal   = afinidad || (info?.Afinidad) || '';
+        const hexReal    = hex || parseInt(info?.HEX) || 0;
+        estadoUI.colaCambios.agregar.push([pj, nombreReal, afinReal, hexReal, "Normal", origen]);
         
-        estadoUI.logOP.aprendidos.push({ spell: nombreHechizo, cost: hex, cobrado: estadoUI.restarHexAsignacion });
-        
-        if(estadoUI.restarHexAsignacion) {
-            restarHexPersonaje(pj, hex);
-            estadoUI.logOP.hexGastado += hex;
-        }
-
-        if(info && (!info.Conocido || info.Conocido.toString().trim().toLowerCase() !== 'si')) {
-            estadoUI.colaCambios.toggleConocido.push({ ID: info.ID, Nombre: info.Nombre, Estado: 'si' });
-            info.Conocido = 'si';
-            estadoUI.logOP.descubiertos.push(`${info.ID} - ${info.Nombre}`);
+        if (estadoUI.esAdmin) {
+            // Solo en modo OP: log de aprendizaje y deducción de HEX
+            estadoUI.logOP.aprendidos.push({ spell: nombreReal, cost: hexReal, cobrado: estadoUI.restarHexAsignacion });
+            if (estadoUI.restarHexAsignacion) {
+                restarHexPersonaje(pj, hexReal);
+                estadoUI.logOP.hexGastado += hexReal;
+            }
+            // Auto-descubrir solo en modo OP
+            if (info && (!info.Conocido || info.Conocido.toString().trim().toLowerCase() !== 'si')) {
+                estadoUI.colaCambios.toggleConocido.push({ ID: info.ID, Nombre: info.Nombre, Estado: 'si' });
+                info.Conocido = 'si';
+                estadoUI.logOP.descubiertos.push(`${info.ID} - ${info.Nombre}`);
+            }
         }
 
     } else if (accion === 'quitar') {
@@ -244,7 +262,7 @@ window.accionCola = (accion, nombreHechizo, afinidad = '', hex = 0) => {
     
     recalcularEstadisticasPersonaje(pj); 
     
-    if(estadoUI.vistaActual === 'gestion') { renderHeaders(); dibujarGestionGrid(); actualizarTextoLogOP(); }
+    if(estadoUI.vistaActual === 'gestion') { renderHeaders(); dibujarGestionGrid(); if(estadoUI.esAdmin) actualizarTextoLogOP(); }
     else if(estadoUI.vistaActual === 'grimorio') { dibujarGrimorioGrid(); }
     actualizarBotonSync();
 };
