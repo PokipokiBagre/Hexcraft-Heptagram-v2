@@ -349,28 +349,83 @@ window.ejecutarSincronizacion = async () => {
             const p = statsGlobal[nombre];
             if (!p) continue;
 
+            const hz  = p.hechizos       || {};
+            const ef  = p.hechizosEfecto || {};
+            const bf  = p.buffs          || {};
+            const afB = p.afinidadesBase || {};
+
             const payloadSeguro = {
+                // ── Identidad ──────────────────────────────────────────
                 hex:        p.hex        || 0,
                 asistencia: p.asistencia || 1,
                 vex:        p.isPlayer ? 0 : (p.vex || 0),
-                is_active:  p.isActive,
-                is_player:  p.isPlayer,
-                
-                vida_roja_actual:  p.vidaRojaActual  || 0,
-                base_vida_roja_max: p.baseVidaRojaMax || 10,
-                base_vida_azul:    p.baseVidaAzul   || 0,
+                is_active:  p.isActive  ?? true,
+                is_player:  p.isPlayer  ?? false,
+                icono_override: p.iconoOverride || '',
+
+                // ── Vida y defensa (BASE) ───────────────────────────────
+                vida_roja_actual:   p.vidaRojaActual   || 0,
+                base_vida_roja_max: p.baseVidaRojaMax  || 10,
+                base_vida_azul:     p.baseVidaAzul     || 0,
                 base_guarda_dorada: p.baseGuardaDorada || 0,
-                
-                base_dano_rojo:    p.baseDanoRojo   || 0,
-                base_dano_azul:    p.baseDanoAzul   || 0,
-                base_elim_dorada:  p.baseElimDorada || 0,
-                
-                af_fisica:     p.afinidadesBase?.fisica     || 0,
-                af_energetica: p.afinidadesBase?.energetica || 0,
-                af_espiritual: p.afinidadesBase?.espiritual || 0,
-                af_mando:      p.afinidadesBase?.mando      || 0,
-                af_psiquica:   p.afinidadesBase?.psiquica   || 0,
-                af_oscura:     p.afinidadesBase?.oscura     || 0
+
+                // ── Ataque (BASE) ───────────────────────────────────────
+                base_dano_rojo:   p.baseDanoRojo   || 0,
+                base_dano_azul:   p.baseDanoAzul   || 0,
+                base_elim_dorada: p.baseElimDorada || 0,
+
+                // ── Afinidades BASE ────────────────────────────────────
+                af_fisica:     afB.fisica     || 0,
+                af_energetica: afB.energetica || 0,
+                af_espiritual: afB.espiritual || 0,
+                af_mando:      afB.mando      || 0,
+                af_psiquica:   afB.psiquica   || 0,
+                af_oscura:     afB.oscura     || 0,
+
+                // ── Bonos de Hechizos (hz_*) ───────────────────────────
+                hz_fisica:     hz.fisica     || 0,
+                hz_energetica: hz.energetica || 0,
+                hz_espiritual: hz.espiritual || 0,
+                hz_mando:      hz.mando      || 0,
+                hz_psiquica:   hz.psiquica   || 0,
+                hz_oscura:     hz.oscura     || 0,
+                hechizo_vida_roja:  hz.vidaRojaMaxExtra  || 0,
+                hechizo_vida_azul:  hz.vidaAzulExtra     || 0,
+                hechizo_guarda:     hz.guardaDoradaExtra || 0,
+                hechizo_dano_rojo:  hz.danoRojo          || 0,
+                hechizo_dano_azul:  hz.danoAzul          || 0,
+                hechizo_elim:       hz.elimDorada        || 0,
+
+                // ── Bonos de Efectos/Alteraciones (ef_*) ───────────────
+                ef_fisica:     ef.fisica     || 0,
+                ef_energetica: ef.energetica || 0,
+                ef_espiritual: ef.espiritual || 0,
+                ef_mando:      ef.mando      || 0,
+                ef_psiquica:   ef.psiquica   || 0,
+                ef_oscura:     ef.oscura     || 0,
+                efecto_vida_roja:  ef.vidaRojaMaxExtra  || 0,
+                efecto_vida_azul:  ef.vidaAzulExtra     || 0,
+                efecto_guarda:     ef.guardaDoradaExtra || 0,
+                efecto_dano_rojo:  ef.danoRojo          || 0,
+                efecto_dano_azul:  ef.danoAzul          || 0,
+                efecto_elim:       ef.elimDorada        || 0,
+
+                // ── Buffs externos/temporales (bf_*) ───────────────────
+                bf_fisica:     bf.fisica     || 0,
+                bf_energetica: bf.energetica || 0,
+                bf_espiritual: bf.espiritual || 0,
+                bf_mando:      bf.mando      || 0,
+                bf_psiquica:   bf.psiquica   || 0,
+                bf_oscura:     bf.oscura     || 0,
+                buff_vida_roja:  bf.vidaRojaMaxExtra  || 0,
+                buff_vida_azul:  bf.vidaAzulExtra     || 0,
+                buff_guarda:     bf.guardaDoradaExtra || 0,
+                buff_dano_rojo:  bf.danoRojo          || 0,
+                buff_dano_azul:  bf.danoAzul          || 0,
+                buff_elim:       bf.elimDorada        || 0,
+
+                // ── Estados (JSON) ─────────────────────────────────────
+                estados: p.estados || {}
             };
 
             const { error } = await supabase
