@@ -607,11 +607,24 @@ window.borrarPersonaje = async (nombre, event) => {
         : `¿Eliminar al NPC [${nombre.toUpperCase()}]?\n\nEsta acción también borrará sus hechizos e inventario.`;
     if(confirm(msg)) {
         try {
-            // Borrado en cascada: hechizos, objetos y personaje en paralelo
-            const [exitoH, exitoO, exitoP] = await Promise.all([
+            // Calcular el key normalizado de la imagen (misma lógica que el resto del proyecto)
+            const norm = (str) => str.toString().trim().toLowerCase()
+                .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
+                .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
+                .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n')
+                .replace(/\s+/g,'_').replace(/[^a-z0-9_\-]/g,'');
+            const iconoKey = norm(p?.iconoOverride || nombre) + 'icon';
+
+            // Borrado en cascada: hechizos, objetos, imágenes y personaje en paralelo
+            const [, , exitoP] = await Promise.all([
                 supabase.from('hechizos_inventario').delete().eq('personaje_nombre', nombre),
                 supabase.from('inventario_objetos').delete().eq('personaje_nombre', nombre),
-                db.personajes.eliminar(nombre)
+                db.personajes.eliminar(nombre),
+                // Borrar imágenes del bucket (PNG y JPG)
+                supabase.storage.from('imagenes-hex').remove([
+                    `imgpersonajes/${iconoKey}.png`,
+                    `imgpersonajes/${iconoKey}.jpg`
+                ])
             ]);
             if (exitoP) {
                 alert(`${nombre} eliminado correctamente junto con su inventario.`);
