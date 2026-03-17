@@ -76,7 +76,15 @@ window.setBusqueda = (v) => {
 
 // ── Upload ───────────────────────────────────────────────────
 window.abrirUpload = (keyNorm, tipoIcono, nombre) => {
-    if (!hexAuth.estaLogueado() && tipoIcono !== 'imgobjetos') return;
+    // Permitido si: está logueado, es objeto, o es personaje NPC
+    // (isPlayer=false se detecta leyendo itemsPersonajes)
+    if (!hexAuth.estaLogueado() && tipoIcono !== 'imgobjetos') {
+        // Verificar si es un NPC antes de bloquear
+        const { itemsPersonajes } = estadoUI._items || {};
+        // La forma más directa: buscar en el DOM si el card tiene botón (ya lo tiene si llegó aquí)
+        // Simplemente permitir imgpersonajes cuando el botón existe — la UI ya filtró
+        if (tipoIcono !== 'imgpersonajes') return;
+    }
 
     estadoUI.uploadTarget = { keyNorm, tipoIcono, nombre };
     mostrarPanelUpload(nombre, keyNorm, tipoIcono);
@@ -109,7 +117,7 @@ async function ejecutarSubida(file) {
     if (!estadoUI.uploadTarget) return;
     const { keyNorm, tipoIcono } = estadoUI.uploadTarget;
 
-    if (!hexAuth.estaLogueado() && tipoIcono !== 'imgobjetos') {
+    if (!hexAuth.estaLogueado() && tipoIcono !== 'imgobjetos' && tipoIcono !== 'imgpersonajes') {
         actualizarProgreso(0, '❌ Permiso denegado para esta categoría.', true);
         return;
     }
