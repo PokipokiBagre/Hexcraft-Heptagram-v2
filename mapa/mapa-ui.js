@@ -372,7 +372,7 @@ export function dibujarFrame() {
                 if (estadoMapa.esAdmin) {
                     textoADibujar = `${nodo.nombreOriginal.replace(/\s*\(\d+\)$/, '').trim()} (${nodo.hex})`;
                 } else {
-                    textoADibujar = nodo.id; // Solo el ID tipo "Hechizo 13"
+                    textoADibujar = `${nodo.id} (${nodo.hex})`; // ID enmascarado + costo hex
                 }
             } else {
                 textoADibujar = nodo.nombre;
