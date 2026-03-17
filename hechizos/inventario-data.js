@@ -6,12 +6,19 @@ export async function inicializarDatos(barraProgreso) {
     try {
         if (barraProgreso) barraProgreso.style.width = '30%';
 
-        const [personajesArr, hechizosData] = await Promise.all([
+        const [personajesArr, hechizosData, afinidadesRes] = await Promise.all([
             hexDB.personajes.getAll(),
-            hexDB.hechizos.getDataCompleta()
+            hexDB.hechizos.getDataCompleta(),
+            supabase.from('hechizos_afinidades').select('afinidad, color_t')
         ]);
 
         if (barraProgreso) barraProgreso.style.width = '70%';
+
+        // Poblar el mapa de colores desde la DB
+        for (let k in localDB.colorMap) delete localDB.colorMap[k];
+        if (afinidadesRes.data) {
+            afinidadesRes.data.forEach(a => { localDB.colorMap[a.afinidad] = a.color_t; });
+        }
 
         for (let k in localDB.personajes) delete localDB.personajes[k];
 
