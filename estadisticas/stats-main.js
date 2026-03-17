@@ -6,7 +6,7 @@ import { hexAuth, supabase } from '../hex-auth.js';
 import { db } from '../hex-db.js';
 
 // ============================================================
-// stats-main.js — VERSIÓN SUPABASE (GUARDADO SEGURO)
+// stats-main.js — VERSIÓN SUPABASE (ESTABILIDAD MÁXIMA)
 // ============================================================
 
 if (!estadoUI.colaCambios) estadoUI.colaCambios = { stats: {} };
@@ -189,11 +189,22 @@ window.modAsistenciaInd = (nombre, amount) => {
 };
 
 window.togglePartyMember = (nombre, isChecked) => {
-    if (isChecked) { const e = estadoUI.party.indexOf(null); if (e !== -1) estadoUI.party[e] = nombre; else alert("Máximo de 6 alcanzado."); }
-    else { const c = estadoUI.party.indexOf(nombre); if (c !== -1) estadoUI.party[c] = null; }
+    if (isChecked) {
+        if (!estadoUI.esAdmin && statsGlobal[nombre]?.isPlayer) {
+            return alert("Solo puedes añadir NPCs a la party en modo público.");
+        }
+        const e = estadoUI.party.indexOf(null);
+        if (e !== -1) estadoUI.party[e] = nombre;
+        else alert("Máximo de 6 alcanzado.");
+    } else {
+        const c = estadoUI.party.indexOf(nombre);
+        if (c !== -1) estadoUI.party[c] = null;
+    }
     window.sincronizarUI();
 };
+
 window.vaciarParty = () => { estadoUI.party = [null,null,null,null,null,null]; window.sincronizarUI(); };
+
 window.establecerPartyActiva = () => {
     if (!estadoUI.party.some(n => n !== null)) return alert("La Party está vacía.");
     if(!confirm("¿Marcar a esta Party como los únicos Activos/Jugadores?")) return;
@@ -289,7 +300,7 @@ window.mostrarPaginaOP = (subvista) => { estadoUI.vistaActual = subvista; refres
 window.setFiltro = (tipo, valor) => { if(tipo==='rol') estadoUI.filtroRol=valor; if(tipo==='act') estadoUI.filtroAct=valor; window.sincronizarUI(); };
 
 // ============================================================================
-// 5. SINCRONIZACIÓN DIRECTA (GUARDADO QUIRÚRGICO)
+// 5. SINCRONIZACIÓN CON SUPABASE
 // ============================================================================
 window.encolarCambio = (nombre) => {
     try {
@@ -337,7 +348,6 @@ window.ejecutarSincronizacion = async () => {
             const bf  = p.buffs          || {};
             const afB = p.afinidadesBase || {};
 
-            // 🔥 CORRECCIÓN: Stringify a los estados y parseo estricto numérico 🔥
             const payloadSeguro = {
                 hex:        parseInt(p.hex)        || 0,
                 asistencia: parseInt(p.asistencia) || 1,
@@ -478,8 +488,46 @@ window.descargarAumentada = () => { descargarArchivoCSV(generarCSVExportacion(),
 // ============================================================================
 window.toggleCrearRol = () => { const btn=document.getElementById('btn-crear-rol'); if(btn.dataset.val==='npc'){btn.dataset.val='jugador';btn.innerText='🎭 ROL: JUGADOR';btn.style.background='#003300';btn.style.borderColor='#00e676';}else{btn.dataset.val='npc';btn.innerText='🎭 ROL: NPC';btn.style.background='#330000';btn.style.borderColor='#ff1744';} };
 window.toggleCrearAct = () => { const btn=document.getElementById('btn-crear-act'); if(btn.dataset.val==='activo'){btn.dataset.val='inactivo';btn.innerText='🌟 ESTADO: INACTIVO';btn.style.background='#330000';btn.style.borderColor='#ff1744';}else{btn.dataset.val='activo';btn.innerText='🌟 ESTADO: ACTIVO';btn.style.background='#003300';btn.style.borderColor='#00e676';} };
-window.updateCreationAfinitySum = () => { const s=['fis','ene','esp','man','psi','osc'].reduce((acc,id)=>acc+(parseInt(document.getElementById('npc-'+id)?.value)||0),0); const d=document.getElementById('creation-affinity-sum-display'); if(d) d.innerText=`Total Afinidades: ${s}`; };
-window.modForm = (inputId, cantidad) => { const input=document.getElementById(inputId); if(input){input.value=Math.max(0,(parseInt(input.value)||0)+cantidad); if(inputId.startsWith('npc-')) window.updateCreationAfinitySum();} };
+window.updateCreationAfinitySum = () => {
+    const gv = (id) => parseInt(document.getElementById(id)?.value) || 0;
+    const fis = gv('npc-fis');
+    const ene = gv('npc-ene');
+    const esp = gv('npc-esp');
+    const man = gv('npc-man');
+    const psi = gv('npc-psi');
+    const osc = gv('npc-osc');
+    const suma = fis + ene + esp + man + psi + osc;
+
+    const vidaRoja  = 10 + Math.floor(fis / 2);
+    const vidaAzul  = Math.floor((ene + esp + man + psi) / 4);
+    const vexMax    = Math.round((osc * 300) / 4 / 50) * 50;
+
+    const d = document.getElementById('creation-affinity-sum-display');
+    if (d) d.innerHTML =
+        `<span style="color:#aaa; font-size:0.85em;">Total Afinidades:</span> <strong>${suma}</strong>`
+        + `<div style="display:flex; justify-content:center; gap:20px; margin-top:8px; font-size:0.9em; flex-wrap:wrap;">`
+        + `<span>❤️ Vida Roja: <b style="color:#ff4444;">${vidaRoja}</b></span>`
+        + `<span>💙 Vida Azul: <b style="color:#4a90e2;">${vidaAzul}</b></span>`
+        + `<span>🔮 VEX Máx: <b style="color:#b3a0ff;">${vexMax}</b></span>`
+        + `</div>`;
+
+    const vrActual = document.getElementById('npc-vra');
+    const vrMax    = document.getElementById('npc-vrm');
+    const va       = document.getElementById('npc-va');
+    if (vrActual && vrActual.dataset.manual !== 'true') vrActual.value = vidaRoja;
+    if (vrMax    && vrMax.dataset.manual    !== 'true') vrMax.value    = vidaRoja;
+    if (va       && va.dataset.manual       !== 'true') va.value       = vidaAzul;
+};
+
+window.modForm = (inputId, cantidad) => {
+    const input = document.getElementById(inputId);
+    if (input) {
+        input.value = Math.max(0, (parseInt(input.value) || 0) + cantidad);
+        const vidaIds = ['npc-vra', 'npc-vrm', 'npc-va'];
+        if (vidaIds.includes(inputId)) input.dataset.manual = 'true';
+        if (inputId.startsWith('npc-')) window.updateCreationAfinitySum();
+    }
+};
 
 window.ejecutarCreacionNPC = async () => {
     const btn = document.querySelector('button[onclick="window.ejecutarCreacionNPC()"]');
@@ -537,14 +585,36 @@ window.ejecutarCreacionNPC = async () => {
 
 window.borrarPersonaje = async (nombre, event) => {
     if(event) event.stopPropagation();
-    if(confirm(`⚠️ ADVERTENCIA CRÍTICA ⚠️\n\n¿Estás absolutamente seguro de que deseas DESTRUIR a [${nombre.toUpperCase()}] de la base de datos?\n\nEsta acción es irreversible y borrará sus stats de la existencia.`)) {
+    const p = statsGlobal[nombre];
+    if (!estadoUI.esAdmin && p?.isPlayer) {
+        return alert("Solo el Máster puede eliminar personajes jugadores.");
+    }
+    const msg = estadoUI.esAdmin
+        ? `⚠️ ADVERTENCIA CRÍTICA ⚠️\n\n¿Estás absolutamente seguro de que deseas DESTRUIR a [${nombre.toUpperCase()}] de la base de datos?\n\nEsta acción borrará sus stats, hechizos e inventario de objetos.`
+        : `¿Eliminar al NPC [${nombre.toUpperCase()}]?\n\nEsta acción también borrará sus hechizos e inventario.`;
+    if(confirm(msg)) {
         try {
-            const exito = await db.personajes.eliminar(nombre);
-            if (exito) {
-                alert(`El personaje ${nombre} ha sido erradicado de Supabase.`);
+            const norm = (str) => str.toString().trim().toLowerCase()
+                .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
+                .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
+                .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n')
+                .replace(/\s+/g,'_').replace(/[^a-z0-9_\-]/g,'');
+            const iconoKey = norm(p?.iconoOverride || nombre) + 'icon';
+
+            const [, , exitoP] = await Promise.all([
+                supabase.from('hechizos_inventario').delete().eq('personaje_nombre', nombre),
+                supabase.from('inventario_objetos').delete().eq('personaje_nombre', nombre),
+                db.personajes.eliminar(nombre),
+                supabase.storage.from('imagenes-hex').remove([
+                    `imgpersonajes/${iconoKey}.png`,
+                    `imgpersonajes/${iconoKey}.jpg`
+                ])
+            ]);
+            if (exitoP) {
+                alert(`${nombre} eliminado correctamente junto con su inventario.`);
                 window.location.reload();
             } else {
-                alert("Hubo un problema al intentar eliminar al personaje desde la base de datos.");
+                alert("Hubo un problema al eliminar el personaje de la base de datos.");
             }
         } catch (error) {
             alert("Error crítico al eliminar: " + error.message);
