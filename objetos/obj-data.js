@@ -66,32 +66,35 @@ export async function cargarTodoDesdeCSV() {
     }
 }
 
-export async function sincronizarObjetosBD(colaCambios) {
+export async function sincronizarObjetosBD(colaCambios, esAdmin = false) {
     let logErrores = [];
     try {
         for (const [nombreObj, data] of Object.entries(colaCambios)) {
             
-            // Acción 1: Eliminar objeto de raíz
+            // Acción 1: Eliminar objeto de raíz (solo admin)
             if (data.__ELIMINAR_OBJETO__) {
+                if (!esAdmin) { logErrores.push(`Sin permisos para eliminar: ${nombreObj}`); continue; }
                 const ok = await db.objetos.eliminarObjeto(nombreObj);
                 if (!ok) logErrores.push(`Fallo al eliminar: ${nombreObj}`);
                 continue;
             }
 
-            // Acción 2: Actualizar/Insertar Catálogo de Objetos
-            const objInfo = objGlobal[nombreObj];
-            if (objInfo) {
-                const okObj = await db.objetos.upsertObjeto({
-                    nombre: nombreObj,
-                    tipo: objInfo.tipo,
-                    material: objInfo.mat,
-                    efecto: objInfo.eff,
-                    rareza: objInfo.rar
-                });
-                if (!okObj) logErrores.push(`Fallo al actualizar catálogo: ${nombreObj}`);
+            // Acción 2: Actualizar Catálogo de Objetos (solo admin)
+            if (esAdmin) {
+                const objInfo = objGlobal[nombreObj];
+                if (objInfo) {
+                    const okObj = await db.objetos.upsertObjeto({
+                        nombre: nombreObj,
+                        tipo: objInfo.tipo,
+                        material: objInfo.mat,
+                        efecto: objInfo.eff,
+                        rareza: objInfo.rar
+                    });
+                    if (!okObj) logErrores.push(`Fallo al actualizar catálogo: ${nombreObj}`);
+                }
             }
 
-            // Acción 3: Actualizar Inventarios Relacionales (Batch nativo)
+            // Acción 3: Actualizar Inventarios (todos pueden)
             const changes = [];
             Object.keys(invGlobal).forEach(jugador => {
                 const cant = invGlobal[jugador][nombreObj] || 0;
