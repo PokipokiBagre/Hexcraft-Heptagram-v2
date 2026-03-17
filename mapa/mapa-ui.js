@@ -363,10 +363,20 @@ export function dibujarFrame() {
             const textY = nodo.y + nodo.radio + (15 / scaleFactor);
             ctx.lineWidth = 6.05 / scaleFactor;
             
-            // LÓGICA MÁSTER
-            const textoADibujar = estadoMapa.esAdmin && !nodo.esConocido && !nodo.isHexNode 
-                                  ? `${nodo.nombreOriginal.replace(/\s*\(\d+\)$/, '').trim()} (${nodo.hex})` 
-                                  : nodo.nombre;
+            // LÓGICA DE NOMBRE:
+            // Admin + oculto → nombre real con indicador
+            // Admin + conocido / público + conocido → nombre real
+            // Público + oculto → solo ID enmascarado
+            let textoADibujar;
+            if (!nodo.esConocido && !nodo.isHexNode) {
+                if (estadoMapa.esAdmin) {
+                    textoADibujar = `${nodo.nombreOriginal.replace(/\s*\(\d+\)$/, '').trim()} (${nodo.hex})`;
+                } else {
+                    textoADibujar = nodo.id; // Solo el ID tipo "Hechizo 13"
+                }
+            } else {
+                textoADibujar = nodo.nombre;
+            }
             
             if (isPlayerView && esIrrelevantePlayer && !nodo.isHexNode) {
                 ctx.strokeStyle = 'rgba(0,0,0,0.2)'; 
@@ -405,7 +415,9 @@ export function actualizarPanelInfo() {
 
     if (!nodo) { panel.classList.add('oculto'); return; }
 
-    document.getElementById('info-titulo').innerText = nodo.nombre;
+    const esOcultoParaPublico = !nodo.esConocido && !nodo.isHexNode && !estadoMapa.esAdmin;
+    const tituloMostrado = esOcultoParaPublico ? nodo.id : nodo.nombre;
+    document.getElementById('info-titulo').innerText = tituloMostrado;
     const colorData = window.mapaColores[nodo.afinidad];
     const colorAfinidad = colorData ? colorData.t : '#888';
     
