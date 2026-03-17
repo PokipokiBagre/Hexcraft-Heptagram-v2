@@ -10,6 +10,10 @@ const safeStr    = (str) => str ? str.toString().replace(/'/g, "\\'") : '';
 const NO_ENCONTRADO = () => `${hexDB.storage.urlBase}/imginterfaz/no_encontrado.png`;
 
 function getColorAfinidad(af) {
+    // Primero intenta usar los colores cargados desde hechizos_afinidades en Supabase
+    const t = db.colorMap?.[af];
+    if (t) return { b: t, t };
+    // Fallback hardcoded por si el colorMap aún no cargó
     if(af === 'Física')     return { b: '#b36a2f', t: '#e2a673' };
     if(af === 'Energética') return { b: '#bba71b', t: '#f3e57a' };
     if(af === 'Espiritual') return { b: '#2ba85e', t: '#7df0a7' };
@@ -106,6 +110,10 @@ export function renderHeaders() {
 
     const btnArbol   = char.isPlayer ? `<button onclick="window.cambiarVista('aprendizaje')" class="btn-nav" style="background:#004a4a; border-color:var(--cyan-magic);">✨ Árbol de Aprendizaje</button>` : '';
     const btnCastear = `<button onclick="window.cambiarVista('casteo')" class="btn-nav" style="background:#3a005a; border-color:#ff00ff; color:white;">🎲 Castear Hechizo</button>`;
+    // Botón de asignación: admin puede en cualquier PJ; público solo en NPCs
+    const btnGestion = estadoUI.esAdmin
+        ? `<button onclick="window.cambiarVista('gestion')" class="btn-nav" style="background:#4a004a; border-color:var(--purple-magic);">⚙️ Asignar/Quitar (OP)</button>`
+        : (!char.isPlayer ? `<button onclick="window.abrirGestionNPC('${pj}')" class="btn-nav" style="background:#002244; border-color:#00aaff; color:#00ccff;">🎭 Asignar Hechizos</button>` : '');
 
     // VEX calculado desde afinidad oscura total (sin rawRow)
     const afOscura = char.afinidades?.oscura || 0;
@@ -161,7 +169,7 @@ export function renderHeaders() {
             <div style="display:flex; gap:10px; flex-wrap:wrap;">
                 ${btnArbol}
                 ${btnCastear}
-                ${estadoUI.esAdmin ? `<button onclick="window.cambiarVista('gestion')" class="btn-nav" style="background:#4a004a; border-color:var(--purple-magic);">⚙️ Asignar/Quitar (OP)</button>` : ''}
+                ${btnGestion}
             </div>
         </div>`;
 
@@ -202,7 +210,7 @@ export function renderHeaders() {
                 ${portraitHTML}
                 <div>
                     <a href="${linkStats}" target="_blank" style="text-decoration:none;" title="Ver ficha de estado de ${pj}">
-                        <h2 style="margin:0; color:var(--gold); cursor:pointer;">GESTIÓN OP: ${pj.toUpperCase()}</h2>
+                        <h2 style="margin:0; color:var(--gold); cursor:pointer;">${estadoUI.esAdmin ? 'GESTIÓN OP' : 'ASIGNAR HECHIZOS'}: ${pj.toUpperCase()}</h2>
                     </a>
                     <p style="margin:5px 0 0 0; color:var(--gold); font-weight:bold;">
                         HEX Actual: <span style="color:white;">${char.hex}</span> &nbsp;|&nbsp; VEX MAX: <span style="color:#dcb1f0;">${maxVex}</span>
@@ -211,6 +219,7 @@ export function renderHeaders() {
                 </div>
             </div>
         </div>
+        ${estadoUI.esAdmin ? `
         <label class="toggle-hex">
             <input type="checkbox" onchange="window.toggleRestarHex(this.checked)" ${estadoUI.restarHexAsignacion ? 'checked' : ''}>
             RESTAR COSTE DE HEX AL ASIGNAR HECHIZO
@@ -230,7 +239,10 @@ export function renderHeaders() {
                 <button onclick="window.copiarLogOP()" style="flex:3; background:var(--gold); color:black; font-weight:bold; padding:8px; border:none; cursor:pointer; border-radius:4px;">COPIAR AL PORTAPAPELES</button>
                 <button onclick="window.limpiarLogOP()" style="flex:1; background:#8b0000; color:white; padding:8px; border:none; cursor:pointer; border-radius:4px;">LIMPIAR LOG</button>
             </div>
-        </div>`;
+        </div>` : `
+        <div style="margin: 10px auto 20px auto; max-width:800px; background:#0a0014; border:1px dashed #00aaff; border-radius:8px; padding:12px 18px; color:#00aaff; font-size:0.9em; text-align:center;">
+            🎭 Modo Público — Los hechizos sellados se muestran enmascarados. Solo puedes asignar, no quitar ni cambiar visibilidad.
+        </div>`}`;
 }
 
 export function dibujarGrimorioGrid() {
@@ -325,14 +337,28 @@ export function dibujarGestionGrid() {
         const currentlyPublic = checkColaVis ? (checkColaVis.Estado === 'si') : isPublicBase;
 
         const col   = getColorAfinidad(h.Afinidad); const costo = parseInt(h.HEX) || 0;
+
+        // Modo público: nombre real si es conocido, ID enmascarado si es oculto
+        const tituloMostrado = (estadoUI.esAdmin || currentlyPublic) ? tituloPrincipal : (h.ID || tituloPrincipal);
+        const colTitulo      = (estadoUI.esAdmin || currentlyPublic) ? col.t : '#666';
+        const subTituloMostrado = (estadoUI.esAdmin || currentlyPublic)
+            ? `<span style="display:block; color:#888; font-size:0.7em; font-style:italic; margin-bottom:10px;">${subTitulo}</span>`
+            : `<span style="display:block; color:#444; font-size:0.7em; font-style:italic; margin-bottom:10px;">⚠️ Hechizo Sellado</span>`;
+
+        // ASIGNAR usa el nombre enmascarado para públicos (ID si sellado), nombre real para admin
+        const nombreParaBoton = safeStr(estadoUI.esAdmin ? tituloPrincipal : tituloMostrado);
         const btn   = isOwned
-            ? `<button onclick="window.accionCola('quitar', '${nombreSafeForButtons}')" class="btn-nav" style="background:#4a0000; border-color:#ff0000; color:white; width:100%; margin-top:10px;">❌ QUITAR HECHIZO</button>`
-            : `<button onclick="window.accionCola('agregar', '${nombreSafeForButtons}', '${h.Afinidad}', ${costo})" class="btn-nav" style="background:#004a00; border-color:#00ff00; color:white; width:100%; margin-top:10px;">➕ ASIGNAR</button>`;
-        const btnVis = `<button onclick="window.toggleVisibilidad('${h.ID}', '${nombreSafeForButtons}', '${currentlyPublic ? 'no' : 'si'}')" class="btn-nav" style="background:#111; color:#aaa; border-color:#555; width:100%; margin-top:5px; font-size:0.8em; padding:5px;">${currentlyPublic ? '👁️ Ocultar Hechizo' : '🙈 Hacer Público'}</button>`;
+            ? (estadoUI.esAdmin
+                ? `<button onclick="window.accionCola('quitar', '${safeStr(tituloPrincipal)}')" class="btn-nav" style="background:#4a0000; border-color:#ff0000; color:white; width:100%; margin-top:10px;">❌ QUITAR HECHIZO</button>`
+                : '')  // público no puede quitar
+            : `<button onclick="window.accionCola('agregar', '${nombreParaBoton}', '${h.Afinidad}', ${costo})" class="btn-nav" style="background:#004a00; border-color:#00ff00; color:white; width:100%; margin-top:10px;">➕ ASIGNAR</button>`;
+        const btnVis = estadoUI.esAdmin
+            ? `<button onclick="window.toggleVisibilidad('${h.ID}', '${nombreSafeForButtons}', '${currentlyPublic ? 'no' : 'si'}')" class="btn-nav" style="background:#111; color:#aaa; border-color:#555; width:100%; margin-top:5px; font-size:0.8em; padding:5px;">${currentlyPublic ? '👁️ Ocultar Hechizo' : '🙈 Hacer Público'}</button>`
+            : '';
 
         html += `<div class="spell-card" style="border-left:4px solid ${col.b}; ${isOwned ? 'box-shadow: inset 0 0 15px rgba(0,255,0,0.1);' : ''}">
-                    <h3 style="color:${col.t}; margin-bottom:2px;">${tituloPrincipal}</h3>
-                    <span style="display:block; color:#888; font-size:0.7em; font-style:italic; margin-bottom:10px;">${subTitulo}</span>
+                    <h3 style="color:${colTitulo}; margin-bottom:2px;">${tituloMostrado}</h3>
+                    ${subTituloMostrado}
                     <div class="spell-tags">
                         <span class="spell-tag tag-hex">HEX: ${costo}</span>
                         <span class="spell-tag tag-clase">${h.Clase || '-'}</span>
