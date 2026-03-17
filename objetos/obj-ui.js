@@ -128,6 +128,9 @@ export function dibujarResumenVisual() {
     
     Object.keys(invGlobal).sort().forEach(j => {
         let itemsHtml = '';
+        const pjStatsR  = getPjStats(j);
+        const esNPCR    = !pjStatsR.isPlayer;
+        const puedeEditarR = estadoUI.esAdmin || esNPCR;
         
         let frozenKeys = estadoUI.cachedInvOrders[j] || [];
         Object.keys(invGlobal[j]).forEach(k => { if (invGlobal[j][k] > 0 && !frozenKeys.includes(k)) frozenKeys.push(k); });
@@ -140,7 +143,7 @@ export function dibujarResumenVisual() {
                 const tooltipText = `<span>${o}</span>Tipo: ${info.tipo}<br>Rareza: ${info.rar}<br><br>${info.eff}`;
                 
                 let badgeHTML = '';
-                if(estadoUI.esAdmin) {
+                if(puedeEditarR) {
                     badgeHTML = `
                     <div class="badge-op">
                         <button class="minus" onclick="window.hexMod('${j}','${o.replace(/'/g, "\\'")}',-1); event.stopPropagation();">-</button>
@@ -184,6 +187,10 @@ export function dibujarInventarios() {
     
     const linkStats = `../estadisticas/index.html?pj=${encodeURIComponent(j)}`;
     
+    const pjStats   = getPjStats(j);
+    const esNPC     = !pjStats.isPlayer;
+    const puedeEditar = estadoUI.esAdmin || esNPC;
+
     let html = `
     <button onclick="window.volverAGrilla()" style="background:#444; margin-bottom: 20px;">⬅ Volver a Inventarios</button>
     <div class="player-header">
@@ -195,10 +202,9 @@ export function dibujarInventarios() {
                 <h1 style="margin: 0; color:var(--gold); cursor:pointer;">${j.toUpperCase()}</h1>
             </a>
         </div>
-        ${estadoUI.esAdmin ? `<button onclick="window.mostrarPagina('control')" style="background:#4a004a; border-color:var(--gold);">⚙️ Panel Control Masivo</button>` : ''}
+        ${puedeEditar ? `<button onclick="window.mostrarPagina('control')" style="background:#4a004a; border-color:var(--gold);">⚙️ Panel Control Masivo</button>` : ''}
     </div>
     <input type="text" id="busq-inv" class="search-bar" placeholder="🔍 Filtrar equipo..." value="${estadoUI.busquedaInv}" oninput="window.setBusquedaInv(this.value)">`;
-
     let frozenKeys = estadoUI.cachedInvOrders[j] || [];
     Object.keys(invGlobal[j]).forEach(k => { if (invGlobal[j][k] > 0 && !frozenKeys.includes(k)) frozenKeys.push(k); });
 
@@ -227,7 +233,7 @@ export function dibujarInventarios() {
         if (invGlobal[j][o] > 0 && (!term || o.toLowerCase().includes(term))) {
             const oSafe = o.replace(/'/g, "\\'");
             
-            const cantHTML = estadoUI.esAdmin 
+            const cantHTML = puedeEditar
                 ? `<div style="display:flex; justify-content:center; align-items:center; gap:8px;">
                      <button class="btn-inline-op minus" onclick="window.hexMod('${j}','${oSafe}',-1)">-</button>
                      <b style="font-size:1.3em; width:20px;">${invGlobal[j][o]}</b>
