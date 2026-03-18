@@ -56,12 +56,14 @@ export async function cargarDatos() {
     catalogo.forEach(o => {
         const key = norm(o.nombre);
         itemsObjetos.push({
-            nombre:     o.nombre,
-            keyNorm:    key,
-            tipoIcono:  'imgobjetos',
-            urlStorage: `${STORAGE_URL}/imgobjetos/${key}.png`,
-            urlGithub:  `../img/imgobjetos/${key}.png`,
-            existe:     setObjetos.has(key)
+            nombre:       o.nombre,
+            keyNorm:      key,
+            tipoIcono:    'imgobjetos',
+            urlStorage:   `${STORAGE_URL}/imgobjetos/${key}.png`,
+            urlGithub:    `../img/imgobjetos/${key}.png`,
+            existe:       setObjetos.has(key),
+            esPropuesta:  !!o.es_propuesta,
+            propuesto_por: o.propuesto_por || ''
         });
     });
 
