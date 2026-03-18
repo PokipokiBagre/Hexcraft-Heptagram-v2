@@ -3,10 +3,9 @@
 // ============================================================
 
 import { invGlobal, objGlobal, statsGlobal, historial, estadoUI, guardar } from './obj-state.js';
-import { cargarTodoDesdeCSV, sincronizarObjetosBD } from './obj-data.js';
-// 👇 Importamos las 2 nuevas funciones 👇
+import { cargarTodoDesdeCSV, sincronizarObjetosBD, proponerObjeto, aprobarPropuesta as aprobarProp, rechazarPropuesta as rechazarProp, aprobarTodasPropuestas } from './obj-data.js';
 import { modificar, modificarMulti, transferir, descargarLogExcel, descargarEstadoExcel, agregarObjetoManual, agregarObjetosMulti, eliminarObjetoCompletamente, editarObjetoCatalogo } from './obj-logic.js';
-import { refrescarUI, dibujarMenuOP, dibujarInventarios, dibujarCatalogo, dibujarControl, dibujarCreacionObjeto, dibujarCreacionMulti, dibujarGrillaPersonajes, dibujarPartyLoot, dibujarTransferencia, dibujarResumenVisual, dibujarModalEdicionObjeto } from './obj-ui.js';
+import { refrescarUI, dibujarMenuOP, dibujarInventarios, dibujarCatalogo, dibujarControl, dibujarCreacionObjeto, dibujarCreacionMulti, dibujarGrillaPersonajes, dibujarPartyLoot, dibujarTransferencia, dibujarResumenVisual, dibujarModalEdicionObjeto, dibujarPropuestas, dibujarFormularioPropuesta } from './obj-ui.js';
 import { hexAuth } from '../hex-auth.js';
 import { db } from '../hex-db.js';
 
@@ -127,6 +126,10 @@ async function iniciar() {
         const target = document.getElementById('pag-' + id);
         if(target) target.classList.add('activa'); 
         
+        // Render directo para propuestas (no pasan por refrescarUI cache)
+        if (id === 'propuestas') { dibujarPropuestas(); window.actualizarBotonSyncObj(); return; }
+        if (id === 'crear-propuesta') { dibujarFormularioPropuesta(); window.actualizarBotonSyncObj(); return; }
+
         refrescarUI(); 
         window.actualizarBotonSyncObj();
     };
@@ -259,6 +262,66 @@ async function iniciar() {
             refrescarUI();
             window.actualizarBotonSyncObj();
         });
+    };
+
+    // ── Propuestas públicas ───────────────────────────────────
+    window.enviarPropuesta = async () => {
+        const nombre = document.getElementById('prop-nombre')?.value.trim();
+        const eff    = document.getElementById('prop-eff')?.value.trim();
+        const autor  = document.getElementById('prop-autor')?.value.trim() || 'Anónimo';
+        if (!nombre) return alert("El nombre del objeto es obligatorio.");
+        if (!eff)    return alert("El efecto/descripción es obligatorio.");
+
+        const btn = document.querySelector('#panel-crear-propuesta button[onclick="window.enviarPropuesta()"]');
+        if (btn) { btn.innerText = '⏳ Enviando...'; btn.disabled = true; }
+
+        const ok = await proponerObjeto({
+            nombre, eff,
+            tipo: document.getElementById('prop-tipo')?.value || '-',
+            mat:  document.getElementById('prop-mat')?.value  || '-',
+            rar:  document.getElementById('prop-rar')?.value  || 'Común',
+            propuesto_por: autor
+        });
+
+        if (ok) {
+            const c = document.createElement('div');
+            c.innerText = '✅ Propuesta enviada. El OP la revisará pronto.';
+            c.style.cssText = 'position:fixed;top:30px;left:50%;transform:translateX(-50%);background:#4a2800;color:#ff9900;border:1px solid #ff9900;padding:15px 30px;border-radius:8px;font-weight:bold;z-index:99999;font-family:Cinzel,serif;';
+            document.body.appendChild(c);
+            setTimeout(() => { c.remove(); window.mostrarPagina('grilla'); }, 2500);
+        } else {
+            alert('Error al enviar la propuesta. Intenta de nuevo.');
+            if (btn) { btn.innerText = '📨 ENVIAR PROPUESTA'; btn.disabled = false; }
+        }
+    };
+
+    window.aprobarPropuesta = async (nombre) => {
+        if (!confirm(`¿Aprobar "${nombre}"? Pasará al catálogo oficial.`)) return;
+        const ok = await aprobarProp(nombre);
+        if (ok) { await cargarTodoDesdeCSV(); window.mostrarPagina('propuestas'); }
+        else alert('Error al aprobar la propuesta.');
+    };
+
+    window.rechazarPropuesta = async (nombre) => {
+        if (!confirm(`¿Rechazar y eliminar "${nombre}"?`)) return;
+        const ok = await rechazarProp(nombre);
+        if (ok) { await cargarTodoDesdeCSV(); window.mostrarPagina('propuestas'); }
+        else alert('Error al rechazar la propuesta.');
+    };
+
+    window.aprobarTodas = async () => {
+        if (!confirm(`¿Aprobar TODAS las propuestas pendientes?`)) return;
+        const ok = await aprobarTodasPropuestas();
+        if (ok) { await cargarTodoDesdeCSV(); window.mostrarPagina('propuestas'); }
+        else alert('Error al aprobar las propuestas.');
+    };
+
+    window.rechazarTodas = async () => {
+        if (!confirm(`¿Rechazar y ELIMINAR todas las propuestas pendientes?`)) return;
+        const { supabase } = await import('../hex-auth.js');
+        await supabase.from('objetos').delete().eq('es_propuesta', true);
+        await cargarTodoDesdeCSV();
+        window.mostrarPagina('propuestas');
     };
     
     // --- LÓGICA DE LECTURA DE URL ---
