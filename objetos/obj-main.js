@@ -3,7 +3,7 @@
 // ============================================================
 
 import { invGlobal, objGlobal, statsGlobal, historial, estadoUI, guardar } from './obj-state.js';
-import { cargarTodoDesdeCSV, sincronizarObjetosBD, proponerObjeto, aprobarPropuesta as aprobarProp, rechazarPropuesta as rechazarProp, aprobarTodasPropuestas } from './obj-data.js';
+import { cargarTodoDesdeCSV, sincronizarObjetosBD, proponerObjeto, aprobarPropuesta as aprobarProp, rechazarPropuesta as rechazarProp, aprobarTodasPropuestas, getPropuestasParaPersonaje } from './obj-data.js';
 import { modificar, modificarMulti, transferir, descargarLogExcel, descargarEstadoExcel, agregarObjetoManual, agregarObjetosMulti, eliminarObjetoCompletamente, editarObjetoCatalogo } from './obj-logic.js';
 import { refrescarUI, dibujarMenuOP, dibujarInventarios, dibujarCatalogo, dibujarControl, dibujarCreacionObjeto, dibujarCreacionMulti, dibujarGrillaPersonajes, dibujarPartyLoot, dibujarTransferencia, dibujarResumenVisual, dibujarModalEdicionObjeto, dibujarPropuestas, dibujarFormularioPropuesta } from './obj-ui.js';
 import { hexAuth } from '../hex-auth.js';
@@ -76,6 +76,8 @@ async function iniciar() {
     
     estadoUI.cambiosSesion = {};
     estadoUI.vistaActual = 'grilla';
+    estadoUI._propuestasCache = [];
+    estadoUI.propFormMostrarNPCs = false;
 
     const modal = document.createElement('div');
     modal.id = 'hex-modal-view'; modal.className = 'hex-modal';
@@ -144,7 +146,12 @@ async function iniciar() {
         }
     };
 
-    window.abrirInventario = (j) => { estadoUI.jugadorInv = j; window.mostrarPagina('inventario'); };
+    window.abrirInventario = async (j) => {
+        estadoUI.jugadorInv = j;
+        // Cargar propuestas pendientes para este personaje
+        estadoUI._propuestasCache = await getPropuestasParaPersonaje(j);
+        window.mostrarPagina('inventario');
+    };
     window.volverAGrilla = () => { estadoUI.jugadorInv = null; window.mostrarPagina('grilla'); };
 
     window.setEditMult = (val) => { estadoUI.editMult = val; refrescarUI(); };
@@ -265,10 +272,17 @@ async function iniciar() {
     };
 
     // ── Propuestas públicas ───────────────────────────────────
+    window.togglePropFormNPCs = () => {
+        estadoUI.propFormMostrarNPCs = !estadoUI.propFormMostrarNPCs;
+        dibujarFormularioPropuesta();
+    };
+
     window.enviarPropuesta = async () => {
-        const nombre = document.getElementById('prop-nombre')?.value.trim();
-        const eff    = document.getElementById('prop-eff')?.value.trim();
-        const autor  = document.getElementById('prop-autor')?.value.trim() || 'Anónimo';
+        const nombre   = document.getElementById('prop-nombre')?.value.trim();
+        const eff      = document.getElementById('prop-eff')?.value.trim();
+        const autor    = document.getElementById('prop-autor')?.value.trim() || 'Anónimo';
+        const para     = document.getElementById('prop-para')?.value || '';
+        const cantidad = parseInt(document.getElementById('prop-cantidad')?.value) || 1;
         if (!nombre) return alert("El nombre del objeto es obligatorio.");
         if (!eff)    return alert("El efecto/descripción es obligatorio.");
 
@@ -277,22 +291,36 @@ async function iniciar() {
 
         const ok = await proponerObjeto({
             nombre, eff,
-            tipo: document.getElementById('prop-tipo')?.value || '-',
-            mat:  document.getElementById('prop-mat')?.value  || '-',
-            rar:  document.getElementById('prop-rar')?.value  || 'Común',
-            propuesto_por: autor
+            tipo:               document.getElementById('prop-tipo')?.value || '-',
+            mat:                document.getElementById('prop-mat')?.value  || '-',
+            rar:                document.getElementById('prop-rar')?.value  || 'Común',
+            propuesto_por:      autor,
+            propuesta_para:     para,
+            propuesta_cantidad: cantidad
         });
 
         if (ok) {
             const c = document.createElement('div');
-            c.innerText = '✅ Propuesta enviada. El OP la revisará pronto.';
-            c.style.cssText = 'position:fixed;top:30px;left:50%;transform:translateX(-50%);background:#4a2800;color:#ff9900;border:1px solid #ff9900;padding:15px 30px;border-radius:8px;font-weight:bold;z-index:99999;font-family:Cinzel,serif;';
+            c.innerText = para
+                ? `✅ Propuesta enviada para ${para} (x${cantidad}). El OP la revisará.`
+                : '✅ Propuesta enviada. El OP la revisará pronto.';
+            c.style.cssText = 'position:fixed;top:30px;left:50%;transform:translateX(-50%);background:#4a1800;color:#ff9900;border:1px solid #ff9900;padding:15px 30px;border-radius:8px;font-weight:bold;z-index:99999;font-family:Cinzel,serif;text-align:center;max-width:80%;';
             document.body.appendChild(c);
             setTimeout(() => { c.remove(); window.mostrarPagina('grilla'); }, 2500);
         } else {
             alert('Error al enviar la propuesta. Intenta de nuevo.');
             if (btn) { btn.innerText = '📨 ENVIAR PROPUESTA'; btn.disabled = false; }
         }
+    };
+
+    window.aprobarPropuestaDesdeInventario = async (nombre, personaje) => {
+        if (!confirm(`¿Aprobar "${nombre}" para ${personaje}?`)) return;
+        const ok = await aprobarProp(nombre);
+        if (ok) {
+            await cargarTodoDesdeCSV();
+            estadoUI._propuestasCache = await getPropuestasParaPersonaje(personaje);
+            refrescarUI();
+        } else alert('Error al aprobar.');
     };
 
     window.aprobarPropuesta = async (nombre) => {
@@ -305,8 +333,16 @@ async function iniciar() {
     window.rechazarPropuesta = async (nombre) => {
         if (!confirm(`¿Rechazar y eliminar "${nombre}"?`)) return;
         const ok = await rechazarProp(nombre);
-        if (ok) { await cargarTodoDesdeCSV(); window.mostrarPagina('propuestas'); }
-        else alert('Error al rechazar la propuesta.');
+        if (ok) {
+            await cargarTodoDesdeCSV();
+            // Refrescar donde estemos
+            if (estadoUI.vistaActual === 'inventario' && estadoUI.jugadorInv) {
+                estadoUI._propuestasCache = await getPropuestasParaPersonaje(estadoUI.jugadorInv);
+                refrescarUI();
+            } else {
+                window.mostrarPagina('propuestas');
+            }
+        } else alert('Error al rechazar la propuesta.');
     };
 
     window.aprobarTodas = async () => {
