@@ -78,23 +78,40 @@ export async function cargarTodoDesdeCSV() {
 // ── Funciones de Propuestas ───────────────────────────────────
 export async function proponerObjeto(data) {
     const { error } = await supabase.from('objetos').upsert({
-        nombre: data.nombre,
-        tipo: data.tipo || '-',
-        material: data.mat || '-',
-        efecto: data.eff || '',
-        rareza: data.rar || 'Común',
-        es_propuesta: true,
-        propuesto_por: data.propuesto_por || 'Anónimo'
+        nombre:             data.nombre,
+        tipo:               data.tipo || '-',
+        material:           data.mat  || '-',
+        efecto:             data.eff  || '',
+        rareza:             data.rar  || 'Común',
+        es_propuesta:       true,
+        propuesto_por:      data.propuesto_por      || 'Anónimo',
+        propuesta_para:     data.propuesta_para     || '',
+        propuesta_cantidad: data.propuesta_cantidad || 1
     }, { onConflict: 'nombre' });
     if (error) { console.error('proponerObjeto:', error); return false; }
     return true;
 }
 
 export async function aprobarPropuesta(nombre) {
-    const { error } = await supabase.from('objetos')
-        .update({ es_propuesta: false, propuesto_por: '' })
-        .eq('nombre', nombre);
-    if (error) { console.error('aprobarPropuesta:', error); return false; }
+    // 1. Marcar como aprobado
+    const { data: obj, error: errUpd } = await supabase.from('objetos')
+        .update({ es_propuesta: false, propuesto_por: '', propuesta_para: '', propuesta_cantidad: 1 })
+        .eq('nombre', nombre)
+        .select('propuesta_para, propuesta_cantidad')
+        .single();
+    if (errUpd) { console.error('aprobarPropuesta update:', errUpd); return false; }
+
+    // 2. Si tenía destinatario, agregar al inventario
+    const para  = obj?.propuesta_para;
+    const cant  = obj?.propuesta_cantidad || 1;
+    if (para && cant > 0) {
+        const { data: existing } = await supabase.from('inventario_objetos')
+            .select('cantidad').eq('personaje_nombre', para).eq('objeto_nombre', nombre).single();
+        const nuevaCant = (existing?.cantidad || 0) + cant;
+        await supabase.from('inventario_objetos')
+            .upsert({ personaje_nombre: para, objeto_nombre: nombre, cantidad: nuevaCant },
+                    { onConflict: 'personaje_nombre,objeto_nombre' });
+    }
     return true;
 }
 
@@ -102,6 +119,15 @@ export async function rechazarPropuesta(nombre) {
     const { error } = await supabase.from('objetos').delete().eq('nombre', nombre);
     if (error) { console.error('rechazarPropuesta:', error); return false; }
     return true;
+}
+
+export async function getPropuestasParaPersonaje(nombrePj) {
+    const { data, error } = await supabase.from('objetos')
+        .select('nombre, tipo, material, efecto, rareza, propuesto_por, propuesta_cantidad')
+        .eq('es_propuesta', true)
+        .eq('propuesta_para', nombrePj);
+    if (error) { console.error('getPropuestasParaPersonaje:', error); return []; }
+    return data || [];
 }
 
 export async function aprobarTodasPropuestas() {
