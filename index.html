@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HEXCRAFT HEPTAGRAM</title>
     <link rel="icon" type="image/png" id="dynamic-favicon">
-    <link rel="stylesheet" href="style.css?v=3.0">
+    <link rel="stylesheet" href="style.css?v=3.1">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
 </head>
@@ -30,7 +30,16 @@
             evolución del sistema en tiempo real.
         </section>
 
-        <h2 style="margin-top: 40px; margin-bottom: 20px;">Sistemas de Gestión</h2>
+        <!-- ══════════ DASHBOARD ══════════ -->
+        <h2 style="margin-top:40px; margin-bottom:15px;">Estado Actual</h2>
+        <div id="dashboard" class="dashboard-grid">
+            <div class="dash-card" style="grid-column: 1/-1; text-align:center; color:#555; font-family:sans-serif; padding:30px;">
+                Cargando datos...
+            </div>
+        </div>
+
+        <!-- ══════════ SISTEMAS ══════════ -->
+        <h2 style="margin-top: 40px; margin-bottom: 20px;">Sistemas</h2>
         <div class="main-grid">
             <a href="objetos/index.html" class="grid-item">
                 <img data-img="objetos.jpg" alt="Objetos">
@@ -74,47 +83,156 @@
 
 <script type="module">
     import { hexAuth } from './hex-auth.js';
-    import { db } from './hex-db.js';
+    import { db }      from './hex-db.js';
+    import { supabase } from './hex-auth.js';
 
     async function iniciar() {
-        // --- Inyectar el icono de la pestaña principal ---
         const favicon = document.getElementById("dynamic-favicon");
         if (favicon) favicon.href = db.storage.getUrlInterfaz('icon.png');
-        // --------------------------------------------------------
 
         await hexAuth.init();
 
-        // 1. Renderizar badge de sesión
         const badge = document.getElementById('hex-session-badge');
         if (badge) badge.innerHTML = hexAuth.renderStatusBadge();
 
-        // 2. Cargar imágenes dinámicamente desde Supabase Storage
         cargarImagenesNube();
+        await cargarDashboard();
     }
 
     function cargarImagenesNube() {
         const urlIconoNube = db.storage.getUrlInterfaz('icon.png');
-
-        // 1. Cambiar las imágenes de la grilla y los accesos directos
-        // Ahora buscamos las imágenes que tengan el atributo 'data-img'
         document.querySelectorAll('img[data-img]').forEach(img => {
             const nombreLocal = img.getAttribute('data-img');
             const nuevaUrl = db.storage.getUrlInterfaz(nombreLocal);
-            
-            img.onerror = () => {
-                img.onerror = null; 
-                img.src = urlIconoNube;
-            };
-            
-            // Asignamos la ruta de Supabase al src para que recién ahora se descargue
+            img.onerror = () => { img.onerror = null; img.src = urlIconoNube; };
             img.src = nuevaUrl;
         });
-
-        // 2. Cambiar la imagen de fondo del Hero Header
         const header = document.querySelector('.hero-section');
         if (header) {
             const bgUrl = db.storage.getUrlInterfaz('hex-002.png');
             header.style.backgroundImage = `linear-gradient(rgba(18,0,36,0.7), rgba(18,0,36,0.7)), url('${bgUrl}')`;
+        }
+    }
+
+    async function cargarDashboard() {
+        const dash = document.getElementById('dashboard');
+        try {
+            const [personajesRes, misionesRes, objetosRes, hechizosRes] = await Promise.all([
+                supabase.from('personajes').select('nombre, is_player, is_active, hex, vida_roja_actual, base_vida_roja_max'),
+                supabase.from('misiones').select('titulo, estado, tipo, jugadores'),
+                supabase.from('inventario_objetos').select('cantidad').gt('cantidad', 0),
+                supabase.from('hechizos_inventario').select('hechizo_nombre')
+            ]);
+
+            const personajes = personajesRes.data || [];
+            const misiones   = misionesRes.data   || [];
+            const invItems   = objetosRes.data     || [];
+            const hechizos   = hechizosRes.data    || [];
+
+            const jugadores    = personajes.filter(p => p.is_player && p.is_active);
+            const npcs         = personajes.filter(p => !p.is_player && p.is_active);
+            const misActivas   = misiones.filter(m => m.estado === 1 || m.estado === 2);
+            const misPendiente = misiones.filter(m => m.estado === 1);
+            const misProceso   = misiones.filter(m => m.estado === 2);
+            const totalObjetos = invItems.reduce((acc, r) => acc + (r.cantidad || 0), 0);
+            const hexPromedio  = jugadores.length
+                ? Math.round(jugadores.reduce((a, p) => a + (p.hex || 0), 0) / jugadores.length)
+                : 0;
+
+            // Party: jugadores activos con vida
+            const partyHTML = jugadores.slice(0, 6).map(p => {
+                const norm = (s) => s.toString().trim().toLowerCase()
+                    .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
+                    .replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n')
+                    .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+                const vidaMax  = p.base_vida_roja_max || 10;
+                const vidaAct  = Math.min(p.vida_roja_actual || 0, vidaMax);
+                const pct      = Math.round(vidaAct / vidaMax * 100);
+                const barColor = pct > 60 ? '#00cc44' : pct > 30 ? '#ffaa00' : '#cc2200';
+                const iconUrl  = `${db.storage.urlBase}/imgpersonajes/${norm(p.nombre)}icon.png`;
+                const noFound  = `${db.storage.urlBase}/imginterfaz/no_encontrado.png`;
+                return `
+                <a href="estadisticas/index.html?pj=${encodeURIComponent(p.nombre)}" class="dash-player-card" title="${p.nombre} — HEX: ${p.hex}">
+                    <img src="${iconUrl}" onerror="this.onerror=null;this.src='${noFound}'">
+                    <div class="dash-player-name">${p.nombre}</div>
+                    <div class="dash-player-hex">${(p.hex||0).toLocaleString()} HEX</div>
+                    <div class="dash-vida-bar" title="Vida: ${vidaAct}/${vidaMax}">
+                        <div style="height:100%; width:${pct}%; background:${barColor}; border-radius:3px; transition:width 0.5s;"></div>
+                    </div>
+                </a>`;
+            }).join('');
+
+            // Misiones activas
+            const misHTML = misActivas.slice(0, 5).map(m => {
+                const badge = m.estado === 1
+                    ? `<span style="background:#4a3800;color:#ffaa00;padding:1px 6px;border-radius:8px;font-size:0.65em;">Pendiente</span>`
+                    : `<span style="background:#003a4a;color:#00ccff;padding:1px 6px;border-radius:8px;font-size:0.65em;">En Proceso</span>`;
+                const jugHTML = (m.jugadores || []).map(j => `<span style="font-size:0.7em;color:#888;">${j}</span>`).join(', ');
+                return `<div class="dash-mision-row">
+                    <span style="font-weight:bold;color:#d4af37;font-size:0.85em;">${m.titulo}</span>
+                    ${badge}
+                    <div style="color:#666;font-size:0.75em;margin-top:2px;">${jugHTML || 'Sin asignar'}</div>
+                </div>`;
+            }).join('') || '<div style="color:#555;font-size:0.85em;font-style:italic;text-align:center;padding:10px;">No hay misiones activas</div>';
+
+            dash.innerHTML = `
+            <!-- Fila de stats rápidos -->
+            <div class="dash-stat-row">
+                <div class="dash-stat">
+                    <div class="dash-stat-num" style="color:#d4af37;">${jugadores.length}</div>
+                    <div class="dash-stat-lbl">Jugadores Activos</div>
+                </div>
+                <div class="dash-stat">
+                    <div class="dash-stat-num" style="color:#00ccff;">${npcs.length}</div>
+                    <div class="dash-stat-lbl">NPCs Activos</div>
+                </div>
+                <div class="dash-stat">
+                    <div class="dash-stat-num" style="color:#ffaa00;">${misActivas.length}</div>
+                    <div class="dash-stat-lbl">Misiones Activas</div>
+                </div>
+                <div class="dash-stat">
+                    <div class="dash-stat-num" style="color:#00ff88;">${totalObjetos}</div>
+                    <div class="dash-stat-lbl">Objetos en Circulación</div>
+                </div>
+                <div class="dash-stat">
+                    <div class="dash-stat-num" style="color:#cc88ff;">${hechizos.length}</div>
+                    <div class="dash-stat-lbl">Hechizos Aprendidos</div>
+                </div>
+                <div class="dash-stat">
+                    <div class="dash-stat-num" style="color:#d4af37;">${hexPromedio.toLocaleString()}</div>
+                    <div class="dash-stat-lbl">HEX Promedio Party</div>
+                </div>
+            </div>
+
+            <!-- Party -->
+            <div class="dash-card">
+                <div class="dash-card-title">⚔️ Party Activa</div>
+                <div class="dash-party-grid">
+                    ${partyHTML || '<p style="color:#555;font-size:0.85em;font-style:italic;text-align:center;">Sin jugadores activos</p>'}
+                </div>
+                <a href="estadisticas/index.html" class="dash-link">Ver todos →</a>
+            </div>
+
+            <!-- Misiones activas -->
+            <div class="dash-card">
+                <div class="dash-card-title">📜 Misiones en Curso</div>
+                <div style="display:flex;gap:15px;margin-bottom:12px;">
+                    <div style="text-align:center;flex:1;background:rgba(255,170,0,0.1);padding:8px;border-radius:6px;border:1px solid rgba(255,170,0,0.2);">
+                        <div style="font-size:1.6em;font-weight:bold;color:#ffaa00;">${misPendiente.length}</div>
+                        <div style="font-size:0.7em;color:#888;font-family:sans-serif;">Pendientes</div>
+                    </div>
+                    <div style="text-align:center;flex:1;background:rgba(0,204,255,0.1);padding:8px;border-radius:6px;border:1px solid rgba(0,204,255,0.2);">
+                        <div style="font-size:1.6em;font-weight:bold;color:#00ccff;">${misProceso.length}</div>
+                        <div style="font-size:0.7em;color:#888;font-family:sans-serif;">En Proceso</div>
+                    </div>
+                </div>
+                ${misHTML}
+                <a href="misiones/index.html" class="dash-link">Ver tablón →</a>
+            </div>`;
+
+        } catch(e) {
+            console.error('Dashboard error:', e);
+            dash.innerHTML = `<div class="dash-card" style="grid-column:1/-1;text-align:center;color:#ff4444;font-family:sans-serif;">Error cargando el dashboard: ${e.message}</div>`;
         }
     }
 
