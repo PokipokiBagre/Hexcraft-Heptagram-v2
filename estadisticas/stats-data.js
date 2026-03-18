@@ -29,6 +29,7 @@ export async function cargarTodoDesdeCSV(barraProgreso) {
                 isPlayer:  p.is_player,
                 isNPC:    !p.is_player,
                 isActive:  p.is_active,
+                npc_tipo:  p.is_player ? null : (p.npc_tipo || 'sistema'),
                 hex:       p.hex        || 0,
                 asistencia: p.asistencia || 1,
                 vex:       p.vex        || 0,
