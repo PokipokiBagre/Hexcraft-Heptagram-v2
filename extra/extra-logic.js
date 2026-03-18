@@ -18,6 +18,9 @@ export function getItemsFiltrados() {
         if (busq && !item.nombre.toLowerCase().includes(busq)) return false;
         if (estadoUI.filtro === 'falta' &&  item.existe) return false;
         if (estadoUI.filtro === 'ok'    && !item.existe) return false;
+        // Filtros de propuesta (solo aplican a tab objetos)
+        if (estadoUI.filtro === 'propuesta'  && !item.esPropuesta) return false;
+        if (estadoUI.filtro === 'aprobado'   &&  item.esPropuesta) return false;
         return true;
     });
 }
