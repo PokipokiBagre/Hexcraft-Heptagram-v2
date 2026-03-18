@@ -1,7 +1,7 @@
 import { statsGlobal, listaEstados, estadoUI, dbExtra } from './stats-state.js';
 import { cargarTodoDesdeCSV, procesarTextoCSV, cargarDiccionarioEstados } from './stats-data.js';
 import { dibujarCatalogo, dibujarResumenVisual, dibujarDetalle, dibujarMenuOP, dibujarHexOP, dibujarFormularioCrear, dibujarPanelEdicionOP } from './stats-ui.js';
-import { generarCSVExportacion, descargarArchivoCSV, calcularVidaRojaMax, getMysticBonus } from './stats-logic.js';
+import { generarCSVExportacion, descargarArchivoCSV, calcularVidaRojaMax, getMysticBonus, esNPCSistema } from './stats-logic.js';
 import { hexAuth, supabase } from '../hex-auth.js';
 import { db } from '../hex-db.js';
 
@@ -121,6 +121,31 @@ window.modLibre            = (s,c) => { const n=estadoUI.personajeSeleccionado; 
 window.modEstado           = (s,c) => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; p.estados[s]=Math.max(0,(p.estados[s]||0)+c); window.encolarCambio(n); window.sincronizarUI(); };
 window.toggleEstado        = (s)   => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; p.estados[s]=!p.estados[s]; window.encolarCambio(n); window.sincronizarUI(); };
 window.toggleIdentidad     = (pr)  => { const n=estadoUI.personajeSeleccionado; const p=statsGlobal[n]; if(!p)return; p[pr]=!p[pr]; if(pr==='isPlayer') p.isNPC=!p.isPlayer; window.encolarCambio(n); window.sincronizarUI(); };
+
+// ── NPC tipo: sistema ↔ jugador ──────────────────────────────────────────────
+window.toggleNpcTipo = (nombre) => {
+    const p = statsGlobal[nombre]; if (!p || p.isPlayer) return;
+    const nuevo = esNPCSistema(p) ? 'jugador' : 'sistema';
+    if (!confirm(`¿Cambiar tipo de NPC de "${p.npc_tipo || 'sistema'}" a "${nuevo}"?\n\n${nuevo === 'jugador' ? 'El VEX pasará a calcularse desde la Afinidad Oscura.' : 'El VEX pasará a ser un valor absoluto editable.'}`)) return;
+    p.npc_tipo = nuevo;
+    window.encolarCambio(nombre); window.sincronizarUI();
+};
+
+// ── VEX directo para NPC sistema ────────────────────────────────────────────
+window.modVexSistema = (nombre, delta) => {
+    const p = statsGlobal[nombre]; if (!p) return;
+    p.vex = Math.max(0, (p.vex || 0) + delta);
+    window.encolarCambio(nombre); window.sincronizarUI();
+};
+
+window.setVexFijoSistema = (nombre) => {
+    const input = document.getElementById('vex-fijo-input');
+    const val = parseInt(input?.value);
+    if (isNaN(val) || val < 0) return alert('Ingresa un número válido.');
+    const p = statsGlobal[nombre]; if (!p) return;
+    p.vex = val;
+    window.encolarCambio(nombre); window.sincronizarUI();
+};
 
 window.ejecutarClonacion = (tipo) => {
     const s = document.getElementById('clon-source'); if(!s) return; const sn = s.value; if(!sn) return alert("Selecciona origen.");
@@ -354,6 +379,7 @@ window.ejecutarSincronizacion = async () => {
                 vex:        p.isPlayer ? 0 : (parseInt(p.vex) || 0),
                 is_active:  p.isActive  ?? true,
                 is_player:  p.isPlayer  ?? false,
+                npc_tipo:   p.isPlayer ? null : (p.npc_tipo || 'sistema'),
                 icono_override: p.iconoOverride || '',
 
                 vida_roja_actual:   parseInt(p.vidaRojaActual)   || 0,
@@ -486,7 +512,39 @@ window.descargarAumentada = () => { descargarArchivoCSV(generarCSVExportacion(),
 // ============================================================================
 // 7. CREACIÓN Y BORRADO DIRECTO EN SUPABASE
 // ============================================================================
-window.toggleCrearRol = () => { const btn=document.getElementById('btn-crear-rol'); if(btn.dataset.val==='npc'){btn.dataset.val='jugador';btn.innerText='🎭 ROL: JUGADOR';btn.style.background='#003300';btn.style.borderColor='#00e676';}else{btn.dataset.val='npc';btn.innerText='🎭 ROL: NPC';btn.style.background='#330000';btn.style.borderColor='#ff1744';} };
+window.toggleCrearRol = () => {
+    const btn = document.getElementById('btn-crear-rol');
+    const selectorTipo = document.getElementById('npc-tipo-selector');
+    if (btn.dataset.val === 'npc') {
+        btn.dataset.val = 'jugador';
+        btn.innerText = '🎭 ROL: JUGADOR';
+        btn.style.background = '#003300';
+        btn.style.borderColor = '#00e676';
+        if (selectorTipo) selectorTipo.style.display = 'none';
+    } else {
+        btn.dataset.val = 'npc';
+        btn.innerText = '🎭 ROL: NPC';
+        btn.style.background = '#330000';
+        btn.style.borderColor = '#ff1744';
+        if (selectorTipo) selectorTipo.style.display = 'flex';
+    }
+};
+
+window.toggleCrearNpcTipo = () => {
+    const btn = document.getElementById('btn-crear-npc-tipo');
+    if (!btn) return;
+    if (btn.dataset.val === 'sistema') {
+        btn.dataset.val = 'jugador';
+        btn.innerText = '🧑 NPC TIPO: JUGADOR';
+        btn.style.background = '#001a33';
+        btn.style.borderColor = '#4a90e2';
+    } else {
+        btn.dataset.val = 'sistema';
+        btn.innerText = '⚙️ NPC TIPO: SISTEMA';
+        btn.style.background = '#1a0900';
+        btn.style.borderColor = '#ff9900';
+    }
+};
 window.toggleCrearAct = () => { const btn=document.getElementById('btn-crear-act'); if(btn.dataset.val==='activo'){btn.dataset.val='inactivo';btn.innerText='🌟 ESTADO: INACTIVO';btn.style.background='#330000';btn.style.borderColor='#ff1744';}else{btn.dataset.val='activo';btn.innerText='🌟 ESTADO: ACTIVO';btn.style.background='#003300';btn.style.borderColor='#00e676';} };
 window.updateCreationAfinitySum = () => {
     const gv = (id) => parseInt(document.getElementById(id)?.value) || 0;
@@ -544,11 +602,13 @@ window.ejecutarCreacionNPC = async () => {
         
         const isPlayer = document.getElementById('btn-crear-rol').dataset.val === 'jugador';
         const isActive = document.getElementById('btn-crear-act').dataset.val === 'activo';
+        const npc_tipo = isPlayer ? null : (document.getElementById('btn-crear-npc-tipo')?.dataset.val || 'sistema');
 
         const nuevoPJ = {
             nombre: nombre,
             is_player: isPlayer,
             is_active: isActive,
+            npc_tipo: npc_tipo,
             icono_override: "",
             hex: pV('npc-hex'),
             asistencia: 1,
