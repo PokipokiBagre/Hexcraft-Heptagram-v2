@@ -5,7 +5,8 @@
 export let invGlobal = {}; 
 export let objGlobal = {}; 
 export let statsGlobal = {}; 
-export let historial = []; 
+export let historial = [];
+export let propuestasGlobal = []; // Objetos pendientes de aprobación 
 
 export let estadoUI = {
     vistaActual: 'grilla',
