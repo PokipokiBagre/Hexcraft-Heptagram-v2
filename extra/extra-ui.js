@@ -38,10 +38,13 @@ export function renderGrid() {
     const imgFallback = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 
     filtrados.forEach(item => {
-        const claseCard = item.existe ? 'ok' : 'falta';
-        const badge     = item.existe
-            ? `<div class="badge-ok">✓</div>`
-            : `<div class="badge-falta">!</div>`;
+        const esProp = item.esPropuesta === true;
+        const claseCard = esProp ? 'propuesta' : (item.existe ? 'ok' : 'falta');
+        const badge     = esProp
+            ? `<div class="badge-propuesta" style="position:absolute;top:5px;right:5px;background:#ff9900;color:#000;font-size:0.6em;padding:2px 5px;border-radius:3px;font-weight:bold;">?</div>`
+            : item.existe
+                ? `<div class="badge-ok">✓</div>`
+                : `<div class="badge-falta">!</div>`;
             
         const imgSrc    = item.existe ? item.urlStorage : imgFallback;
         const btnTxt    = item.existe ? '🔄 Cambiar' : '📤 Subir';
@@ -49,18 +52,15 @@ export function renderGrid() {
         const btnBorder = item.existe ? '#00ff00' : '#ff4444';
         const safeNombre = item.nombre.replace(/'/g, "\\'");
 
-        // Puede editar si:
-        // - Está logueado (admin o usuario)
-        // - Es la categoría de objetos
-        // - Es un personaje NPC (no jugador)
         const esNPC = item.tipoIcono === 'imgpersonajes' && item.isPlayer === false;
         const puedeEditar = hexAuth.estaLogueado() || item.tipoIcono === 'imgobjetos' || esNPC;
 
-        // Desactivar el click en la imagen si no tiene permisos
         const clickAction = puedeEditar ? `onclick="window.abrirUpload('${item.keyNorm}','${item.tipoIcono}','${safeNombre}')"` : '';
         const cursorStyle = puedeEditar ? 'cursor:pointer;' : '';
 
-        // Dibujar botones o texto de "Solo lectura"
+        // Border color for proposals
+        const cardBorderStyle = esProp ? 'border-color:#ff9900; background:rgba(40,20,0,0.5);' : '';
+
         let btnHtml = '';
         if (puedeEditar) {
             btnHtml = `
@@ -73,20 +73,22 @@ export function renderGrid() {
                 </button>
             </div>`;
         } else {
-            btnHtml = `
-            <div style="margin-top:6px; font-size:0.7em; color:#666; font-style:italic;">
-                Solo lectura
-            </div>`;
+            btnHtml = `<div style="margin-top:6px; font-size:0.7em; color:#666; font-style:italic;">Solo lectura</div>`;
         }
 
+        const propBadgeExtra = esProp
+            ? `<div style="font-size:0.65em;color:#ff9900;margin-top:3px;font-family:sans-serif;">Por: ${item.propuesto_por||'?'}</div>`
+            : '';
+
         html += `
-        <div class="img-card ${claseCard}" title="${item.nombre}">
+        <div class="img-card ${claseCard}" title="${item.nombre}" style="${cardBorderStyle}">
             ${badge}
             <img src="${imgSrc}"
                  onerror="this.onerror=null; this.src='${imgFallback}'"
                  style="${cursorStyle}"
                  ${clickAction}>
             <div class="nombre">${item.nombre}</div>
+            ${propBadgeExtra}
             ${btnHtml}
         </div>`;
     });
