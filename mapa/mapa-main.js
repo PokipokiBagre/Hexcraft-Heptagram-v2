@@ -1,7 +1,3 @@
-// ============================================================
-// mapa-ui.js
-// ============================================================
-
 import { estadoMapa, COLOR_AFINIDAD, ESTETICA, COLORES_JUGADOR } from './mapa-state.js';
 
 let canvas, ctx;
@@ -104,12 +100,12 @@ export function dibujarFrame() {
                 drawNormal = false;
             } else if (ancestorEdges.has(link)) {
                 ctx.strokeStyle = 'rgba(177, 156, 217, 0.55)'; 
-                ctx.lineWidth = 1.55 / scaleFactor;
+                ctx.lineWidth = 1.55 / scaleFactor; // +0.05
                 ctx.setLineDash([]);
                 drawNormal = false;
             } else {
                 ctx.strokeStyle = 'rgba(80, 80, 80, 0.35)'; 
-                ctx.lineWidth = 0.85 / scaleFactor;
+                ctx.lineWidth = 0.85 / scaleFactor; // +0.05
                 ctx.setLineDash([]);
                 ctx.globalAlpha = 0.3; 
                 arrowMult = 1.5; baseHeadLen = 5;
@@ -127,7 +123,7 @@ export function dibujarFrame() {
 
                 if (sP && tP) {
                     ctx.strokeStyle = COLORES_JUGADOR.posesionMorada; 
-                    ctx.lineWidth = 1.55 / scaleFactor;
+                    ctx.lineWidth = 1.55 / scaleFactor; // +0.05
                     ctx.setLineDash([]);
                 } else if (sP && tA) {
                     let target = link.target;
@@ -139,27 +135,27 @@ export function dibujarFrame() {
                     else if (ratio >= 0.4) ctx.strokeStyle = COLORES_JUGADOR.doradoMedio; 
                     else ctx.strokeStyle = COLORES_JUGADOR.doradoTenue; 
                     
-                    ctx.lineWidth = 1.55 / scaleFactor;
+                    ctx.lineWidth = 1.55 / scaleFactor; // +0.05
                     ctx.setLineDash([]);
                 } else if (sT && tT) {
                     ctx.strokeStyle = COLORES_JUGADOR.doradoRastreo; 
-                    ctx.lineWidth = 1.05 / scaleFactor;
+                    ctx.lineWidth = 1.05 / scaleFactor; // +0.05
                     ctx.setLineDash([]); 
                 } else {
                     ctx.strokeStyle = COLORES_JUGADOR.fondoNeutro; 
-                    ctx.lineWidth = 0.85 / scaleFactor;
+                    ctx.lineWidth = 0.85 / scaleFactor; // +0.05
                     ctx.setLineDash([]);
                     arrowMult = 1.5; baseHeadLen = 5;
                 }
             } else {
                 if (modoVisual === 'afinidades') {
                     ctx.strokeStyle = link.target.arrowColor || 'rgba(150, 150, 150, 0.3)'; 
-                    ctx.lineWidth = 1.55 / scaleFactor;
+                    ctx.lineWidth = 1.55 / scaleFactor; // +0.05
                     if (ctx.strokeStyle === ESTETICA.lineaRosa) ctx.setLineDash([8 / scaleFactor, 8 / scaleFactor]);
                     else ctx.setLineDash([]); 
                 } else {
                     ctx.strokeStyle = link.source.arrowColor || 'rgba(150, 150, 150, 0.3)'; 
-                    ctx.lineWidth = 1.55 / scaleFactor;
+                    ctx.lineWidth = 1.55 / scaleFactor; // +0.05
                     ctx.setLineDash([]); 
                 }
             }
@@ -180,6 +176,7 @@ export function dibujarFrame() {
 
     // --- HOOK DIBUJO DE EDICIÓN ---
     if (window.mapaEditor && window.mapaEditor.activa) {
+        // 1. Dibujar enlace temporal
         if (window.mapaEditor.tempLink) {
             const temp = window.mapaEditor.tempLink;
             const seleccion = window.mapaEditor.seleccionMultiple;
@@ -211,6 +208,7 @@ export function dibujarFrame() {
             });
         }
         
+        // 2. Dibujar Caja de Selección
         if (window.mapaEditor.boxStart && window.mapaEditor.boxCurrent) {
             const minX = Math.min(window.mapaEditor.boxStart.x, window.mapaEditor.boxCurrent.x);
             const minY = Math.min(window.mapaEditor.boxStart.y, window.mapaEditor.boxCurrent.y);
@@ -226,6 +224,7 @@ export function dibujarFrame() {
             ctx.setLineDash([]);
         }
 
+        // 3. Dibujar Enmascarado
         window.mapaEditor.seleccionMultiple.forEach(n => {
             ctx.beginPath(); 
             ctx.arc(n.x, n.y, n.radio + (12/scaleFactor), 0, Math.PI * 2);
@@ -331,7 +330,7 @@ export function dibujarFrame() {
         }
         
         ctx.shadowBlur = 0;
-        ctx.lineWidth = ((isHovered || isSelected) ? 4.05 : 2.05) / scaleFactor; 
+        ctx.lineWidth = ((isHovered || isSelected) ? 4.05 : 2.05) / scaleFactor; // +0.05
         ctx.beginPath(); ctx.arc(nodo.x, nodo.y, rOuter, 0, Math.PI * 2);
         
         if (esPlenamenteDescubierto) {
@@ -352,7 +351,7 @@ export function dibujarFrame() {
         ctx.setLineDash([]); 
 
         // ==========================================
-        // 3. TEXTOS Y LÓGICA DE MÁSCARA SIMPLE
+        // 3. TEXTOS
         // ==========================================
         if (camara.zoom > 0.08 || isHovered || isSelected || nodo.isHexNode) {
             let fontSize = nodo.isHexNode ? 52 : (esPlenamenteDescubierto ? 32 : 26);
@@ -364,17 +363,30 @@ export function dibujarFrame() {
             const textY = nodo.y + nodo.radio + (15 / scaleFactor);
             ctx.lineWidth = 6.05 / scaleFactor;
             
-            // 💥 LÓGICA LIMPIA: Si NO eres admin, NO lo tienes y NO es público -> Enmascarar
-            let ocultarInfo = false;
-            
-            if (!estadoMapa.esAdmin && !nodo.esConocido && !nodo.isHexNode) {
-                if (!(isPlayerView && tieneElHechizo)) {
-                    ocultarInfo = true;
-                }
+            // LÓGICA DE NOMBRE:
+            // Admin → siempre nombre real
+            // Jugador con posesión → nombre real
+            // Jugador sin posesión → ID enmascarado
+            // Público sin jugador + conocido → nombre real
+            // Público sin jugador + oculto → ID enmascarado
+            let textoADibujar;
+            const jugadorTieneNodo = isPlayerView && posesiones.has(nodo);
+            if (estadoMapa.esAdmin || nodo.isHexNode) {
+                // Admin siempre ve nombres reales
+                textoADibujar = nodo.esConocido
+                    ? nodo.nombre
+                    : `${nodo.nombreOriginal.replace(/\s*\(\d+\)$/, '').trim()} (${nodo.hex})`;
+            } else if (isPlayerView) {
+                // En vista jugador: solo se ve el nombre si lo posee
+                textoADibujar = jugadorTieneNodo
+                    ? nodo.nombre
+                    : `${nodo.id} (${nodo.hex})`;
+            } else {
+                // Vista pública sin jugador seleccionado
+                textoADibujar = nodo.esConocido
+                    ? nodo.nombre
+                    : `${nodo.id} (${nodo.hex})`;
             }
-
-            // Usamos nodo.id que sabemos que tiene "Hechizo X" puro desde la BD
-            let textoADibujar = ocultarInfo ? `${nodo.id} (${nodo.hex})` : nodo.nombre;
             
             if (isPlayerView && esIrrelevantePlayer && !nodo.isHexNode) {
                 ctx.strokeStyle = 'rgba(0,0,0,0.2)'; 
@@ -413,24 +425,13 @@ export function actualizarPanelInfo() {
 
     if (!nodo) { panel.classList.add('oculto'); return; }
 
-    const isPlayerView = estadoMapa.jugadorActivo !== 'Todos';
-    const tieneElHechizo = isPlayerView && estadoMapa.vistaJugador.posesiones.has(nodo);
-    
-    // 💥 MISMA LÓGICA LIMPIA:
-    let ocultarInfo = false;
-    if (!estadoMapa.esAdmin && !nodo.esConocido && !nodo.isHexNode) {
-        if (!(isPlayerView && tieneElHechizo)) {
-            ocultarInfo = true;
-        }
-    }
-
-    const tituloMostrado = ocultarInfo ? nodo.id : (nodo.nombreOriginal || nodo.id);
-    
+    const esOcultoParaPublico = !nodo.esConocido && !nodo.isHexNode && !estadoMapa.esAdmin;
+    const tituloMostrado = esOcultoParaPublico ? nodo.id : nodo.nombre;
     document.getElementById('info-titulo').innerText = tituloMostrado;
     const colorData = window.mapaColores[nodo.afinidad];
     const colorAfinidad = colorData ? colorData.t : '#888';
     
-    if (!ocultarInfo) {
+    if (nodo.esConocido || nodo.isHexNode) {
         document.getElementById('info-titulo').style.color = colorAfinidad;
         document.getElementById('info-tags').innerHTML = 
             '<span class="tag" style="border-color:' + colorAfinidad + '; color:' + colorAfinidad + '">' + nodo.afinidad + '</span>' +
@@ -450,7 +451,7 @@ export function actualizarPanelInfo() {
     const efectoEl = document.getElementById('info-efecto');
     const detallesEl = document.getElementById('info-detalles');
     
-    if (!ocultarInfo) {
+    if (nodo.esConocido) {
         if (nodo.efecto) {
             efectoEl.innerText = "Efecto: " + nodo.efecto; 
             efectoEl.style.display = 'block';
@@ -480,9 +481,9 @@ export function actualizarPanelInfo() {
         const safeId = nodo.id.replace(/'/g, "\\'");
         opDiv.innerHTML = `
             <hr style="border-color: #444; margin: 15px 0 10px 0;">
-            <label style="color:var(--gold); font-size:0.85em; font-weight:bold; font-family:'Cinzel';">🛠️ ESTADO GLOBAL (MÁSTER):</label>
+            <label style="color:var(--gold); font-size:0.85em; font-weight:bold; font-family:'Cinzel';">🛠️ ESTADO (MÁSTER):</label>
             <select onchange="window.cambiarEstadoNodo('${safeId}', this.value)" style="width:100%; background:#000; color:#fff; border:1px solid var(--gold); padding:8px; margin-top:5px; cursor:pointer; pointer-events:auto;">
-                <option value="si" ${nodo.esConocido ? 'selected' : ''}>👁️ SÍ (Descubierto por todos)</option>
+                <option value="si" ${nodo.esConocido ? 'selected' : ''}>👁️ SÍ (Descubierto)</option>
                 <option value="no" ${!nodo.esConocido ? 'selected' : ''}>🔒 NO (Sellado)</option>
             </select>
         `;
