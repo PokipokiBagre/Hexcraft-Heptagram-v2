@@ -1,4 +1,4 @@
-import { invGlobal, objGlobal, statsGlobal, estadoUI } from './obj-state.js';
+import { invGlobal, objGlobal, statsGlobal, estadoUI, propuestasGlobal } from './obj-state.js';
 import { db } from '../hex-db.js';
 
 function drawnHEXPreserveFocus(containerId, html) {
@@ -46,6 +46,8 @@ export function refrescarUI() {
     else if (estadoUI.vistaActual === 'crear-multi') dibujarCreacionMulti();
     else if (estadoUI.vistaActual === 'party-loot') dibujarPartyLoot();
     else if (estadoUI.vistaActual === 'transfer') dibujarTransferencia();
+    else if (estadoUI.vistaActual === 'propuestas') dibujarPropuestas();
+    else if (estadoUI.vistaActual === 'crear-propuesta') dibujarFormularioPropuesta();
 }
 
 export function dibujarGrillaPersonajes() {
@@ -222,7 +224,7 @@ export function dibujarInventarios() {
             html += `
             <div class="top-item-card ${rarClase}">
                 <img src="${db.storage.urlBase}/imgobjetos/${imgFile}.png" onclick="window.verImagen(this.src)" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'">
-                <span style="font-size:0.65em; display:block; height:2.4em; overflow:hidden; color:#d4af37; cursor:pointer;" onclick="window.verImagenByName('${oSafe}')">${o}</span>
+                <span style="font-size:0.65em; display:block; height:2.4em; overflow:hidden; color:#d4af37;" title="${o}">${o}</span>
             </div>`;
         });
         html += `</div><hr style="border:0; border-top:1px solid rgba(212,175,55,0.2); margin:20px 0;">`;
@@ -243,7 +245,7 @@ export function dibujarInventarios() {
 
             html += `<tr>
                 <td><img src="${db.storage.urlBase}/imgobjetos/${normalizarNombre(o)}.png" class="cat-img" onclick="window.verImagen(this.src)" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'"></td>
-                <td style="font-weight:bold; color:#d4af37; cursor:pointer;" onclick="window.verImagenByName('${oSafe}')">${o}</td>
+                <td style="font-weight:bold; color:#d4af37; cursor:pointer;" title="Clic para copiar al portapapeles" onclick="navigator.clipboard.writeText('${oSafe}: ${invGlobal[j][o]}').then(()=>{const t=document.createElement('div');t.innerText='📋 ${oSafe}: ${invGlobal[j][o]}';t.style.cssText='position:fixed;top:30px;left:50%;transform:translateX(-50%);background:#333;color:#d4af37;padding:8px 20px;border-radius:6px;z-index:99999;font-size:0.9em;font-family:Cinzel;border:1px solid #d4af37;';document.body.appendChild(t);setTimeout(()=>t.remove(),1500);})">${o}</td>
                 <td style="text-align:left; font-size:0.85em;">${objGlobal[o]?.eff || ''}</td>
                 <td>${cantHTML}</td>
             </tr>`;
@@ -282,7 +284,7 @@ export function dibujarCatalogo() {
             ` : '';
             html += `<tr>
                 <td><img src="${db.storage.urlBase}/imgobjetos/${normalizarNombre(o)}.png" class="cat-img" onclick="window.verImagen(this.src)" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'"></td>
-                <td style="font-weight:bold; color:#d4af37; cursor:pointer;" onclick="window.verImagenByName('${oSafe}')">${o} ${btnAdmin}</td>
+                <td style="font-weight:bold; color:#d4af37;">${o} ${btnAdmin}</td>
                 <td style="font-size:0.85em; color:#aaa;">${item.tipo}</td>
                 <td style="text-align:left; font-size:0.85em;">${item.eff}</td>
                 <td style="font-size:0.85em;">${item.rar}</td>
@@ -293,6 +295,10 @@ export function dibujarCatalogo() {
 }
 
 export function dibujarMenuOP() {
+    const pendientes = propuestasGlobal.length;
+    const badgeProp = pendientes > 0
+        ? `<span style="background:#ff9900; color:#000; font-size:0.7em; padding:2px 6px; border-radius:10px; margin-left:6px; font-weight:bold;">${pendientes}</span>`
+        : '';
     document.getElementById('menu-op-central').innerHTML = `
         <h2 style="margin-top:0;">Panel OP Maestro</h2>
         <div class="op-grid">
@@ -300,6 +306,7 @@ export function dibujarMenuOP() {
             <button onclick="window.mostrarPagina('transfer')" style="background:#1a4b8c; color:#fff;">Mercado de Transferencias</button>
             <button onclick="window.mostrarPagina('crear')" style="background:#4a004a">Creación Rápida (1)</button>
             <button onclick="window.mostrarPagina('crear-multi')" style="background:#600060">Forja Múltiple (6)</button>
+            <button onclick="window.mostrarPagina('propuestas')" style="background:#4a2800; border:1px solid #ff9900; color:#ff9900;">📥 Propuestas Pendientes${badgeProp}</button>
             <button onclick="window.descargarInventariosJPG()" style="background:#8b0000">Descargar todos los JPGs</button>
             <button onclick="window.descargarLogExcel()" style="background:#107c41; color:#fff;">Descargar Log (Excel)</button>
             <button onclick="window.descargarEstadoExcel()" style="background:#107c41; color:#fff;">Descargar Stock (Excel)</button>
@@ -674,4 +681,114 @@ export function dibujarModalEdicionObjeto(nombre) {
             </div>
         </div>`;
     document.body.appendChild(modal);
+}
+
+// ── Propuestas ───────────────────────────────────────────────
+export function dibujarPropuestas() {
+    const cont = document.getElementById('panel-propuestas');
+    if (!cont) return;
+
+    if (propuestasGlobal.length === 0) {
+        cont.innerHTML = `
+        <h2 style="margin-top:0; color:#ff9900;">📥 Propuestas de Objetos</h2>
+        <div style="text-align:center; padding:60px; color:#666; font-style:italic; border:1px dashed #444; border-radius:8px; background:rgba(0,0,0,0.3);">
+            No hay propuestas pendientes.
+        </div>
+        <button onclick="window.mostrarPagina('op-menu')" style="margin-top:20px; background:#333; padding:10px 20px; cursor:pointer; border-radius:4px;">← Volver al Panel</button>`;
+        return;
+    }
+
+    let html = `
+    <h2 style="margin-top:0; color:#ff9900;">📥 Propuestas de Objetos <span style="background:#ff9900; color:#000; font-size:0.6em; padding:2px 8px; border-radius:10px; vertical-align:middle;">${propuestasGlobal.length}</span></h2>
+    <div style="display:flex; gap:10px; margin-bottom:20px; flex-wrap:wrap;">
+        <button onclick="window.aprobarTodas()" style="background:linear-gradient(135deg,#004a00,#007700); color:white; font-weight:bold; padding:12px 20px; border:none; border-radius:6px; cursor:pointer; font-size:1em;">✅ Aprobar Todas (${propuestasGlobal.length})</button>
+        <button onclick="window.rechazarTodas()" style="background:linear-gradient(135deg,#4a0000,#770000); color:white; font-weight:bold; padding:12px 20px; border:none; border-radius:6px; cursor:pointer; font-size:1em;">❌ Rechazar Todas</button>
+        <button onclick="window.mostrarPagina('op-menu')" style="background:#333; padding:12px 20px; border:1px solid #555; border-radius:6px; cursor:pointer;">← Volver al Panel</button>
+    </div>
+    <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(280px,1fr)); gap:15px;">`;
+
+    propuestasGlobal.forEach(p => {
+        const oSafe = p.nombre.replace(/'/g, "\\'");
+        const norm = p.nombre.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n').replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+        const imgUrl = `${db.storage.urlBase}/imgobjetos/${norm}.png`;
+        const noFound = `${db.storage.urlBase}/imginterfaz/no_encontrado.png`;
+
+        html += `
+        <div style="background:linear-gradient(145deg,rgba(40,20,0,0.9),rgba(20,10,0,0.95)); border:2px solid #ff9900; border-radius:10px; padding:15px; position:relative;">
+            <div style="position:absolute;top:8px;right:8px; background:#ff9900; color:#000; font-size:0.65em; padding:2px 7px; border-radius:8px; font-weight:bold;">PROPUESTA</div>
+            <div style="display:flex; gap:12px; align-items:flex-start; margin-bottom:12px;">
+                <img src="${imgUrl}" onerror="this.onerror=null;this.src='${noFound}'" style="width:60px;height:60px;object-fit:cover;border-radius:6px;border:1px solid #ff9900;background:#000;">
+                <div style="flex:1;">
+                    <div style="font-weight:bold;color:#ff9900;font-size:1.05em;margin-bottom:4px;">${p.nombre}</div>
+                    <div style="font-size:0.75em;color:#aaa;">Tipo: ${p.tipo} | ${p.mat} | <span style="color:${p.rar==='Legendario'?'#d4af37':p.rar==='Raro'?'#8a2be2':'#aaa'}">${p.rar}</span></div>
+                    <div style="font-size:0.7em;color:#888;margin-top:4px;">Propuesto por: <b style="color:#ccc;">${p.propuesto_por}</b></div>
+                </div>
+            </div>
+            <div style="font-size:0.8em;color:#ddd;margin-bottom:12px;background:rgba(0,0,0,0.3);padding:8px;border-radius:4px;border-left:2px solid #ff9900;">${p.eff}</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">
+                <button onclick="window.aprobarPropuesta('${oSafe}')" style="background:#004a00;border:1px solid #00aa00;color:white;padding:8px;border-radius:4px;cursor:pointer;font-weight:bold;transition:0.2s;" onmouseover="this.style.background='#006600'" onmouseout="this.style.background='#004a00'">✅ Aprobar</button>
+                <button onclick="window.rechazarPropuesta('${oSafe}')" style="background:#4a0000;border:1px solid #aa0000;color:white;padding:8px;border-radius:4px;cursor:pointer;font-weight:bold;transition:0.2s;" onmouseover="this.style.background='#660000'" onmouseout="this.style.background='#4a0000'">❌ Rechazar</button>
+            </div>
+        </div>`;
+    });
+
+    html += `</div>`;
+    cont.innerHTML = html;
+}
+
+export function dibujarFormularioPropuesta() {
+    const cont = document.getElementById('panel-crear-propuesta');
+    if (!cont) return;
+
+    const norm = (str) => str ? str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n').replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'') : '';
+
+    const tipos = ['Consumible','Herramienta','Accesorio','Equipo','Equipamiento','-'];
+    const mats  = ['Cristal','Metal','Orgánico','Sagrado','-'];
+    const rars  = ['Común','Raro','Legendario'];
+
+    cont.innerHTML = `
+    <h2 style="margin-top:0; color:#ff9900; font-family:'Cinzel';">📝 Proponer Nuevo Objeto</h2>
+    <div style="max-width:620px; margin:0 auto; background:rgba(40,15,0,0.9); padding:25px; border:2px solid #ff9900; border-radius:10px; box-shadow:0 0 20px rgba(255,153,0,0.15);">
+        <p style="color:#aaa; font-size:0.85em; margin-top:0; border-left:3px solid #ff9900; padding-left:10px;">
+            Tu propuesta será revisada por el OP antes de aparecer en el catálogo oficial. Incluye una imagen en el Gestor de Imágenes si quieres.
+        </p>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+            <div>
+                <label style="color:#ff9900;font-size:0.8em;display:block;margin-bottom:4px;">Tu nombre / personaje</label>
+                <input type="text" id="prop-autor" class="search-bar" placeholder="¿Quién propone esto?" style="width:100%;box-sizing:border-box;">
+            </div>
+            <div>
+                <label style="color:#ff9900;font-size:0.8em;display:block;margin-bottom:4px;">Nombre del objeto *</label>
+                <input type="text" id="prop-nombre" class="search-bar" placeholder="Nombre único del objeto..." style="width:100%;box-sizing:border-box;">
+            </div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div>
+                    <label style="color:#aaa;font-size:0.8em;display:block;margin-bottom:4px;">Tipo</label>
+                    <select id="prop-tipo" class="search-bar" style="width:100%;box-sizing:border-box;">
+                        ${tipos.map(t=>`<option value="${t}">${t}</option>`).join('')}
+                    </select>
+                </div>
+                <div>
+                    <label style="color:#aaa;font-size:0.8em;display:block;margin-bottom:4px;">Material</label>
+                    <select id="prop-mat" class="search-bar" style="width:100%;box-sizing:border-box;">
+                        ${mats.map(m=>`<option value="${m}">${m}</option>`).join('')}
+                    </select>
+                </div>
+            </div>
+            <div>
+                <label style="color:#aaa;font-size:0.8em;display:block;margin-bottom:4px;">Rareza</label>
+                <select id="prop-rar" class="search-bar" style="width:100%;box-sizing:border-box;">
+                    ${rars.map(r=>`<option value="${r}">${r}</option>`).join('')}
+                </select>
+            </div>
+            <div>
+                <label style="color:#aaa;font-size:0.8em;display:block;margin-bottom:4px;">Efecto / Descripción *</label>
+                <textarea id="prop-eff" class="search-bar" placeholder="¿Qué hace este objeto?" style="width:100%;height:80px;box-sizing:border-box;resize:none;"></textarea>
+            </div>
+            <div style="display:flex;gap:10px;margin-top:8px;">
+                <button onclick="window.enviarPropuesta()" style="flex:2;background:linear-gradient(135deg,#4a2800,#7a4a00);color:#ff9900;font-weight:bold;padding:14px;border:1px solid #ff9900;border-radius:6px;cursor:pointer;font-size:1.05em;font-family:'Cinzel';transition:0.2s;" onmouseover="this.style.background='#7a4a00'" onmouseout="this.style.background='linear-gradient(135deg,#4a2800,#7a4a00)'">📨 ENVIAR PROPUESTA</button>
+                <button onclick="window.mostrarPagina('grilla')" style="flex:1;background:#333;color:#aaa;padding:14px;border:1px solid #555;border-radius:6px;cursor:pointer;">Cancelar</button>
+            </div>
+        </div>
+    </div>`;
 }
