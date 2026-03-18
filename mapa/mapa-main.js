@@ -1,556 +1,566 @@
-import { estadoMapa } from './mapa-state.js';
-import { cargarDatos, actualizarColoresFlechas, guardarPosicionesYVisibilidad } from './mapa-data.js';
-import { inicializarCanvas, dibujarFrame, actualizarPanelInfo, resetearPosicionPanel } from './mapa-ui.js';
-import { hexAuth } from '../hex-auth.js';
-import { db }      from '../hex-db.js';
+// ============================================================
+// mapa-ui.js
+// ============================================================
 
-window.onload = async () => {
-    let favicon = document.querySelector("link[rel='icon']");
-    if (!favicon) {
-        favicon = document.createElement("link");
-        favicon.rel = "icon";
-        document.head.appendChild(favicon);
-    }
-    favicon.href = `${db.storage.urlBase}/imginterfaz/icon.png`;
+import { estadoMapa, COLOR_AFINIDAD, ESTETICA, COLORES_JUGADOR } from './mapa-state.js';
 
-    await hexAuth.init();
-    estadoMapa.esAdmin = hexAuth.esAdmin();
+let canvas, ctx;
 
-    if (estadoMapa.esAdmin) {
-        const btnEditar = document.getElementById('btn-editar-mapa');
-        const btnOrdenar = document.getElementById('btn-ordenar');
-        if (btnEditar) btnEditar.classList.remove('oculto');
-        if (btnOrdenar) btnOrdenar.classList.remove('oculto');
-    }
-
-    try { 
-        inicializarCanvas();
-        const barra = document.getElementById('carga-progreso');
-        const loadScreen = document.getElementById('loader');
-
-        await cargarDatos(barra);
-        centrarCamaraAuto(); 
-        inicializarSidebar(); 
-        
-        if (loadScreen) {
-            loadScreen.style.opacity = '0';
-            setTimeout(() => loadScreen.remove(), 500);
-        }
-
-        if(estadoMapa.nodos.some(n => n.modificado)) {
-            document.getElementById('btn-save-map').classList.remove('oculto');
-        }
-
-        iniciarEventosInput();
-        bucleRender();
-    } catch (error) {
-        console.error("Error fatal iniciando el mapa:", error);
-    }
-};
-
-window.cambiarModoVisual = (modo) => {
-    estadoMapa.modoVisual = modo;
-    document.getElementById('mode-descubiertos').classList.toggle('active', modo === 'descubiertos');
-    document.getElementById('mode-afinidades').classList.toggle('active', modo === 'afinidades');
-    dibujarFrame();
-};
-
-const normalizarNombre = (str) => str ? str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/\s+/g,'_').replace(/[^a-z0-9ñ_]/g,'') : "";
-
-function inicializarSidebar() {
-    const container = document.getElementById('lista-jugadores');
-    if(!container) return;
-    container.innerHTML = '';
+export function inicializarCanvas() {
+    canvas = document.getElementById('mapa-canvas');
+    if(!canvas) return;
+    ctx = canvas.getContext('2d', { alpha: false });
+    redimensionar();
+    window.addEventListener('resize', redimensionar);
     
-    estadoMapa.jugadores.forEach(jug => {
-        const btn = document.createElement('button');
-        btn.className = 'btn-jugador';
-        btn.id = 'btn-jug-' + jug.replace(/\s+/g, '-');
-        
-        btn.innerHTML = `
-            <img src="${db.storage.urlBase}/imgpersonajes/${normalizarNombre(jug)}icon.png" 
-                 onerror="this.onerror=null; this.src='${db.storage.urlBase}/imginterfaz/no_encontrado.png'" 
-                 style="width:24px; height:24px; border-radius:50%; object-fit:cover; border:1px solid var(--gold);">
-            <span>${jug}</span>`;
-            
-        btn.onclick = () => window.seleccionarJugador(jug);
-        container.appendChild(btn);
-    });
+    // Hacemos arrastrables ambos paneles
+    hacerPanelArrastrable('panel-info');
+    hacerPanelArrastrable('panel-edicion-avanzada');
 }
 
-// ── LÓGICA DE SELECCIÓN BLINDADA ──────────────────────────────────
-window.seleccionarJugador = (nombre) => {
-    estadoMapa.jugadorActivo = nombre;
+function redimensionar() {
+    if(!canvas) return;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = window.innerWidth * dpr;
+    canvas.height = window.innerHeight * dpr;
+    canvas.style.width = window.innerWidth + 'px';
+    canvas.style.height = window.innerHeight + 'px';
+    dibujarFrame();
+}
+
+export function dibujarFrame() {
+    if(!ctx) return;
     
-    document.querySelectorAll('.btn-jugador').forEach(b => b.classList.remove('activo'));
-    let btnId = nombre === 'Todos' ? 'btn-jug-Todos' : 'btn-jug-' + nombre.replace(/\s+/g, '-');
-    let activeBtn = document.getElementById(btnId);
-    if(activeBtn) activeBtn.classList.add('activo');
-    
-    const sidebar = document.getElementById('sidebar-jugadores');
-    if (sidebar) sidebar.classList.remove('open');
+    const { nodos, enlaces, camara, interaccion, jugadorActivo, vistaJugador, modoVisual } = estadoMapa;
 
-    estadoMapa.vistaJugador = { posesiones: new Set(), aprendibles: new Set(), rastreo: new Set() };
-    
-    if (nombre !== 'Todos') {
-        const inv = estadoMapa.inventario[nombre] || new Set();
-        
-        estadoMapa.nodos.forEach(n => {
-            let idName = n.id.toLowerCase().trim();
-            let originalName = n.nombreOriginal.toLowerCase().trim();
-            let baseName = originalName.replace(/\s*\(\d+\)$/, '').trim();
-            let justId = idName.replace('hechizo', '').trim();
-            let idWithHechizo = `hechizo ${justId}`;
+    ctx.setTransform(1, 0, 0, 1, 0, 0); 
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = '#05000a';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-            // Comparamos contra todas las variables posibles
-            if (inv.has(idName) || inv.has(originalName) || inv.has(baseName) || inv.has(justId) || inv.has(idWithHechizo)) {
-                estadoMapa.vistaJugador.posesiones.add(n);
-            }
-        });
+    const dpr = window.devicePixelRatio || 1;
+    ctx.scale(dpr, dpr);
+    ctx.translate(camara.x, camara.y);
+    ctx.scale(camara.zoom, camara.zoom);
 
-        // Reconstruir aprendibles
-        estadoMapa.enlaces.forEach(e => {
-            if (estadoMapa.vistaJugador.posesiones.has(e.source) && !estadoMapa.vistaJugador.posesiones.has(e.target)) {
-                estadoMapa.vistaJugador.aprendibles.add(e.target);
-            }
-        });
+    const scaleFactor = Math.max(camara.zoom, 0.2); 
+    const nodoActivo = interaccion.selectedNode || interaccion.hoveredNode;
+    const isPlayerView = jugadorActivo !== 'Todos';
 
-        // Reconstruir rastreo (recursivo) hacia atrás
-        const rastrear = (n) => {
-            estadoMapa.enlaces.forEach(e => {
-                if (e.target === n && !estadoMapa.vistaJugador.rastreo.has(e.source) && !estadoMapa.vistaJugador.posesiones.has(e.source)) {
-                    estadoMapa.vistaJugador.rastreo.add(e.source);
-                    rastrear(e.source);
+    const posesiones = vistaJugador.posesiones || new Set();
+    const aprendibles = vistaJugador.aprendibles || new Set();
+    const rastreo = vistaJugador.rastreo || new Set();
+
+    const ancestorEdges = new Set();
+    const ancestorNodes = new Set();
+    const outgoingEdges = new Set();
+    const outgoingNodes = new Set();
+
+    if (nodoActivo) {
+        const encontrarPrecedentes = (n) => {
+            enlaces.forEach(e => {
+                if (e.target === n && !ancestorEdges.has(e)) {
+                    ancestorEdges.add(e);
+                    ancestorNodes.add(e.source);
+                    encontrarPrecedentes(e.source); 
                 }
             });
         };
-        estadoMapa.vistaJugador.aprendibles.forEach(n => rastrear(n));
-        estadoMapa.vistaJugador.posesiones.forEach(n => rastrear(n));
-    }
-    
-    estadoMapa.interaccion.selectedNode = null;
-    window.cerrarPanelInfo(); 
-};
+        encontrarPrecedentes(nodoActivo);
 
-window.abrirMenuOP = async () => { 
-    if (estadoMapa.esAdmin) { 
-        estadoMapa.esAdmin = false; 
-        alert("Modo OP Desactivado."); 
-        document.getElementById('btn-save-map').classList.add('oculto');
-        document.getElementById('btn-ordenar').classList.add('oculto');
-        document.getElementById('btn-editar-mapa').classList.add('oculto');
-        if (window.mapaEditor) window.mapaEditor.desactivar(); 
-        estadoMapa.interaccion.selectedNode = null;
-        actualizarPanelInfo(); 
-    } else { 
-        await hexAuth._mostrarModalLogin();
-        estadoMapa.esAdmin = hexAuth.esAdmin();
-        if (estadoMapa.esAdmin) {
-            document.getElementById('btn-ordenar').classList.remove('oculto');
-            document.getElementById('btn-editar-mapa').classList.remove('oculto'); 
-            alert("Modo OP Activado.\\n- TOCA un nodo para fijar su menú.\\n- Usa 'Auto-Ordenar' para organizar el mapa.");
-            actualizarPanelInfo(); 
-        }
-    } 
-};
-
-window.cerrarPanelInfo = () => {
-    estadoMapa.interaccion.selectedNode = null;
-    estadoMapa.interaccion.hoveredNode = null; 
-    resetearPosicionPanel();
-    actualizarPanelInfo();
-    dibujarFrame(); 
-};
-
-// ... Resto del motor físico sin alterar (se asume que YifanHu y eventos input ya están bien)
-window.ordenarMapaYifanHu = () => {
-    const nodos = estadoMapa.nodos;
-    const enlaces = estadoMapa.enlaces;
-    
-    const K = 550; 
-    let iteraciones = 150; 
-    let temp = 400; 
-
-    nodos.forEach(n => n.modificado = true);
-    document.getElementById('btn-save-map').classList.remove('oculto');
-
-    function iterarFisica() {
-        if(iteraciones <= 0) {
-            alert("¡Mapa circular ordenado! Si te gusta, pulsa Guardar Cambios.");
-            return;
-        }
-
-        const disp = new Map();
-        nodos.forEach(n => disp.set(n.id, {x:0, y:0}));
-
-        for(let i=0; i<nodos.length; i++) {
-            for(let j=i+1; j<nodos.length; j++) {
-                const u = nodos[i]; const v = nodos[j];
-                let dx = u.x - v.x; let dy = u.y - v.y;
-                let dist = Math.sqrt(dx*dx + dy*dy) || 1;
-                
-                const f = (K * K) / dist;
-                const fx = (dx / dist) * f; const fy = (dy / dist) * f;
-
-                disp.get(u.id).x += fx; disp.get(u.id).y += fy;
-                disp.get(v.id).x -= fx; disp.get(v.id).y -= fy;
-            }
-        }
-
-        enlaces.forEach(link => {
-            const u = link.source; const v = link.target;
-            let dx = u.x - v.x; let dy = u.y - v.y;
-            let dist = Math.sqrt(dx*dx + dy*dy) || 1;
-
-            const f = (dist * dist) / K;
-            const fx = (dx / dist) * f; const fy = (dy / dist) * f;
-
-            disp.get(u.id).x -= fx; disp.get(u.id).y -= fy;
-            disp.get(v.id).x += fx; disp.get(v.id).y += fy;
-        });
-
-        nodos.forEach(u => {
-            if(!u.isHexNode) {
-                let distCentro = Math.sqrt(u.x*u.x + u.y*u.y) || 1;
-                const fG = (distCentro * distCentro) / (K * 2); 
-                disp.get(u.id).x -= (u.x / distCentro) * fG;
-                disp.get(u.id).y -= (u.y / distCentro) * fG;
+        enlaces.forEach(e => {
+            if (e.source === nodoActivo) {
+                outgoingEdges.add(e);
+                outgoingNodes.add(e.target);
             }
         });
-
-        nodos.forEach(u => {
-            if(u.isHexNode) { u.x = 0; u.y = 0; return; }
-
-            const d = disp.get(u.id);
-            const dLen = Math.sqrt(d.x*d.x + d.y*d.y);
-            if(dLen > 0) {
-                const limit = Math.min(dLen, temp); 
-                u.x += (d.x / dLen) * limit;
-                u.y += (d.y / dLen) * limit;
-            }
-        });
-
-        temp *= 0.95; 
-        iteraciones--;
-        requestAnimationFrame(iterarFisica); 
     }
 
-    iterarFisica();
-};
+    // ==========================================
+    // 1. DIBUJAR ENLACES
+    // ==========================================
+    enlaces.forEach(link => {
+        const dx = link.target.x - link.source.x;
+        const dy = link.target.y - link.source.y;
+        const angle = Math.atan2(dy, dx);
+        
+        const targetX = link.target.x - Math.cos(angle) * (link.target.radio + (4/scaleFactor));
+        const targetY = link.target.y - Math.sin(angle) * (link.target.radio + (4/scaleFactor));
 
-window.cambiarEstadoNodo = (id, valor) => {
-    const nodo = estadoMapa.nodos.find(n => n.id === id);
-    if(nodo) {
-        const nuevoEstado = (valor === 'si');
-        if (nodo.esConocido !== nuevoEstado) {
-            nodo.esConocido = nuevoEstado;
-            nodo.modificado = true;
-            nodo.radio = nodo.esConocido ? 35 : 28;
-            let baseName = nodo.nombreOriginal.replace(/\s*\(\d+\)$/, '').trim();
-            if (nodo.esConocido) {
-                nodo.nombre = `${baseName} (${nodo.hex})`;
+        ctx.beginPath();
+        ctx.moveTo(link.source.x, link.source.y);
+        ctx.lineTo(targetX, targetY);
+        
+        ctx.globalAlpha = 1.0; 
+        let drawNormal = true;
+        let arrowMult = 3;
+        let baseHeadLen = 10;
+
+        if (nodoActivo) {
+            if (outgoingEdges.has(link)) {
+                ctx.strokeStyle = ESTETICA.lineaSaliente;
+                ctx.lineWidth = 4.05 / scaleFactor;
+                ctx.setLineDash([]);
+                drawNormal = false;
+            } else if (ancestorEdges.has(link)) {
+                ctx.strokeStyle = 'rgba(177, 156, 217, 0.55)'; 
+                ctx.lineWidth = 1.55 / scaleFactor;
+                ctx.setLineDash([]);
+                drawNormal = false;
             } else {
-                let maskName = nodo.id.toLowerCase().includes('hechizo') ? nodo.id : `Hechizo ${nodo.id}`;
-                nodo.nombre = `${maskName} (${nodo.hex})`;
+                ctx.strokeStyle = 'rgba(80, 80, 80, 0.35)'; 
+                ctx.lineWidth = 0.85 / scaleFactor;
+                ctx.setLineDash([]);
+                ctx.globalAlpha = 0.3; 
+                arrowMult = 1.5; baseHeadLen = 5;
+                drawNormal = false;
             }
-
-            actualizarColoresFlechas(); 
-            actualizarPanelInfo(); 
-            document.getElementById('btn-save-map').classList.remove('oculto');
-        }
-    }
-};
-
-window.guardarCambiosMapa = async () => {
-    const btn = document.getElementById('btn-save-map');
-    btn.innerText = "Guardando..."; btn.disabled = true;
-
-    const cambios = estadoMapa.nodos.filter(n => n.modificado).map(n => ({
-        hechizo_id:  n.id || n.nombreOriginal,
-        pos_x:       Math.round(n.x),
-        pos_y:       Math.round(n.y),
-        es_conocido: n.esConocido
-    }));
-
-    if (cambios.length === 0) {
-        alert("No hay cambios para guardar.");
-        btn.classList.add('oculto'); btn.disabled = false;
-        return;
-    }
-
-    if (await db.hechizos.guardarPosicionesBatch(cambios)) {
-        alert("¡Éxito! Posiciones guardadas permanentemente.");
-        estadoMapa.nodos.forEach(n => n.modificado = false);
-        btn.classList.add('oculto');
-    } else {
-        alert("Fallo de conexión al intentar guardar.");
-    }
-
-    btn.innerText = "💾 Guardar Cambios"; btn.disabled = false;
-};
-
-function centrarCamaraAuto() {
-    if (estadoMapa.nodos.length === 0) return;
-    
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    estadoMapa.nodos.forEach(n => {
-        if (n.x < minX) minX = n.x;
-        if (n.x > maxX) maxX = n.x;
-        if (n.y < minY) minY = n.y;
-        if (n.y > maxY) maxY = n.y;
-    });
-
-    const w = (maxX - minX) || 1000;
-    const h = (maxY - minY) || 1000;
-    const cx = minX + w / 2;
-    const cy = minY + h / 2;
-
-    const zoomX = window.innerWidth / (w * 1.2);
-    const zoomY = window.innerHeight / (h * 1.2);
-    
-    estadoMapa.camara.zoom = Math.min(zoomX, zoomY, 1.5); 
-    estadoMapa.camara.x = (window.innerWidth / 2) - (cx * estadoMapa.camara.zoom);
-    estadoMapa.camara.y = (window.innerHeight / 2) - (cy * estadoMapa.camara.zoom);
-}
-
-function iniciarEventosInput() {
-    const canvas = document.getElementById('mapa-canvas');
-    if(!canvas) return;
-
-    let pinchStartDistance = 0;
-
-    const getPosicionMundo = (clientX, clientY) => {
-        const camara = estadoMapa.camara;
-        return {
-            x: (clientX - camara.x) / camara.zoom,
-            y: (clientY - camara.y) / camara.zoom
-        };
-    };
-
-    const obtenerNodoEnCursor = (worldX, worldY) => {
-        for (let i = estadoMapa.nodos.length - 1; i >= 0; i--) {
-            const n = estadoMapa.nodos[i];
-            const dist = Math.hypot(n.x - worldX, n.y - worldY);
-            if (dist <= n.radio) return n;
-        }
-        return null;
-    };
-
-    canvas.addEventListener('dblclick', (e) => {
-        estadoMapa.interaccion.selectedNode = null;
-        resetearPosicionPanel();
-        actualizarPanelInfo();
-    });
-
-    canvas.addEventListener('mousedown', (e) => {
-        const worldPos = getPosicionMundo(e.clientX, e.clientY);
-        const nodo = obtenerNodoEnCursor(worldPos.x, worldPos.y);
-
-        if (window.mapaEditor && window.mapaEditor.activa) {
-            window.mapaEditor.onMouseDown(e, nodo, worldPos);
-            estadoMapa.interaccion.lastMouseX = e.clientX;
-            estadoMapa.interaccion.lastMouseY = e.clientY;
-            return;
-        }
-
-        if (nodo) {
-            if (estadoMapa.interaccion.selectedNode === nodo) {
-                estadoMapa.interaccion.selectedNode = null;
-                resetearPosicionPanel();
-            } else {
-                estadoMapa.interaccion.selectedNode = nodo;
-                resetearPosicionPanel(); 
-            }
-            if (estadoMapa.esAdmin) estadoMapa.interaccion.draggedNode = nodo;
-        } else {
-            estadoMapa.interaccion.isDraggingBg = true;
-        }
-        
-        actualizarPanelInfo(); 
-        estadoMapa.interaccion.lastMouseX = e.clientX;
-        estadoMapa.interaccion.lastMouseY = e.clientY;
-    });
-
-    canvas.addEventListener('mousemove', (e) => {
-        const dx = e.clientX - estadoMapa.interaccion.lastMouseX;
-        const dy = e.clientY - estadoMapa.interaccion.lastMouseY;
-        const worldPos = getPosicionMundo(e.clientX, e.clientY);
-
-        if (window.mapaEditor && window.mapaEditor.activa) {
-            window.mapaEditor.onMouseMove(e, dx, dy, worldPos);
-            estadoMapa.interaccion.lastMouseX = e.clientX;
-            estadoMapa.interaccion.lastMouseY = e.clientY;
-            const nodoBajoCursor = obtenerNodoEnCursor(worldPos.x, worldPos.y);
-            canvas.style.cursor = nodoBajoCursor ? 'pointer' : (window.mapaEditor.herramienta === 'enlace' ? 'crosshair' : 'grab');
-            return;
-        }
-
-        if (estadoMapa.interaccion.isDraggingBg) {
-            estadoMapa.camara.x += dx;
-            estadoMapa.camara.y += dy;
         } 
-        else if (estadoMapa.interaccion.draggedNode) {
-            const n = estadoMapa.interaccion.draggedNode;
-            n.x += dx / estadoMapa.camara.zoom;
-            n.y += dy / estadoMapa.camara.zoom;
-            n.modificado = true;
-            document.getElementById('btn-save-map').classList.remove('oculto');
-        } 
-        else {
-            const nodoBajoCursor = obtenerNodoEnCursor(worldPos.x, worldPos.y);
-            if (estadoMapa.interaccion.hoveredNode !== nodoBajoCursor) {
-                estadoMapa.interaccion.hoveredNode = nodoBajoCursor;
-                if (!estadoMapa.interaccion.selectedNode) actualizarPanelInfo();
-                canvas.style.cursor = nodoBajoCursor ? 'pointer' : 'grab';
-            }
-        }
-        estadoMapa.interaccion.lastMouseX = e.clientX;
-        estadoMapa.interaccion.lastMouseY = e.clientY;
-    });
-
-    canvas.addEventListener('mouseup', (e) => {
-        if (window.mapaEditor && window.mapaEditor.activa) {
-            const worldPos = getPosicionMundo(e.clientX, e.clientY);
-            const nodo = obtenerNodoEnCursor(worldPos.x, worldPos.y);
-            window.mapaEditor.onMouseUp(e, nodo);
-            return;
-        }
-        estadoMapa.interaccion.isDraggingBg = false;
-        estadoMapa.interaccion.draggedNode = null;
-        canvas.style.cursor = estadoMapa.interaccion.hoveredNode ? 'pointer' : 'grab';
-    });
-
-    canvas.addEventListener('wheel', (e) => {
-        e.preventDefault();
-        const camara = estadoMapa.camara;
-        const zoomDelta = e.deltaY > 0 ? 0.85 : 1.15; 
-        const nuevoZoom = Math.max(0.01, Math.min(camara.zoom * zoomDelta, 4)); 
         
-        const mouseX = e.clientX;
-        const mouseY = e.clientY;
-        
-        camara.x = mouseX - (mouseX - camara.x) * (nuevoZoom / camara.zoom);
-        camara.y = mouseY - (mouseY - camara.y) * (nuevoZoom / camara.zoom);
-        camara.zoom = nuevoZoom;
-    }, { passive: false });
+        if (drawNormal) {
+            if (isPlayerView) {
+                let sP = posesiones.has(link.source);
+                let tP = posesiones.has(link.target);
+                let tA = aprendibles.has(link.target);
+                let sT = rastreo.has(link.source) || sP;
+                let tT = rastreo.has(link.target) || tP || tA;
 
-    canvas.addEventListener('touchstart', (e) => {
-        if (e.target.closest('button') || e.target.closest('.sidebar') || e.target.closest('.view-controls')) return; 
-        e.preventDefault(); 
-        
-        if (e.touches.length === 1) { 
-            const touch = e.touches[0];
-            const worldPos = getPosicionMundo(touch.clientX, touch.clientY);
-            const nodo = obtenerNodoEnCursor(worldPos.x, worldPos.y);
+                if (sP && tP) {
+                    ctx.strokeStyle = COLORES_JUGADOR.posesionMorada; 
+                    ctx.lineWidth = 1.55 / scaleFactor;
+                    ctx.setLineDash([]);
+                } else if (sP && tA) {
+                    let target = link.target;
+                    let totalReq = target.incomingSources.length;
+                    let posReq = target.incomingSources.filter(n => posesiones.has(n)).length;
+                    let ratio = posReq / totalReq;
 
-            if (window.mapaEditor && window.mapaEditor.activa) {
-                window.mapaEditor.onMouseDown(e, nodo, worldPos);
-                estadoMapa.interaccion.lastMouseX = touch.clientX;
-                estadoMapa.interaccion.lastMouseY = touch.clientY;
-                return;
-            }
-
-            if (nodo) {
-                if (estadoMapa.interaccion.selectedNode === nodo) {
-                    estadoMapa.interaccion.selectedNode = null;
-                    resetearPosicionPanel();
+                    if (ratio >= 0.75) ctx.strokeStyle = COLORES_JUGADOR.doradoInmediato; 
+                    else if (ratio >= 0.4) ctx.strokeStyle = COLORES_JUGADOR.doradoMedio; 
+                    else ctx.strokeStyle = COLORES_JUGADOR.doradoTenue; 
+                    
+                    ctx.lineWidth = 1.55 / scaleFactor;
+                    ctx.setLineDash([]);
+                } else if (sT && tT) {
+                    ctx.strokeStyle = COLORES_JUGADOR.doradoRastreo; 
+                    ctx.lineWidth = 1.05 / scaleFactor;
+                    ctx.setLineDash([]); 
                 } else {
-                    estadoMapa.interaccion.selectedNode = nodo;
-                    resetearPosicionPanel(); 
+                    ctx.strokeStyle = COLORES_JUGADOR.fondoNeutro; 
+                    ctx.lineWidth = 0.85 / scaleFactor;
+                    ctx.setLineDash([]);
+                    arrowMult = 1.5; baseHeadLen = 5;
                 }
-                if (estadoMapa.esAdmin) estadoMapa.interaccion.draggedNode = nodo;
             } else {
-                estadoMapa.interaccion.isDraggingBg = true;
+                if (modoVisual === 'afinidades') {
+                    ctx.strokeStyle = link.target.arrowColor || 'rgba(150, 150, 150, 0.3)'; 
+                    ctx.lineWidth = 1.55 / scaleFactor;
+                    if (ctx.strokeStyle === ESTETICA.lineaRosa) ctx.setLineDash([8 / scaleFactor, 8 / scaleFactor]);
+                    else ctx.setLineDash([]); 
+                } else {
+                    ctx.strokeStyle = link.source.arrowColor || 'rgba(150, 150, 150, 0.3)'; 
+                    ctx.lineWidth = 1.55 / scaleFactor;
+                    ctx.setLineDash([]); 
+                }
             }
-            
-            actualizarPanelInfo(); 
-            estadoMapa.interaccion.lastMouseX = touch.clientX;
-            estadoMapa.interaccion.lastMouseY = touch.clientY;
-        } 
-        else if (e.touches.length === 2) { 
-            estadoMapa.interaccion.isDraggingBg = false;
-            estadoMapa.interaccion.draggedNode = null;
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
-            pinchStartDistance = Math.hypot(dx, dy);
-        }
-    }, { passive: false });
-
-    canvas.addEventListener('touchmove', (e) => {
-        if (e.target.closest('button') || e.target.closest('.sidebar') || e.target.closest('.view-controls')) return; 
-        e.preventDefault(); 
-        
-        if (e.touches.length === 1) { 
-            const touch = e.touches[0];
-            const dx = touch.clientX - estadoMapa.interaccion.lastMouseX;
-            const dy = touch.clientY - estadoMapa.interaccion.lastMouseY;
-            const worldPos = getPosicionMundo(touch.clientX, touch.clientY);
-
-            if (window.mapaEditor && window.mapaEditor.activa) {
-                window.mapaEditor.onMouseMove(e, dx, dy, worldPos);
-                estadoMapa.interaccion.lastMouseX = touch.clientX;
-                estadoMapa.interaccion.lastMouseY = touch.clientY;
-                return;
-            }
-
-            if (estadoMapa.interaccion.isDraggingBg) {
-                estadoMapa.camara.x += dx;
-                estadoMapa.camara.y += dy;
-            } 
-            else if (estadoMapa.interaccion.draggedNode) {
-                const n = estadoMapa.interaccion.draggedNode;
-                n.x += dx / estadoMapa.camara.zoom;
-                n.y += dy / estadoMapa.camara.zoom;
-
-                n.modificado = true;
-                document.getElementById('btn-save-map').classList.remove('oculto');
-            }
-
-            estadoMapa.interaccion.lastMouseX = touch.clientX;
-            estadoMapa.interaccion.lastMouseY = touch.clientY;
-            
-        } else if (e.touches.length === 2) { 
-            const dx = e.touches[0].clientX - e.touches[1].clientX;
-            const dy = e.touches[0].clientY - e.touches[1].clientY;
-            const distance = Math.hypot(dx, dy);
-            
-            if (pinchStartDistance > 0) {
-                const zoomFactor = distance / pinchStartDistance;
-                const camara = estadoMapa.camara;
-                const nuevoZoom = Math.max(0.01, Math.min(camara.zoom * zoomFactor, 4));
-                
-                const mouseX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
-                const mouseY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
-                
-                camara.x = mouseX - (mouseX - camara.x) * (nuevoZoom / camara.zoom);
-                camara.y = mouseY - (mouseY - camara.y) * (nuevoZoom / camara.zoom);
-                camara.zoom = nuevoZoom;
-            }
-            pinchStartDistance = distance;
-        }
-    }, { passive: false });
-
-    canvas.addEventListener('touchend', (e) => {
-        if (window.mapaEditor && window.mapaEditor.activa) {
-            let nodo = null;
-            if (e.changedTouches && e.changedTouches.length > 0) {
-                const touch = e.changedTouches[0];
-                const worldPos = getPosicionMundo(touch.clientX, touch.clientY);
-                nodo = obtenerNodoEnCursor(worldPos.x, worldPos.y);
-            }
-            window.mapaEditor.onMouseUp(e, nodo);
-            return;
         }
 
-        estadoMapa.interaccion.isDraggingBg = false;
-        estadoMapa.interaccion.draggedNode = null;
-        if (e.touches.length < 2) {
-            pinchStartDistance = 0;
-        }
+        ctx.stroke();
+        ctx.setLineDash([]); 
+
+        const headlen = (ctx.lineWidth * arrowMult) + (baseHeadLen / scaleFactor); 
+        ctx.beginPath();
+        ctx.moveTo(targetX, targetY);
+        ctx.lineTo(targetX - headlen * Math.cos(angle - Math.PI / 7), targetY - headlen * Math.sin(angle - Math.PI / 7));
+        ctx.lineTo(targetX - headlen * Math.cos(angle + Math.PI / 7), targetY - headlen * Math.sin(angle + Math.PI / 7));
+        ctx.lineTo(targetX, targetY);
+        ctx.fillStyle = ctx.strokeStyle;
+        ctx.fill();
     });
+
+    // --- HOOK DIBUJO DE EDICIÓN ---
+    if (window.mapaEditor && window.mapaEditor.activa) {
+        if (window.mapaEditor.tempLink) {
+            const temp = window.mapaEditor.tempLink;
+            const seleccion = window.mapaEditor.seleccionMultiple;
+            
+            const nodosOrigen = (window.mapaEditor.isShiftPressed && seleccion.has(temp.source) && seleccion.size > 1) 
+                ? Array.from(seleccion) 
+                : [temp.source];
+
+            nodosOrigen.forEach(nodoOrg => {
+                const angle = Math.atan2(temp.endY - nodoOrg.y, temp.endX - nodoOrg.x);
+                const headlen = 18 / scaleFactor;
+                
+                ctx.beginPath();
+                ctx.moveTo(nodoOrg.x, nodoOrg.y);
+                ctx.lineTo(temp.endX, temp.endY);
+                ctx.strokeStyle = '#00ffff'; 
+                ctx.lineWidth = 4.05 / scaleFactor; 
+                ctx.setLineDash([10/scaleFactor, 10/scaleFactor]);
+                ctx.stroke(); 
+                ctx.setLineDash([]);
+                
+                ctx.beginPath();
+                ctx.moveTo(temp.endX, temp.endY);
+                ctx.lineTo(temp.endX - headlen * Math.cos(angle - Math.PI / 7), temp.endY - headlen * Math.sin(angle - Math.PI / 7));
+                ctx.lineTo(temp.endX - headlen * Math.cos(angle + Math.PI / 7), temp.endY - headlen * Math.sin(angle + Math.PI / 7));
+                ctx.lineTo(temp.endX, temp.endY);
+                ctx.fillStyle = '#00ffff';
+                ctx.fill();
+            });
+        }
+        
+        if (window.mapaEditor.boxStart && window.mapaEditor.boxCurrent) {
+            const minX = Math.min(window.mapaEditor.boxStart.x, window.mapaEditor.boxCurrent.x);
+            const minY = Math.min(window.mapaEditor.boxStart.y, window.mapaEditor.boxCurrent.y);
+            const w = Math.abs(window.mapaEditor.boxCurrent.x - window.mapaEditor.boxStart.x);
+            const h = Math.abs(window.mapaEditor.boxCurrent.y - window.mapaEditor.boxStart.y);
+            
+            ctx.fillStyle = 'rgba(0, 255, 255, 0.15)';
+            ctx.fillRect(minX, minY, w, h);
+            ctx.strokeStyle = '#00ffff';
+            ctx.lineWidth = 2.05 / scaleFactor;
+            ctx.setLineDash([5/scaleFactor, 5/scaleFactor]);
+            ctx.strokeRect(minX, minY, w, h);
+            ctx.setLineDash([]);
+        }
+
+        window.mapaEditor.seleccionMultiple.forEach(n => {
+            ctx.beginPath(); 
+            ctx.arc(n.x, n.y, n.radio + (12/scaleFactor), 0, Math.PI * 2);
+            ctx.strokeStyle = '#00ffff'; 
+            ctx.lineWidth = 6.05 / scaleFactor; 
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = '#00ffff';
+            ctx.stroke();
+            ctx.shadowBlur = 0; 
+        });
+    }
+
+    // ==========================================
+    // 2. DIBUJAR NODOS
+    // ==========================================
+    nodos.forEach(nodo => {
+        ctx.globalAlpha = 1.0; 
+        
+        let colorAfinidadReal;
+
+        if (modoVisual === 'afinidades') {
+            colorAfinidadReal = window.mapaColores[nodo.afinidad] ? window.mapaColores[nodo.afinidad].t : '#aaaaaa';
+        } else {
+            if (nodo.esConocido) {
+                colorAfinidadReal = 'rgba(177, 156, 217, 1)';
+            } else {
+                colorAfinidadReal = 'rgba(236, 213, 154, 1)';
+            }
+        }
+
+        if (nodo.isHexNode) colorAfinidadReal = '#ff4444'; 
+
+        const isHovered = interaccion.hoveredNode === nodo;
+        const isSelected = interaccion.selectedNode === nodo;
+        
+        const tieneElHechizo = posesiones.has(nodo);
+        const esPlenamenteDescubierto = (isPlayerView && tieneElHechizo) || (!isPlayerView && nodo.esConocido);
+        const esAprendibleInmediato = isPlayerView && aprendibles.has(nodo) && !tieneElHechizo;
+        const esPrecedente = isPlayerView && rastreo.has(nodo) && !aprendibles.has(nodo) && !tieneElHechizo;
+        const esIrrelevantePlayer = isPlayerView && !tieneElHechizo && !aprendibles.has(nodo) && !rastreo.has(nodo);
+
+        let colorNodoFinal = colorAfinidadReal;
+        if (isPlayerView && tieneElHechizo && !nodo.isHexNode) {
+            colorNodoFinal = 'rgba(177, 156, 217, 1)';
+        } else if (isPlayerView && (esAprendibleInmediato || esPrecedente)) {
+            colorNodoFinal = esAprendibleInmediato ? 'rgba(236, 213, 154, 0.8)' : 'rgba(212, 196, 146, 0.4)';
+        }
+
+        if (nodoActivo) {
+            if (nodo !== nodoActivo && !ancestorNodes.has(nodo) && !outgoingNodes.has(nodo) && !nodo.isHexNode) {
+                ctx.globalAlpha = 0.2;
+            }
+        } else if (isPlayerView && esIrrelevantePlayer) {
+            ctx.globalAlpha = 0.56; 
+        }
+
+        if (isSelected) {
+            ctx.beginPath();
+            ctx.arc(nodo.x, nodo.y, nodo.radio + (10/scaleFactor), 0, Math.PI * 2);
+            ctx.strokeStyle = ESTETICA.lineaSaliente; 
+            ctx.lineWidth = 3.05 / scaleFactor;
+            ctx.setLineDash([8/scaleFactor, 8/scaleFactor]);
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        const rOuter = nodo.radio;
+        const rGap = Math.max(1, nodo.radio - 3); 
+        const rCore = Math.max(1, nodo.radio - 7); 
+
+        ctx.shadowBlur = (isHovered || isSelected) ? 35 : (nodo.isHexNode ? 30 : (nodo.esConocido ? 5 : 0));
+        ctx.shadowColor = esIrrelevantePlayer ? 'transparent' : colorNodoFinal;
+
+        if (nodo.isHexNode) {
+            ctx.beginPath(); ctx.arc(nodo.x, nodo.y, rOuter, 0, Math.PI * 2);
+            ctx.fillStyle = '#4a0000'; ctx.fill();
+        } else {
+            ctx.beginPath(); ctx.arc(nodo.x, nodo.y, rOuter, 0, Math.PI * 2);
+            ctx.fillStyle = '#111'; ctx.fill();
+
+            ctx.beginPath(); ctx.arc(nodo.x, nodo.y, rGap, 0, Math.PI * 2);
+            ctx.fillStyle = '#111'; ctx.fill();
+
+            ctx.beginPath(); ctx.arc(nodo.x, nodo.y, rCore, 0, Math.PI * 2);
+            if (esPlenamenteDescubierto) {
+                ctx.fillStyle = colorNodoFinal;
+                ctx.globalAlpha = 0.9;
+                ctx.fill();
+                ctx.globalAlpha = 1.0;
+            } else if (esAprendibleInmediato) {
+                ctx.fillStyle = '#222'; ctx.fill();
+                ctx.fillStyle = 'rgba(236, 213, 154, 0.3)'; ctx.fill();
+            } else if (esPrecedente) {
+                ctx.fillStyle = '#222'; ctx.fill();
+                ctx.fillStyle = 'rgba(212, 196, 146, 0.08)'; ctx.fill();
+            } else {
+                ctx.fillStyle = '#111'; ctx.fill();
+                if (!isPlayerView) {
+                    ctx.fillStyle = colorAfinidadReal;
+                    ctx.globalAlpha = 0.15; ctx.fill(); ctx.globalAlpha = 1.0;
+                }
+            }
+        }
+        
+        ctx.shadowBlur = 0;
+        ctx.lineWidth = ((isHovered || isSelected) ? 4.05 : 2.05) / scaleFactor; 
+        ctx.beginPath(); ctx.arc(nodo.x, nodo.y, rOuter, 0, Math.PI * 2);
+        
+        if (esPlenamenteDescubierto) {
+            ctx.strokeStyle = colorNodoFinal;
+            ctx.setLineDash([]);
+            ctx.stroke();
+        } else if (isPlayerView) {
+            ctx.strokeStyle = esIrrelevantePlayer ? 'rgba(80, 80, 80, 0.3)' : colorNodoFinal;
+            ctx.setLineDash([]);
+            ctx.stroke();
+        } else {
+            ctx.strokeStyle = colorAfinidadReal;
+            ctx.globalAlpha = 0.5;
+            ctx.setLineDash([6 / scaleFactor, 4 / scaleFactor]);
+            ctx.stroke();
+            ctx.globalAlpha = 1.0;
+        }
+        ctx.setLineDash([]); 
+
+        // ==========================================
+        // 3. TEXTOS Y LÓGICA DE MÁSCARA SIMPLE
+        // ==========================================
+        if (camara.zoom > 0.08 || isHovered || isSelected || nodo.isHexNode) {
+            let fontSize = nodo.isHexNode ? 52 : (esPlenamenteDescubierto ? 32 : 26);
+            if (isHovered || isSelected) fontSize += 8;
+
+            ctx.font = "bold " + fontSize + "px sans-serif";
+            ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+            
+            const textY = nodo.y + nodo.radio + (15 / scaleFactor);
+            ctx.lineWidth = 6.05 / scaleFactor;
+            
+            // 💥 LÓGICA LIMPIA: Si NO eres admin, NO lo tienes y NO es público -> Enmascarar
+            let ocultarInfo = false;
+            
+            if (!estadoMapa.esAdmin && !nodo.esConocido && !nodo.isHexNode) {
+                if (!(isPlayerView && tieneElHechizo)) {
+                    ocultarInfo = true;
+                }
+            }
+
+            // Usamos nodo.id que sabemos que tiene "Hechizo X" puro desde la BD
+            let textoADibujar = ocultarInfo ? `${nodo.id} (${nodo.hex})` : nodo.nombre;
+            
+            if (isPlayerView && esIrrelevantePlayer && !nodo.isHexNode) {
+                ctx.strokeStyle = 'rgba(0,0,0,0.2)'; 
+            } else {
+                ctx.strokeStyle = 'rgba(0,0,0,0.95)'; 
+            }
+            
+            ctx.strokeText(textoADibujar, nodo.x, textY);
+            
+            if (nodo.isHexNode) {
+                ctx.fillStyle = '#ffaaaa';
+            } else if (isPlayerView) {
+                if (tieneElHechizo) ctx.fillStyle = 'rgba(177, 156, 217, 1)'; 
+                else if (esAprendibleInmediato) ctx.fillStyle = 'rgba(236, 213, 154, 0.9)'; 
+                else if (esPrecedente) ctx.fillStyle = 'rgba(212, 196, 146, 0.4)'; 
+                else ctx.fillStyle = 'rgba(100, 100, 100, 0.2)'; 
+            } else if (modoVisual === 'descubiertos') {
+                ctx.fillStyle = colorAfinidadReal;
+            } else if (nodo.esConocido) {
+                ctx.fillStyle = (isHovered || isSelected) ? ESTETICA.lineaSaliente : '#fff';
+            } else {
+                ctx.fillStyle = (isHovered || isSelected) ? '#ddd' : (estadoMapa.esAdmin ? '#e0e0e0' : '#bbb'); 
+            }
+            
+            ctx.fillText(textoADibujar, nodo.x, textY);
+        }
+
+    }); 
+} 
+
+export function actualizarPanelInfo() {
+    const panel = document.getElementById('panel-info');
+    if(!panel) return;
+    
+    const nodo = estadoMapa.interaccion.selectedNode || estadoMapa.interaccion.hoveredNode;
+
+    if (!nodo) { panel.classList.add('oculto'); return; }
+
+    const isPlayerView = estadoMapa.jugadorActivo !== 'Todos';
+    const tieneElHechizo = isPlayerView && estadoMapa.vistaJugador.posesiones.has(nodo);
+    
+    // 💥 MISMA LÓGICA LIMPIA:
+    let ocultarInfo = false;
+    if (!estadoMapa.esAdmin && !nodo.esConocido && !nodo.isHexNode) {
+        if (!(isPlayerView && tieneElHechizo)) {
+            ocultarInfo = true;
+        }
+    }
+
+    const tituloMostrado = ocultarInfo ? nodo.id : (nodo.nombreOriginal || nodo.id);
+    
+    document.getElementById('info-titulo').innerText = tituloMostrado;
+    const colorData = window.mapaColores[nodo.afinidad];
+    const colorAfinidad = colorData ? colorData.t : '#888';
+    
+    if (!ocultarInfo) {
+        document.getElementById('info-titulo').style.color = colorAfinidad;
+        document.getElementById('info-tags').innerHTML = 
+            '<span class="tag" style="border-color:' + colorAfinidad + '; color:' + colorAfinidad + '">' + nodo.afinidad + '</span>' +
+            '<span class="tag">HEX: ' + nodo.hex + '</span>' +
+            '<span class="tag">C-' + nodo.clase + '</span>';
+        
+        document.getElementById('info-desc').innerText = nodo.resumen;
+    } else {
+        document.getElementById('info-titulo').style.color = colorAfinidad;
+        document.getElementById('info-tags').innerHTML = 
+            '<span class="tag" style="border-color:' + colorAfinidad + '; color:' + colorAfinidad + '">' + nodo.afinidad + '</span>' +
+            '<span class="tag" style="border-color:#555; color:#888;">Requisitos Insuficientes</span>';
+        
+        document.getElementById('info-desc').innerText = 'El conocimiento de este nodo permanece sellado.';
+    }
+        
+    const efectoEl = document.getElementById('info-efecto');
+    const detallesEl = document.getElementById('info-detalles');
+    
+    if (!ocultarInfo) {
+        if (nodo.efecto) {
+            efectoEl.innerText = "Efecto: " + nodo.efecto; 
+            efectoEl.style.display = 'block';
+        } else {
+            efectoEl.style.display = 'none';
+        }
+
+        if (nodo.overcast || nodo.undercast || nodo.especial) {
+            detallesEl.style.display = 'block';
+            const bOver = document.getElementById('box-overcast');
+            const bUnder = document.getElementById('box-undercast');
+            const bEsp = document.getElementById('box-especial');
+
+            if(nodo.overcast) { bOver.style.display = 'block'; document.getElementById('info-overcast').innerText = nodo.overcast; } else { bOver.style.display = 'none'; }
+            if(nodo.undercast) { bUnder.style.display = 'block'; document.getElementById('info-undercast').innerText = nodo.undercast; } else { bUnder.style.display = 'none'; }
+            if(nodo.especial) { bEsp.style.display = 'block'; document.getElementById('info-especial').innerText = nodo.especial; } else { bEsp.style.display = 'none'; }
+        } else {
+            detallesEl.style.display = 'none';
+        }
+    } else { 
+        efectoEl.style.display = 'none'; 
+        detallesEl.style.display = 'none';
+    }
+
+    const opDiv = document.getElementById('info-op');
+    if (estadoMapa.esAdmin && !nodo.isHexNode) {
+        const safeId = nodo.id.replace(/'/g, "\\'");
+        opDiv.innerHTML = `
+            <hr style="border-color: #444; margin: 15px 0 10px 0;">
+            <label style="color:var(--gold); font-size:0.85em; font-weight:bold; font-family:'Cinzel';">🛠️ ESTADO GLOBAL (MÁSTER):</label>
+            <select onchange="window.cambiarEstadoNodo('${safeId}', this.value)" style="width:100%; background:#000; color:#fff; border:1px solid var(--gold); padding:8px; margin-top:5px; cursor:pointer; pointer-events:auto;">
+                <option value="si" ${nodo.esConocido ? 'selected' : ''}>👁️ SÍ (Descubierto por todos)</option>
+                <option value="no" ${!nodo.esConocido ? 'selected' : ''}>🔒 NO (Sellado)</option>
+            </select>
+        `;
+    } else {
+        opDiv.innerHTML = '';
+    }
+
+    panel.classList.remove('oculto');
 }
 
-function bucleRender() {
-    dibujarFrame();
-    requestAnimationFrame(bucleRender);
+export function resetearPosicionPanel() {
+    const panel = document.getElementById('panel-info');
+    if (panel) { panel.style.top = ''; panel.style.left = ''; panel.style.right = ''; panel.style.bottom = ''; panel.style.transform = ''; }
+}
+
+function hacerPanelArrastrable(id) {
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.style.cursor = 'grab';
+    
+    let offsetX = 0, offsetY = 0;
+
+    el.onmousedown = iniciarArrastre;
+    el.ontouchstart = iniciarArrastre;
+
+    function iniciarArrastre(e) {
+        if (e.target.closest('button') || e.target.closest('select') || e.target.closest('summary') || e.target.closest('input') || e.target.closest('textarea')) {
+            return; 
+        }
+
+        let clientX = e.type === 'touchstart' ? e.touches[0].clientX : e.clientX;
+        let clientY = e.type === 'touchstart' ? e.touches[0].clientY : e.clientY;
+        
+        const rect = el.getBoundingClientRect();
+        const toleranciaResize = 30; 
+        
+        const clickEnXDeResize = (clientX - rect.left) > (rect.width - toleranciaResize);
+        const clickEnYDeResize = (clientY - rect.top) > (rect.height - toleranciaResize);
+        
+        if (clickEnXDeResize && clickEnYDeResize) return; 
+
+        e = e || window.event;
+        if (e.type !== 'touchstart') e.preventDefault(); 
+        
+        el.style.cursor = 'grabbing'; 
+        
+        el.style.bottom = "auto";
+        el.style.right = "auto";
+        el.style.transform = "none";
+        
+        el.style.left = rect.left + "px";
+        el.style.top = rect.top + "px";
+
+        offsetX = clientX - rect.left;
+        offsetY = clientY - rect.top;
+
+        document.onmouseup = detenerArrastre;
+        document.onmousemove = arrastrar;
+        document.ontouchend = detenerArrastre;
+        document.ontouchmove = arrastrar;
+    }
+
+    function arrastrar(e) {
+        e = e || window.event;
+        let clientX = e.type === 'touchmove' ? e.touches[0].clientX : e.clientX;
+        let clientY = e.type === 'touchmove' ? e.touches[0].clientY : e.clientY;
+        
+        if (e.type !== 'touchmove') e.preventDefault();
+        
+        el.style.left = (clientX - offsetX) + "px";
+        el.style.top = (clientY - offsetY) + "px";
+    }
+
+    function detenerArrastre() {
+        el.style.cursor = 'grab'; 
+        document.onmouseup = null;
+        document.onmousemove = null;
+        document.ontouchend = null;
+        document.ontouchmove = null;
+    }
 }
