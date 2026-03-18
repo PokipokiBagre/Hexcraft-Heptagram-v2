@@ -21,21 +21,30 @@ export function calcularVidaRojaMax(p) {
     const efectos = p.hechizosEfecto?.vidaRojaMaxExtra || 0;
     const buffs = p.buffs?.vidaRojaMaxExtra || 0;
     
-    // Cálculo Dinámico (Física Total / 2 - Física Base / 2)
+    const npcSistema = !p.isPlayer && p.npc_tipo !== 'jugador';
     const fisBase = p.afinidadesBase?.fisica || 0;
-    const fisTotal = fisBase + (p.hechizos?.fisica || 0) + (p.hechizosEfecto?.fisica || 0) + (p.buffs?.fisica || 0);
+    const fisTotal = npcSistema
+        ? fisBase + (p.hechizosEfecto?.fisica || 0) + (p.buffs?.fisica || 0)
+        : fisBase + (p.hechizos?.fisica || 0) + (p.hechizosEfecto?.fisica || 0) + (p.buffs?.fisica || 0);
     const bonusFisica = Math.floor(fisTotal / 2) - Math.floor(fisBase / 2);
 
-    return base + hechizos + efectos + buffs + bonusFisica;
+    return base + (npcSistema ? 0 : hechizos) + efectos + buffs + bonusFisica;
 }
 
 export function calcularVexMax(p) {
     if (!p) return 0;
-    if (p.isPlayer) {
+    // Jugador O NPC tipo jugador → calculado a partir de afinidad oscura
+    const esCalculado = p.isPlayer || p.npc_tipo === 'jugador';
+    if (esCalculado) {
         const oscTotal = (p.afinidadesBase?.oscura||0) + (p.hechizos?.oscura||0) + (p.hechizosEfecto?.oscura||0) + (p.buffs?.oscura||0);
         return Math.round((oscTotal * 300) / 4 / 50) * 50;
     }
+    // NPC tipo sistema → VEX absoluto
     return p.vex || 0;
+}
+
+export function esNPCSistema(p) {
+    return !!p && !p.isPlayer && p.npc_tipo !== 'jugador';
 }
 
 export function getMysticBonus(p) {
