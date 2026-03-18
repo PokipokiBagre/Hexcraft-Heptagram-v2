@@ -1,9 +1,4 @@
-// ============================================================
-// mapa-ui.js
-// ============================================================
-
 import { estadoMapa, COLOR_AFINIDAD, ESTETICA, COLORES_JUGADOR } from './mapa-state.js';
-import { db } from '../hex-db.js'; // <-- Importación necesaria para las fotos de Supabase
 
 let canvas, ctx;
 
@@ -368,7 +363,10 @@ export function dibujarFrame() {
             const textY = nodo.y + nodo.radio + (15 / scaleFactor);
             ctx.lineWidth = 6.05 / scaleFactor;
             
-            // LÓGICA DE NOMBRE EXACTAMENTE COMO ESTABA EN TU CÓDIGO
+            // LÓGICA DE NOMBRE:
+            // Admin + oculto → nombre real con indicador
+            // Admin + conocido / público + conocido → nombre real
+            // Público + oculto → solo ID enmascarado
             let textoADibujar;
             if (!nodo.esConocido && !nodo.isHexNode) {
                 if (estadoMapa.esAdmin) {
@@ -423,7 +421,7 @@ export function actualizarPanelInfo() {
     const colorData = window.mapaColores[nodo.afinidad];
     const colorAfinidad = colorData ? colorData.t : '#888';
     
-    if (nodo.esConocido || nodo.isHexNode || estadoMapa.esAdmin) {
+    if (nodo.esConocido || nodo.isHexNode) {
         document.getElementById('info-titulo').style.color = colorAfinidad;
         document.getElementById('info-tags').innerHTML = 
             '<span class="tag" style="border-color:' + colorAfinidad + '; color:' + colorAfinidad + '">' + nodo.afinidad + '</span>' +
@@ -443,7 +441,7 @@ export function actualizarPanelInfo() {
     const efectoEl = document.getElementById('info-efecto');
     const detallesEl = document.getElementById('info-detalles');
     
-    if (nodo.esConocido || estadoMapa.esAdmin) {
+    if (nodo.esConocido) {
         if (nodo.efecto) {
             efectoEl.innerText = "Efecto: " + nodo.efecto; 
             efectoEl.style.display = 'block';
