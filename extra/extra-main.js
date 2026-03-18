@@ -55,11 +55,15 @@ async function iniciar() {
 // ── Cambiar tab ──────────────────────────────────────────────
 window.cambiarTab = (tab) => {
     estadoUI.tab = tab;
+    estadoUI.filtro = 'todos'; // reset filter on tab change
     if (!hexAuth.estaLogueado() && tab !== 'objetos') {
         window.cerrarUpload();
     }
     actualizarTabs();
+    actualizarFiltros();
     renderGrid();
+    // Notificar al HTML para mostrar filtros de propuesta
+    window.dispatchEvent(new CustomEvent('tabChanged', { detail: tab }));
 };
 
 // ── Filtros y búsqueda ───────────────────────────────────────
