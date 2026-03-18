@@ -251,8 +251,51 @@ export function dibujarInventarios() {
             </tr>`;
         }
     });
-    html += "</table></div>";
-    
+    html += `</table></div>`;
+
+    // ── Propuestas pendientes para este personaje ──────────────
+    const propuestasPJ = (estadoUI._propuestasCache || []).filter(
+        p => (p.propuesta_para || '').toLowerCase() === j.toLowerCase()
+    );
+    if (propuestasPJ.length > 0) {
+        html += `
+        <div style="margin-top:30px;">
+            <h3 style="font-family:'Cinzel'; color:#ff9900; border-bottom:1px solid rgba(255,102,0,0.4); padding-bottom:8px; display:flex; align-items:center; gap:10px;">
+                📥 Objetos Propuestos Pendientes
+                <span style="background:#ff9900; color:#000; font-size:0.6em; padding:2px 8px; border-radius:10px; font-weight:bold;">${propuestasPJ.length}</span>
+            </h3>
+            <div class="table-responsive"><table>
+                <tr><th>Imagen</th><th>Objeto</th><th>Efecto</th><th>Cant</th>${puedeEditar ? '<th>Acción</th>' : ''}</tr>`;
+
+        propuestasPJ.forEach(p => {
+            const oSafe = p.nombre.replace(/'/g, "\\'");
+            const imgFile = normalizarNombre(p.nombre);
+            html += `<tr style="background:rgba(255,102,0,0.07); border-left:3px solid #ff9900;">
+                <td><img src="${db.storage.urlBase}/imgobjetos/${imgFile}.png" class="cat-img"
+                    onclick="window.verImagen(this.src)"
+                    onerror="this.onerror=null;this.src='${NO_ENCONTRADO()}'">
+                </td>
+                <td style="font-weight:bold; color:#ff9900;">
+                    ${p.nombre}
+                    <div style="font-size:0.7em; color:#888; margin-top:2px; font-family:sans-serif;">Por: ${p.propuesto_por || '?'}</div>
+                </td>
+                <td style="text-align:left; font-size:0.85em;">${p.efecto || p.eff || ''}</td>
+                <td><b style="color:#ff9900; font-size:1.2em;">${p.propuesta_cantidad || 1}</b></td>
+                ${puedeEditar ? `
+                <td>
+                    <div style="display:flex; gap:5px; justify-content:center;">
+                        <button onclick="window.aprobarPropuestaDesdeInventario('${oSafe}', '${j.replace(/'/g,"\\'")}')"
+                            style="background:#004a00; border:1px solid #00aa00; color:white; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:0.8em; white-space:nowrap;">✅ Aprobar</button>
+                        <button onclick="window.rechazarPropuesta('${oSafe}')"
+                            style="background:#4a0000; border:1px solid #aa0000; color:white; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:0.8em;">❌</button>
+                    </div>
+                </td>` : ''}
+            </tr>`;
+        });
+
+        html += `</table></div></div>`;
+    }
+
     drawnHEXPreserveFocus('contenedor-jugadores', html);
 }
 
@@ -740,54 +783,89 @@ export function dibujarFormularioPropuesta() {
     const cont = document.getElementById('panel-crear-propuesta');
     if (!cont) return;
 
-    const norm = (str) => str ? str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n').replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'') : '';
-
     const tipos = ['Consumible','Herramienta','Accesorio','Equipo','Equipamiento','-'];
     const mats  = ['Cristal','Metal','Orgánico','Sagrado','-'];
     const rars  = ['Común','Raro','Legendario'];
 
+    const mostrarNPCs = estadoUI.propFormMostrarNPCs || false;
+
+    // Construir lista de destinatarios
+    let opcionesDestinatarios = `<option value="">-- Nadie (solo proponer el objeto) --</option>`;
+    Object.keys(invGlobal).sort().forEach(j => {
+        const p = getPjStats(j);
+        if (!mostrarNPCs && !p.isPlayer) return;
+        if (mostrarNPCs && p.isPlayer) return;
+        const label = p.isPlayer ? j : `[NPC] ${j}`;
+        opcionesDestinatarios += `<option value="${j}">${label}</option>`;
+    });
+
     cont.innerHTML = `
     <h2 style="margin-top:0; color:#ff9900; font-family:'Cinzel';">📝 Proponer Nuevo Objeto</h2>
-    <div style="max-width:620px; margin:0 auto; background:rgba(40,15,0,0.9); padding:25px; border:2px solid #ff9900; border-radius:10px; box-shadow:0 0 20px rgba(255,153,0,0.15);">
+    <div style="max-width:640px; margin:0 auto; background:rgba(40,15,0,0.9); padding:25px; border:2px solid #ff9900; border-radius:10px; box-shadow:0 0 20px rgba(255,102,0,0.15);">
         <p style="color:#aaa; font-size:0.85em; margin-top:0; border-left:3px solid #ff9900; padding-left:10px;">
-            Tu propuesta será revisada por el OP antes de aparecer en el catálogo oficial. Incluye una imagen en el Gestor de Imágenes si quieres.
+            Tu propuesta será revisada por el OP antes de aparecer en el catálogo oficial.
         </p>
-        <div style="display:flex;flex-direction:column;gap:12px;">
+        <div style="display:flex; flex-direction:column; gap:12px;">
             <div>
-                <label style="color:#ff9900;font-size:0.8em;display:block;margin-bottom:4px;">Tu nombre / personaje</label>
-                <input type="text" id="prop-autor" class="search-bar" placeholder="¿Quién propone esto?" style="width:100%;box-sizing:border-box;">
+                <label style="color:#ff9900; font-size:0.8em; display:block; margin-bottom:4px;">Tu nombre / personaje</label>
+                <input type="text" id="prop-autor" class="search-bar" placeholder="¿Quién propone esto?" style="width:100%; box-sizing:border-box;">
             </div>
             <div>
-                <label style="color:#ff9900;font-size:0.8em;display:block;margin-bottom:4px;">Nombre del objeto *</label>
-                <input type="text" id="prop-nombre" class="search-bar" placeholder="Nombre único del objeto..." style="width:100%;box-sizing:border-box;">
+                <label style="color:#ff9900; font-size:0.8em; display:block; margin-bottom:4px;">Nombre del objeto *</label>
+                <input type="text" id="prop-nombre" class="search-bar" placeholder="Nombre único del objeto..." style="width:100%; box-sizing:border-box;">
             </div>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                 <div>
-                    <label style="color:#aaa;font-size:0.8em;display:block;margin-bottom:4px;">Tipo</label>
-                    <select id="prop-tipo" class="search-bar" style="width:100%;box-sizing:border-box;">
+                    <label style="color:#aaa; font-size:0.8em; display:block; margin-bottom:4px;">Tipo</label>
+                    <select id="prop-tipo" class="search-bar" style="width:100%; box-sizing:border-box;">
                         ${tipos.map(t=>`<option value="${t}">${t}</option>`).join('')}
                     </select>
                 </div>
                 <div>
-                    <label style="color:#aaa;font-size:0.8em;display:block;margin-bottom:4px;">Material</label>
-                    <select id="prop-mat" class="search-bar" style="width:100%;box-sizing:border-box;">
+                    <label style="color:#aaa; font-size:0.8em; display:block; margin-bottom:4px;">Material</label>
+                    <select id="prop-mat" class="search-bar" style="width:100%; box-sizing:border-box;">
                         ${mats.map(m=>`<option value="${m}">${m}</option>`).join('')}
                     </select>
                 </div>
             </div>
             <div>
-                <label style="color:#aaa;font-size:0.8em;display:block;margin-bottom:4px;">Rareza</label>
-                <select id="prop-rar" class="search-bar" style="width:100%;box-sizing:border-box;">
+                <label style="color:#aaa; font-size:0.8em; display:block; margin-bottom:4px;">Rareza</label>
+                <select id="prop-rar" class="search-bar" style="width:100%; box-sizing:border-box;">
                     ${rars.map(r=>`<option value="${r}">${r}</option>`).join('')}
                 </select>
             </div>
             <div>
-                <label style="color:#aaa;font-size:0.8em;display:block;margin-bottom:4px;">Efecto / Descripción *</label>
-                <textarea id="prop-eff" class="search-bar" placeholder="¿Qué hace este objeto?" style="width:100%;height:80px;box-sizing:border-box;resize:none;"></textarea>
+                <label style="color:#aaa; font-size:0.8em; display:block; margin-bottom:4px;">Efecto / Descripción *</label>
+                <textarea id="prop-eff" class="search-bar" placeholder="¿Qué hace este objeto?" style="width:100%; height:80px; box-sizing:border-box; resize:none;"></textarea>
             </div>
-            <div style="display:flex;gap:10px;margin-top:8px;">
-                <button onclick="window.enviarPropuesta()" style="flex:2;background:linear-gradient(135deg,#4a2800,#7a4a00);color:#ff9900;font-weight:bold;padding:14px;border:1px solid #ff9900;border-radius:6px;cursor:pointer;font-size:1.05em;font-family:'Cinzel';transition:0.2s;" onmouseover="this.style.background='#7a4a00'" onmouseout="this.style.background='linear-gradient(135deg,#4a2800,#7a4a00)'">📨 ENVIAR PROPUESTA</button>
-                <button onclick="window.mostrarPagina('grilla')" style="flex:1;background:#333;color:#aaa;padding:14px;border:1px solid #555;border-radius:6px;cursor:pointer;">Cancelar</button>
+
+            <!-- ── Destinatario ── -->
+            <div style="background:rgba(255,102,0,0.07); border:1px solid rgba(255,102,0,0.3); border-radius:8px; padding:14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+                    <label style="color:#ff9900; font-size:0.85em; font-weight:bold;">🎁 Brindar a (Opcional)</label>
+                    <button type="button" onclick="window.togglePropFormNPCs()"
+                        style="background:${mostrarNPCs ? '#1a3a6a' : '#1a0033'}; color:${mostrarNPCs ? '#00ccff' : '#9966ff'}; border:1px solid ${mostrarNPCs ? '#00ccff' : '#9966ff'}; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:0.75em; font-family:'Cinzel'; transition:0.2s;">
+                        ${mostrarNPCs ? '🎭 Mostrando NPCs' : '⚔️ Mostrando Jugadores'}
+                    </button>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr auto; gap:10px; align-items:center;">
+                    <select id="prop-para" class="search-bar" style="width:100%; box-sizing:border-box; margin:0;">
+                        ${opcionesDestinatarios}
+                    </select>
+                    <div style="display:flex; flex-direction:column; align-items:center; gap:3px;">
+                        <label style="color:#aaa; font-size:0.7em;">Cant.</label>
+                        <input type="number" id="prop-cantidad" value="1" min="1" max="99"
+                            style="width:60px; background:#000; color:#fff; border:1px solid #555; border-radius:4px; padding:6px; text-align:center; font-size:1em; box-sizing:border-box;">
+                    </div>
+                </div>
+                <p style="color:#666; font-size:0.72em; font-family:sans-serif; margin:8px 0 0 0;">
+                    Si seleccionas un personaje, el objeto aparecerá en su inventario como pendiente hasta que el OP lo apruebe.
+                </p>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-top:8px;">
+                <button onclick="window.enviarPropuesta()" style="flex:2; background:linear-gradient(135deg,#4a1800,#8a3000); color:#ff9900; font-weight:bold; padding:14px; border:1px solid #ff9900; border-radius:6px; cursor:pointer; font-size:1.05em; font-family:'Cinzel'; transition:0.2s;" onmouseover="this.style.background='#8a3000'" onmouseout="this.style.background='linear-gradient(135deg,#4a1800,#8a3000)'">📨 ENVIAR PROPUESTA</button>
+                <button onclick="window.mostrarPagina('grilla')" style="flex:1; background:#333; color:#aaa; padding:14px; border:1px solid #555; border-radius:6px; cursor:pointer;">Cancelar</button>
             </div>
         </div>
     </div>`;
