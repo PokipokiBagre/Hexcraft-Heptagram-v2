@@ -254,9 +254,7 @@ export function dibujarInventarios() {
     html += `</table></div>`;
 
     // ── Propuestas pendientes para este personaje ──────────────
-    const propuestasPJ = (estadoUI._propuestasCache || []).filter(
-        p => (p.propuesta_para || '').toLowerCase() === j.toLowerCase()
-    );
+    const propuestasPJ = estadoUI._propuestasCache || [];
     if (propuestasPJ.length > 0) {
         html += `
         <div style="margin-top:30px;">
