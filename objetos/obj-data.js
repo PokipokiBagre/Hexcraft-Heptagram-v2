@@ -2,9 +2,9 @@
 // obj-data.js — VERSIÓN SUPABASE (OPTIMIZACIÓN MASIVA)
 // ============================================================
 
-import { invGlobal, objGlobal, statsGlobal, historial, estadoUI } from './obj-state.js';
+import { invGlobal, objGlobal, statsGlobal, historial, estadoUI, propuestasGlobal } from './obj-state.js';
 import { db } from '../hex-db.js';
-import { supabase } from '../hex-auth.js'; // Importamos supabase directo para el guardado en lote
+import { supabase } from '../hex-auth.js';
 
 // ── Carga inicial desde Supabase ─────────────────────────────
 export async function cargarTodoDesdeCSV() {
@@ -15,12 +15,10 @@ export async function cargarTodoDesdeCSV() {
             db.objetos.getInventarioCompleto()
         ]);
 
-        // Limpieza en memoria
         for (let k in invGlobal) delete invGlobal[k];
         for (let k in objGlobal) delete objGlobal[k];
         for (let k in statsGlobal) delete statsGlobal[k];
 
-        // 1. Cargar Personajes
         personajesArr.forEach(p => {
             statsGlobal[p.nombre] = { 
                 isPlayer: p.is_player, 
@@ -30,20 +28,30 @@ export async function cargarTodoDesdeCSV() {
             invGlobal[p.nombre] = {};
         });
 
-        // 2. Cargar Catálogo de Objetos
+        // Separar propuestas de objetos aprobados
+        propuestasGlobal.length = 0;
         objetosArr.forEach(o => {
-            objGlobal[o.nombre] = { 
-                tipo: o.tipo || '-', 
-                mat: o.material || '-', 
-                eff: o.efecto || 'Sin descripción', 
-                rar: o.rareza || 'Común' 
-            };
+            if (o.es_propuesta) {
+                propuestasGlobal.push({
+                    nombre: o.nombre,
+                    tipo: o.tipo || '-',
+                    mat: o.material || '-',
+                    eff: o.efecto || 'Sin descripción',
+                    rar: o.rareza || 'Común',
+                    propuesto_por: o.propuesto_por || 'Anónimo'
+                });
+            } else {
+                objGlobal[o.nombre] = { 
+                    tipo: o.tipo || '-', 
+                    mat: o.material || '-', 
+                    eff: o.efecto || 'Sin descripción', 
+                    rar: o.rareza || 'Común' 
+                };
+            }
         });
 
-        // 3. Cargar Inventarios
         inventObjArr.forEach(row => {
             const p = row.personaje_nombre.toLowerCase();
-            // Evitar case-sensitivity en los nombres de personajes
             const nombreRealPj = Object.keys(invGlobal).find(k => k.toLowerCase() === p) || row.personaje_nombre;
             const o = row.objeto_nombre;
             
@@ -65,6 +73,43 @@ export async function cargarTodoDesdeCSV() {
         console.error("Error al cargar datos desde Supabase:", e);
         return false;
     }
+}
+
+// ── Funciones de Propuestas ───────────────────────────────────
+export async function proponerObjeto(data) {
+    const { error } = await supabase.from('objetos').upsert({
+        nombre: data.nombre,
+        tipo: data.tipo || '-',
+        material: data.mat || '-',
+        efecto: data.eff || '',
+        rareza: data.rar || 'Común',
+        es_propuesta: true,
+        propuesto_por: data.propuesto_por || 'Anónimo'
+    }, { onConflict: 'nombre' });
+    if (error) { console.error('proponerObjeto:', error); return false; }
+    return true;
+}
+
+export async function aprobarPropuesta(nombre) {
+    const { error } = await supabase.from('objetos')
+        .update({ es_propuesta: false, propuesto_por: '' })
+        .eq('nombre', nombre);
+    if (error) { console.error('aprobarPropuesta:', error); return false; }
+    return true;
+}
+
+export async function rechazarPropuesta(nombre) {
+    const { error } = await supabase.from('objetos').delete().eq('nombre', nombre);
+    if (error) { console.error('rechazarPropuesta:', error); return false; }
+    return true;
+}
+
+export async function aprobarTodasPropuestas() {
+    const { error } = await supabase.from('objetos')
+        .update({ es_propuesta: false, propuesto_por: '' })
+        .eq('es_propuesta', true);
+    if (error) { console.error('aprobarTodasPropuestas:', error); return false; }
+    return true;
 }
 
 // ── Sincronización Optimizada por Lotes ─────────────────────────
