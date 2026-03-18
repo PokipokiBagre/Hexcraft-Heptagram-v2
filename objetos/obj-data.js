@@ -123,7 +123,7 @@ export async function rechazarPropuesta(nombre) {
 
 export async function getPropuestasParaPersonaje(nombrePj) {
     const { data, error } = await supabase.from('objetos')
-        .select('nombre, tipo, material, efecto, rareza, propuesto_por, propuesta_cantidad')
+        .select('nombre, tipo, material, efecto, rareza, propuesto_por, propuesta_para, propuesta_cantidad')
         .eq('es_propuesta', true)
         .eq('propuesta_para', nombrePj);
     if (error) { console.error('getPropuestasParaPersonaje:', error); return []; }
