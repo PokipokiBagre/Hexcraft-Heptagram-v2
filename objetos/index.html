@@ -5,9 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>HEX - GESTIÓN DE OBJETOS</title>
     <link rel="icon" type="image/png" href="../img/icon.png"> 
-    <link rel="stylesheet" href="../styleobjetos.css?v=8.3"> 
+    <link rel="stylesheet" href="../styleobjetos.css?v=8.4"> 
     <style>
-        /* Estilos rápidos para el modal de edición si no están en tu CSS */
         .hex-modal {
             display: none;
             position: fixed;
@@ -23,8 +22,16 @@
 </head>
 <body>
     <div class="container-hex">
-        <div style="text-align: left; margin-bottom: 10px;">
+        <div style="text-align: left; margin-bottom: 10px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:10px;">
             <a href="../index.html" style="color: #d4af37; text-decoration: none; font-size: 0.8em;">⬅ Volver al Inicio</a>
+            <!-- Botón público para proponer objeto -->
+            <button onclick="window.mostrarPagina('crear-propuesta')"
+                style="background:linear-gradient(135deg,#4a2800,#7a4a00); color:#ff9900; border:1px solid #ff9900;
+                       padding:8px 16px; border-radius:6px; cursor:pointer; font-family:'Cinzel',serif;
+                       font-size:0.85em; font-weight:bold; transition:0.2s;"
+                onmouseover="this.style.background='#7a4a00'" onmouseout="this.style.background='linear-gradient(135deg,#4a2800,#7a4a00)'">
+                📝 Proponer Objeto
+            </button>
         </div>
         <h1>SISTEMA DE OBJETOS</h1>
         <nav>
@@ -35,16 +42,19 @@
             <button onclick="window.ejecutarSyncLog()" style="background:#2e004f; border-style: dashed;">Acceso OP</button>
         </nav>
         
-        <section id="pag-grilla" class="pagina"><div id="contenedor-grilla"></div></section>
-        <section id="pag-resumen" class="pagina"><div id="contenedor-resumen"></div></section>
-        <section id="pag-inventario" class="pagina"><div id="contenedor-jugadores"></div></section>
-        <section id="pag-catalogo" class="pagina"><div id="tabla-todos-objetos"></div></section>
-        <section id="pag-op-menu" class="pagina"><div id="menu-op-central"></div></section>
-        <section id="pag-control" class="pagina"><div id="panel-interactivo"></div></section>
-        <section id="pag-crear" class="pagina"><div id="panel-creacion"></div></section>
-        <section id="pag-crear-multi" class="pagina"><div id="panel-creacion-multi"></div></section>
-        <section id="pag-party-loot" class="pagina"><div id="panel-party-loot"></div></section>
-        <section id="pag-transfer" class="pagina"><div id="panel-transferencia"></div></section>
+        <section id="pag-grilla"           class="pagina"><div id="contenedor-grilla"></div></section>
+        <section id="pag-resumen"          class="pagina"><div id="contenedor-resumen"></div></section>
+        <section id="pag-inventario"       class="pagina"><div id="contenedor-jugadores"></div></section>
+        <section id="pag-catalogo"         class="pagina"><div id="tabla-todos-objetos"></div></section>
+        <section id="pag-op-menu"          class="pagina"><div id="menu-op-central"></div></section>
+        <section id="pag-control"          class="pagina"><div id="panel-interactivo"></div></section>
+        <section id="pag-crear"            class="pagina"><div id="panel-creacion"></div></section>
+        <section id="pag-crear-multi"      class="pagina"><div id="panel-creacion-multi"></div></section>
+        <section id="pag-party-loot"       class="pagina"><div id="panel-party-loot"></div></section>
+        <section id="pag-transfer"         class="pagina"><div id="panel-transferencia"></div></section>
+        <!-- Nuevas páginas de propuestas -->
+        <section id="pag-propuestas"       class="pagina"><div id="panel-propuestas"></div></section>
+        <section id="pag-crear-propuesta"  class="pagina"><div id="panel-crear-propuesta"></div></section>
         
         <input type="file" id="input-log" style="display:none">
     </div>
@@ -54,6 +64,6 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     
-    <script type="module" src="obj-main.js?v=8.3"></script>
+    <script type="module" src="obj-main.js?v=8.4"></script>
 </body>
 </html>
