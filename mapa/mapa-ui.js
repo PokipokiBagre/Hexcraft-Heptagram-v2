@@ -364,18 +364,28 @@ export function dibujarFrame() {
             ctx.lineWidth = 6.05 / scaleFactor;
             
             // LÓGICA DE NOMBRE:
-            // Admin + oculto → nombre real con indicador
-            // Admin + conocido / público + conocido → nombre real
-            // Público + oculto → solo ID enmascarado
+            // Admin → siempre nombre real
+            // Jugador con posesión → nombre real
+            // Jugador sin posesión → ID enmascarado
+            // Público sin jugador + conocido → nombre real
+            // Público sin jugador + oculto → ID enmascarado
             let textoADibujar;
-            if (!nodo.esConocido && !nodo.isHexNode) {
-                if (estadoMapa.esAdmin) {
-                    textoADibujar = `${nodo.nombreOriginal.replace(/\s*\(\d+\)$/, '').trim()} (${nodo.hex})`;
-                } else {
-                    textoADibujar = `${nodo.id} (${nodo.hex})`; // ID enmascarado + costo hex
-                }
+            const jugadorTieneNodo = isPlayerView && posesiones.has(nodo);
+            if (estadoMapa.esAdmin || nodo.isHexNode) {
+                // Admin siempre ve nombres reales
+                textoADibujar = nodo.esConocido
+                    ? nodo.nombre
+                    : `${nodo.nombreOriginal.replace(/\s*\(\d+\)$/, '').trim()} (${nodo.hex})`;
+            } else if (isPlayerView) {
+                // En vista jugador: solo se ve el nombre si lo posee
+                textoADibujar = jugadorTieneNodo
+                    ? nodo.nombre
+                    : `${nodo.id} (${nodo.hex})`;
             } else {
-                textoADibujar = nodo.nombre;
+                // Vista pública sin jugador seleccionado
+                textoADibujar = nodo.esConocido
+                    ? nodo.nombre
+                    : `${nodo.id} (${nodo.hex})`;
             }
             
             if (isPlayerView && esIrrelevantePlayer && !nodo.isHexNode) {
