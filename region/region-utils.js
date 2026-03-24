@@ -2,22 +2,20 @@
 // region-utils.js — Matemática Isométrica y Hexagonal
 // ============================================================
 
-import {
-    HEX_SIZE, camara, MAPA_ANCHO, MAPA_ALTO
-} from './region-state.js';
+import { HEX_SIZE, camara } from './region-state.js';
 
 const SQRT3 = Math.sqrt(3);
 
 // Proyección de una coordenada (q,r,elevation) a píxeles isométricos.
 export function hexToPixel3D(q, r, elevation = 0) {
     // Coordenada hex flat-top base (un-elevated)
-    const 2d_x = q * 1.5 * HEX_SIZE;
-    const 2d_y = (q * 0.5 + r) * SQRT3 * HEX_SIZE;
+    const x2d = q * 1.5 * HEX_SIZE;
+    const y2d = (q * 0.5 + r) * SQRT3 * HEX_SIZE;
     
     // Proyección isométrica (squash vertical)
-    const px = (2d_x - 2d_y) * camara.zoom;
+    const px = (x2d - y2d) * camara.zoom;
     // La elevación es un desplazamiento vertical negativo (arriba)
-    const py = (2d_x + 2d_y) * camara.zoom * camara.PITCH_SCALE - elevation * camara.elevationScale * camara.zoom;
+    const py = (x2d + y2d) * camara.zoom * camara.PITCH_SCALE - elevation * camara.elevationScale * camara.zoom;
     
     return { x: px + camara.x, y: py + camara.y };
 }
@@ -30,19 +28,13 @@ export function pixelToHex3D(screenX, screenY) {
     const sy = (screenY - camara.y) / camara.zoom;
     
     // Inversión de la proyección isométrica:
-    // px = 2d_x - 2d_y
-    // py / PITCH_SCALE = 2d_x + 2d_y
-    
     const sy_pitch = sy / camara.PITCH_SCALE;
-    const 2d_x = 0.5 * (sx + sy_pitch);
-    const 2d_y = 0.5 * (sy_pitch - sx);
+    const x2d = 0.5 * (sx + sy_pitch);
+    const y2d = 0.5 * (sy_pitch - sx);
     
     // Coordenadas hex originales (flat-top) desde coordenadas cartesianas 2D:
-    // 2d_x = q * 1.5 * radius
-    // 2d_y = (q/2 + r) * sqrt(3) * radius
-    
-    const q = 2d_x / (1.5 * HEX_SIZE);
-    const r = (2d_y / (SQRT3 * HEX_SIZE)) - (q * 0.5);
+    const q = x2d / (1.5 * HEX_SIZE);
+    const r = (y2d / (SQRT3 * HEX_SIZE)) - (q * 0.5);
     
     // Redondear q y r a los enteros correctos
     const sq = Math.round(q);
