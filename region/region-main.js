@@ -94,7 +94,13 @@ window.abrirMenuOP = async () => {
 
 window.seleccionarProp = (id) => {
     editor.propSeleccionado = props[id] || null;
-    editor.herramienta = 'agregar'; // Actualizado de 'pintar' a 'agregar'
+    // Solo cambia a agregar si estabas en una herramienta "neutral" (no borrar, región, etc.)
+    if (editor.herramienta !== 'borrar' && editor.herramienta !== 'region' && editor.herramienta !== 'seleccionar') {
+        editor.herramienta = 'agregar';
+        document.querySelectorAll('.tool-btn').forEach(b => {
+            b.classList.toggle('activo', b.dataset.tool === 'agregar');
+        });
+    }
     renderPanel();
 };
 
@@ -103,7 +109,7 @@ window.abrirCrearProp = () => abrirModal(htmlFormProp(), '➕ Nuevo Prop');
 window.guardarPropUI = async () => {
     const nombre = document.getElementById('fp-nombre')?.value?.trim();
     if (!nombre) return mostrarToast('El nombre es obligatorio', 'error');
-    const id     = `prop_${normKey(nombre)}_${Date.now()}`;
+    const id     = `prop_${normKey(nombre)}`;  // ID estable basado en nombre
     const tipo   = document.getElementById('fp-tipo').value;
     const imagen = document.getElementById('fp-imagen').value.trim();
 
@@ -116,6 +122,8 @@ window.guardarPropUI = async () => {
 
 window.eliminarPropUI = async (id) => {
     if (!confirm(`¿Eliminar el prop "${props[id]?.nombre}"?`)) return;
+    // Si era el prop activo, deseleccionar
+    if (editor.propSeleccionado?.id === id) editor.propSeleccionado = null;
     delete props[id];
     await eliminarProp(id);
     renderPanel();
@@ -135,21 +143,29 @@ window.subirPropImagen = async (e) => {
 };
 
 async function _subirPropFile(file) {
-    const nombre = document.getElementById('up-prop-nombre')?.value?.trim();
-    if (!nombre) return mostrarToast('Escribe el nombre del prop antes de subir', 'error');
+    const nombreInput = document.getElementById('up-prop-nombre')?.value?.trim();
+    if (!nombreInput) return mostrarToast('Escribe el nombre del prop antes de subir', 'error');
     const tipo = document.getElementById('up-prop-tipo')?.value || 'terreno';
-    const capa = document.getElementById('up-prop-capa')?.value || 'background';
-    const key  = normKey(nombre);
+    const key  = normKey(nombreInput);
+    const id   = `prop_${key}`;  // ID estable — no timestamp, para evitar duplicados
 
     setProgresoProp(0, 'Iniciando...', true);
     try {
-        const url = await subirImagenProp(file, `imgregion/${capa}`, key, (pct, msg) => setProgresoProp(pct, msg, true));
-        // Crear el prop automáticamente
-        const id = `prop_${key}`;
-        const propData = { id, nombre, tipo, capa, ancho: 1, alto: 1, forma: 'hex', imagen: url };
+        // Carpeta basada en tipo
+        const carpeta = `imgregion`;
+        const url = await subirImagenProp(file, carpeta, key, (pct, msg) => setProgresoProp(pct, msg, true));
+
+        // Si ya existe un prop con ese ID, actualizar en lugar de crear nuevo
+        const existente = props[id];
+        const propData = {
+            id,
+            nombre: existente ? existente.nombre : nombreInput,
+            tipo:   existente ? existente.tipo   : tipo,
+            imagen: url
+        };
         props[id] = propData;
         await guardarProp(propData);
-        mostrarToast(`Prop "${nombre}" creado ✅`);
+        mostrarToast(`Prop "${propData.nombre}" actualizado ✅`);
         renderPanel();
     } catch (err) {
         setProgresoProp(0, '❌ ' + err.message, true);
@@ -225,6 +241,18 @@ window.actualizarRegionMisiones = (id, selectEl) => {
     const reg = mapaActual.regiones[id];
     if (!reg) return;
     reg.misiones = Array.from(selectEl.selectedOptions).map(o => o.value);
+    window.dispatchEvent(new Event('mapaModificado'));
+};
+
+window.toggleMisionRegion = (regionId, misionId, activa) => {
+    const reg = mapaActual.regiones[regionId];
+    if (!reg) return;
+    if (!reg.misiones) reg.misiones = [];
+    if (activa) {
+        if (!reg.misiones.includes(misionId)) reg.misiones.push(misionId);
+    } else {
+        reg.misiones = reg.misiones.filter(m => m !== misionId);
+    }
     window.dispatchEvent(new Event('mapaModificado'));
 };
 
@@ -404,11 +432,22 @@ window.aplicarRuido = () => {
 window.abrirSubidaProp = (propId) => {
     const p = props[propId];
     if (!p) return;
+    // Cambiar a pestaña imágenes si no estamos en ella
+    if (ui.panelActual !== 'imagenes') {
+        ui.panelActual = 'imagenes';
+        renderPanel();
+        // Esperar a que el DOM se actualice antes de rellenar
+        setTimeout(() => _rellenarFormSubida(p), 50);
+    } else {
+        _rellenarFormSubida(p);
+    }
+    mostrarToast(`Sube imagen para: ${p.nombre}`, 'info');
+};
+
+function _rellenarFormSubida(p) {
     const nombre = document.getElementById('up-prop-nombre');
     const tipo   = document.getElementById('up-prop-tipo');
     if (nombre) nombre.value = p.nombre;
     if (tipo)   tipo.value   = p.tipo;
     document.getElementById('drop-prop-zone')?.scrollIntoView({ behavior: 'smooth' });
-    mostrarToast(`Sube imagen para: ${p.nombre}`, 'info');
-};
-
+}
