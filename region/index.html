@@ -22,37 +22,34 @@
     <div class="navbar-left">
         <button class="btn-nav" onclick="window.location.href='../index.html'">⬅ Volver</button>
         <button id="btn-volver-mapa" class="btn-nav" style="display:none;" onclick="window.volverMapaPadre()">↩ Subir</button>
-        <span id="breadcrumb">📍 Mundo</span>
+        <span id="breadcrumb"></span>
     </div>
-    <div style="font-family:'Cinzel',serif; font-size:0.85em; font-weight:700; color:var(--gold); letter-spacing:0.08em;">
-        🗺️ MAPA REGIONAL
+    
+    <div class="navbar-center solo-op" style="display:none;">
+        <button class="btn-nav" id="btn-guardar-mapa" onclick="window.guardarMapaUI()" class="oculto">💾 Guardar Cambios</button>
     </div>
+    
     <div class="navbar-right">
-        <button id="btn-guardar-mapa" class="oculto solo-op" onclick="window.guardarMapaUI()" style="display:none;">💾 Guardar Cambios</button>
         <div id="hex-session-badge"></div>
-        <button class="btn-nav" onclick="window.abrirMenuOP()">⚙️ OP</button>
     </div>
 </nav>
 
-<aside id="panel-lateral">
-    <div class="tabs-panel">
+<div class="panel-lateral">
+    <div class="panel-tabs solo-op" style="display:none;">
         <button class="tab-panel-btn activo" data-panel="props"    onclick="window.cambiarPanelUI('props')">🧱 Props</button>
-        <button class="tab-panel-btn"        data-panel="regiones" onclick="window.cambiarPanelUI('regiones')">🌍 Regiones</button>
+        <button class="tab-panel-btn"        data-panel="regiones" onclick="window.cambiarPanelUI('regiones')">🗺️ Regiones</button>
         <button class="tab-panel-btn"        data-panel="npcs"     onclick="window.cambiarPanelUI('npcs')">👤 NPCs</button>
         <button class="tab-panel-btn"        data-panel="misiones" onclick="window.cambiarPanelUI('misiones')">⚔️ Misiones</button>
-        <button class="tab-panel-btn solo-op" data-panel="imagenes" onclick="window.cambiarPanelUI('imagenes')" style="display:none;">🖼️ Imgs</button>
     </div>
-    <div id="panel-contenido"></div>
-</aside>
+    <div id="panel-info-hex"></div>
+    <div class="panel-scroll" id="panel-contenido"></div>
+</div>
 
-<div id="panel-info-hex"></div>
-
-<div id="barra-herramientas" class="solo-op" style="display:none;">
-    <button class="tool-btn activo" data-tool="agregar"     onclick="window.setHerramienta('agregar')"      title="Agregar (A)"><span class="icon">➕</span>Agregar</button>
-    <button class="tool-btn"        data-tool="borrar"      onclick="window.setHerramienta('borrar')"       title="Borrar (B)"><span class="icon">🧹</span>Borrar</button>
-    <button class="tool-btn"        data-tool="seleccionar" onclick="window.setHerramienta('seleccionar')"  title="Seleccionar (S)"><span class="icon">🔲</span>Select</button>
-    <button class="tool-btn"        data-tool="region"      onclick="window.setHerramienta('region')"       title="Pintar Región (R)"><span class="icon">🗺️</span>Región</button>
-    <button class="tool-btn"        data-tool="mover"       onclick="window.setHerramienta('mover')"        title="Mover cámara (M)"><span class="icon">🤚</span>Mover</button>
+<div class="bottom-tools solo-op" style="display:none;">
+    <button class="tool-btn activo" data-tool="agregar" onclick="window.setHerramienta('agregar')" title="Agregar (A)"><span class="icon">➕</span>Agregar</button>
+    <button class="tool-btn"        data-tool="borrar"  onclick="window.setHerramienta('borrar')"  title="Borrar (B)"><span class="icon">🧹</span>Borrar</button>
+    <button class="tool-btn"        data-tool="entrar"  onclick="window.setHerramienta('entrar')"  title="Entrar a Interior (E)"><span class="icon">🚪</span>Puerta</button>
+    <button class="tool-btn"        data-tool="mover"   onclick="window.setHerramienta('mover')"   title="Mover cámara/Info (M)"><span class="icon">🤚</span>Mover</button>
     <div style="width:1px; background:var(--border); margin:0 4px;"></div>
     <button class="tool-btn" onclick="window.cambiarPanelUI('imagenes')" title="Gestionar imágenes"><span class="icon">🖼️</span>Imgs</button>
 </div>
@@ -61,12 +58,15 @@
     <div class="modal-box">
         <div class="modal-header-reg">
             <span id="modal-titulo">Modal</span>
-            <button class="modal-close" onclick="window.cerrarModalRegion()">✕</button>
+            <button class="btn-cerrar-modal" onclick="window.cerrarModalRegion()">✕</button>
         </div>
-        <div id="modal-cuerpo"></div>
+        <div id="modal-cuerpo" style="padding:15px;"></div>
     </div>
 </div>
 
-<script type="module" src="region-main.js"></script>
+<div id="toast-region" class="toast-region"></div>
+
+<script type="module" src="region/region-main.js"></script>
+
 </body>
 </html>
