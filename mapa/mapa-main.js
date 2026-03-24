@@ -665,22 +665,52 @@ function inicializarBuscador() {
             .slice(0, 12);
     }
 
+    // Navegar directamente a un nodo objeto (sin pasar por strings)
+    function irAlNodo(nodo) {
+        if (!nodo) return;
+        const targetZoom = 1.2;
+        estadoMapa.camara.zoom = targetZoom;
+        estadoMapa.camara.x = (window.innerWidth / 2) - (nodo.x * targetZoom);
+        estadoMapa.camara.y = (window.innerHeight / 2) - (nodo.y * targetZoom);
+        estadoMapa.interaccion.selectedNode = nodo;
+        resetearPosicionPanel();
+        actualizarPanelInfo();
+        sugerenciasEl.style.display = 'none';
+        dibujarFrame();
+    }
+
     function mostrarSugerencias(lista) {
         if (lista.length === 0) { sugerenciasEl.style.display = 'none'; return; }
         sugerenciasEl.style.display = 'block';
-        sugerenciasEl.innerHTML = lista.map((n, i) => {
+
+        // Limpiar y construir con addEventListener (sin inline onclick con strings problemáticos)
+        sugerenciasEl.innerHTML = '';
+        lista.forEach((n, i) => {
             const txt = getTextoMostrado(n);
             const colorData = window.mapaColores[n.afinidad];
             const color = colorData ? colorData.t : '#888';
-            return `<div class="sug-item" data-idx="${i}" 
-                style="padding:7px 14px; cursor:pointer; font-size:0.78em; color:${n.esConocido || estadoMapa.esAdmin ? '#fff' : '#aaa'}; border-left:3px solid ${color}; transition:background 0.15s;"
-                onmouseenter="this.style.background='rgba(212,175,55,0.18)'"
-                onmouseleave="this.style.background='transparent'"
-                onclick="window.navegarAHechizo(${n.x}, ${n.y}, '${n.id.replace(/'/g,"\\'")}')">
-                <span style="color:${color}; font-weight:bold;">${txt}</span>
-                <span style="color:#666; font-size:0.85em; margin-left:6px;">${n.afinidad || ''}</span>
-            </div>`;
-        }).join('');
+
+            const div = document.createElement('div');
+            div.className = 'sug-item';
+            div.dataset.idx = i;
+            div.style.cssText = `padding:7px 14px; cursor:pointer; font-size:0.78em; color:${n.esConocido || estadoMapa.esAdmin ? '#fff' : '#aaa'}; border-left:3px solid ${color}; transition:background 0.15s;`;
+            div.innerHTML = `<span style="color:${color}; font-weight:bold;">${txt}</span><span style="color:#666; font-size:0.85em; margin-left:6px;">${n.afinidad || ''}</span>`;
+
+            div.addEventListener('mouseenter', () => {
+                indiceSugerencia = i;
+                resaltarSugerencia();
+            });
+            div.addEventListener('mouseleave', () => {
+                div.style.background = 'transparent';
+            });
+            // Click directo con referencia al objeto nodo — sin strings
+            div.addEventListener('click', () => {
+                irAlNodo(n);
+            });
+
+            sugerenciasEl.appendChild(div);
+        });
+
         indiceSugerencia = -1;
     }
 
@@ -694,32 +724,39 @@ function inicializarBuscador() {
     input.addEventListener('keydown', (e) => {
         if (e.key === 'Tab') {
             e.preventDefault();
-            // Autocompletar con la primera sugerencia
             if (sugerenciasActuales.length > 0) {
-                const nodo = sugerenciasActuales[indiceSugerencia >= 0 ? indiceSugerencia : 0];
+                const idx = indiceSugerencia >= 0 ? indiceSugerencia : 0;
+                const nodo = sugerenciasActuales[idx];
+                // Tab: autocompleta texto pero NO navega todavía
                 input.value = getTextoMostrado(nodo).replace(/\s*\(\d+\)$/, '').trim();
                 document.getElementById('buscador-clear').style.display = 'block';
+                // Recalcular pero mantener referencia al nodo seleccionado
                 sugerenciasActuales = calcularSugerencias(input.value);
+                // Asegurarse que el nodo sigue en la lista
+                const nuevoIdx = sugerenciasActuales.indexOf(nodo);
                 mostrarSugerencias(sugerenciasActuales);
-                indiceSugerencia = 0;
+                indiceSugerencia = nuevoIdx >= 0 ? nuevoIdx : 0;
+                resaltarSugerencia();
             }
         } else if (e.key === 'ArrowDown') {
             e.preventDefault();
-            indiceSugerencia = Math.min(indiceSugerencia + 1, sugerenciasActuales.length - 1);
-            resaltarSugerencia();
+            if (sugerenciasActuales.length > 0) {
+                indiceSugerencia = Math.min(indiceSugerencia + 1, sugerenciasActuales.length - 1);
+                resaltarSugerencia();
+            }
         } else if (e.key === 'ArrowUp') {
             e.preventDefault();
-            indiceSugerencia = Math.max(indiceSugerencia - 1, 0);
-            resaltarSugerencia();
+            if (sugerenciasActuales.length > 0) {
+                indiceSugerencia = Math.max(indiceSugerencia - 1, 0);
+                resaltarSugerencia();
+            }
         } else if (e.key === 'Enter') {
+            e.preventDefault();
+            // Enter: ir al nodo seleccionado con flecha, o al primero si solo hay uno, o al único match exacto
             if (indiceSugerencia >= 0 && sugerenciasActuales[indiceSugerencia]) {
-                const n = sugerenciasActuales[indiceSugerencia];
-                window.navegarAHechizo(n.x, n.y, n.id);
-                sugerenciasEl.style.display = 'none';
-            } else if (sugerenciasActuales.length === 1) {
-                const n = sugerenciasActuales[0];
-                window.navegarAHechizo(n.x, n.y, n.id);
-                sugerenciasEl.style.display = 'none';
+                irAlNodo(sugerenciasActuales[indiceSugerencia]);
+            } else if (sugerenciasActuales.length >= 1) {
+                irAlNodo(sugerenciasActuales[0]);
             }
         } else if (e.key === 'Escape') {
             sugerenciasEl.style.display = 'none';
@@ -747,23 +784,21 @@ window.limpiarBuscador = () => {
     if (input) { input.value = ''; input.dispatchEvent(new Event('input')); }
 };
 
+// Función global de navegación (por si algo externo la llama)
 window.navegarAHechizo = (x, y, id) => {
-    const targetZoom = 1.2;
-    estadoMapa.camara.zoom = targetZoom;
-    estadoMapa.camara.x = (window.innerWidth / 2) - (x * targetZoom);
-    estadoMapa.camara.y = (window.innerHeight / 2) - (y * targetZoom);
-
     const nodo = estadoMapa.nodos.find(n => n.id === id);
     if (nodo) {
+        const targetZoom = 1.2;
+        estadoMapa.camara.zoom = targetZoom;
+        estadoMapa.camara.x = (window.innerWidth / 2) - (nodo.x * targetZoom);
+        estadoMapa.camara.y = (window.innerHeight / 2) - (nodo.y * targetZoom);
         estadoMapa.interaccion.selectedNode = nodo;
         resetearPosicionPanel();
         actualizarPanelInfo();
+        const sug = document.getElementById('buscador-sugerencias');
+        if (sug) sug.style.display = 'none';
+        dibujarFrame();
     }
-
-    const sug = document.getElementById('buscador-sugerencias');
-    if (sug) sug.style.display = 'none';
-
-    dibujarFrame();
 };
 
 function bucleRender() {
