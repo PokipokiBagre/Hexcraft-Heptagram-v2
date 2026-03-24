@@ -11,17 +11,14 @@ import {
     crearHexData
 } from './region-state.js';
 
-// ── Normalizar nombre para storage ───────────────────────────
 export const normKey = (s) => s ? s.toString().trim().toLowerCase()
     .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
     .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
     .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n')
     .replace(/\s+/g,'_').replace(/[^a-z0-9_\-]/g,'') : '';
 
-// ── Cargar todo ──────────────────────────────────────────────
 export async function cargarTodo(mapaId = 'mundo') {
     try {
-        // Paralelo: mapa, props, npcs, personajes, misiones
         const [
             mapaRes, propsRes, npcsRes,
             personajesArr, misionesArr
@@ -33,18 +30,47 @@ export async function cargarTodo(mapaId = 'mundo') {
             db.misiones.getAll()
         ]);
 
-        // ── Personajes ────────────────────────────────────────
+        // ── Props ─────────────────────────────────────────────
+        for (const k in props) delete props[k];
+        
+        // Inyectamos el prop falso universal al inicio
+        props['prop_pintar'] = {
+            id: 'prop_pintar',
+            nombre: '🖌️ PINCEL DE COLOR',
+            tipo: 'terreno', 
+            imagen: null
+        };
+
+        if (propsRes.data) {
+            propsRes.data.forEach(p => {
+                props[p.id] = {
+                    id:     p.id,
+                    nombre: p.nombre,
+                    tipo:   p.tipo,         
+                    imagen: p.imagen_url
+                };
+            });
+        }
+
+        // ── Personajes (Se cargan TODOS y se vuelven Props) ───
         personajesDB.length = 0;
         personajesArr.forEach(p => {
-            if (p.is_active) {
-                personajesDB.push({
-                    nombre:   p.nombre,
-                    icon:     p.icono_override || p.nombre,
-                    isPlayer: p.is_player,
-                    npcTipo:  p.npc_tipo || 'sistema',
-                    color:    '#888'
-                });
-            }
+            personajesDB.push({
+                nombre:   p.nombre,
+                icon:     p.icono_override || p.nombre,
+                isPlayer: p.is_player,
+                npcTipo:  p.npc_tipo || 'sistema',
+                color:    '#888'
+            });
+
+            // Agregarlo a la lista de props para poder pintarlo en el mapa
+            const pid = `pj_${normKey(p.nombre)}`;
+            props[pid] = {
+                id: pid,
+                nombre: p.nombre,
+                tipo: 'entidad',
+                imagen: `${STORAGE_URL}/imgpersonajes/${normKey(p.icono_override || p.nombre)}icon.png`
+            };
         });
 
         // ── Misiones ──────────────────────────────────────────
@@ -61,23 +87,6 @@ export async function cargarTodo(mapaId = 'mundo') {
             }
         });
 
-        // ── Props ─────────────────────────────────────────────
-        for (const k in props) delete props[k];
-        if (propsRes.data) {
-            propsRes.data.forEach(p => {
-                props[p.id] = {
-                    id:     p.id,
-                    nombre: p.nombre,
-                    tipo:   p.tipo,         // terreno|estructura|entidad|elemento|objeto
-                    capa:   p.capa,         // background|mid|over
-                    imagen: p.imagen_url,
-                    ancho:  p.ancho  || 1,
-                    alto:   p.alto   || 1,
-                    forma:  p.forma  || 'hex'  // hex|libre
-                };
-            });
-        }
-
         // ── NPCs del mapa ─────────────────────────────────────
         for (const k in npcsMapaLocal) delete npcsMapaLocal[k];
         if (npcsRes.data) {
@@ -86,9 +95,9 @@ export async function cargarTodo(mapaId = 'mundo') {
                     npcsMapaLocal[n.id] = {
                         id:     n.id,
                         nombre: n.nombre,
-                        tipo:   n.tipo || 'sistema',   // sistema|jugador
+                        tipo:   n.tipo || 'sistema',   
                         icono:  n.icono_url || '',
-                        hex:    n.hex_pos,              // "q,r"
+                        hex:    n.hex_pos,              
                         capa:   n.capa || 'mid',
                         desc:   n.descripcion || '',
                         stats:  n.stats || {},
@@ -113,6 +122,14 @@ export async function cargarTodo(mapaId = 'mundo') {
             for (const k in mapaActual.hexes) delete mapaActual.hexes[k];
             if (m.datos_hexes) {
                 const parsed = typeof m.datos_hexes === 'string' ? JSON.parse(m.datos_hexes) : m.datos_hexes;
+                
+                // Migración de datos viejos (background -> back)
+                for (const key in parsed) {
+                    if (parsed[key].background) {
+                        parsed[key].back = parsed[key].background;
+                        delete parsed[key].background;
+                    }
+                }
                 Object.assign(mapaActual.hexes, parsed);
             }
 
@@ -131,7 +148,6 @@ export async function cargarTodo(mapaId = 'mundo') {
     }
 }
 
-// ── Guardar mapa completo ────────────────────────────────────
 export async function guardarMapa() {
     try {
         const payload = {
@@ -159,7 +175,6 @@ export async function guardarMapa() {
     }
 }
 
-// ── Guardar / Eliminar Prop ──────────────────────────────────
 export async function guardarProp(propData) {
     try {
         const { error } = await supabase
@@ -168,11 +183,7 @@ export async function guardarProp(propData) {
                 id:         propData.id,
                 nombre:     propData.nombre,
                 tipo:       propData.tipo,
-                capa:       propData.capa,
-                imagen_url: propData.imagen,
-                ancho:      propData.ancho || 1,
-                alto:       propData.alto  || 1,
-                forma:      propData.forma || 'hex'
+                imagen_url: propData.imagen || ''
             }, { onConflict: 'id' });
         if (error) throw error;
         return true;
@@ -190,7 +201,6 @@ export async function eliminarProp(propId) {
     } catch (e) { return false; }
 }
 
-// ── Guardar / Eliminar NPC mapa ──────────────────────────────
 export async function guardarNPC(npcData) {
     try {
         const { error } = await supabase
@@ -219,7 +229,6 @@ export async function eliminarNPC(npcId) {
     } catch (e) { return false; }
 }
 
-// ── Subir imagen de prop ─────────────────────────────────────
 export async function subirImagenProp(file, carpeta, keyNorm, onProgreso) {
     const ruta = `${carpeta}/${keyNorm}.png`;
 
@@ -260,7 +269,6 @@ function convertirPNG(file) {
     });
 }
 
-// ── Listar imágenes de background del storage ─────────────────
 export async function listarImagenesBackground() {
     try {
         const { data } = await supabase.storage.from(BUCKET).list('imginterfaz', { limit: 200 });
