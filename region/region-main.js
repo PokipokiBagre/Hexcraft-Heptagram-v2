@@ -22,7 +22,6 @@ let cambiosPendientes = false;
 let mapaIdActual = 'mundo';
 let historialMapas = []; 
 
-// Función helper para aplicar la visibilidad según si es flex o block
 function actualizarVisibilidadUI() {
     document.querySelectorAll('.solo-op').forEach(el => {
         if (editor.activo) {
@@ -73,7 +72,6 @@ async function initApp() {
     });
 }
 
-// Previene que window.onload se pierda si el documento ya cargó
 if (document.readyState === 'complete') { initApp(); } 
 else { window.addEventListener('load', initApp); }
 
@@ -128,6 +126,7 @@ window.setHerramienta = (h) => {
     document.querySelectorAll('.tool-btn').forEach(b => {
         b.classList.toggle('activo', b.dataset.tool === h);
     });
+    renderPanel(); // Refresca UI para que los botones reflejen el estado
 };
 
 window.cerrarModalRegion = cerrarModalUI;
@@ -185,11 +184,32 @@ window.confirmarPincelRegion = () => {
         return;
     }
     
-    editor.selectedPropId = 'prop_region';
-    window.setHerramienta('agregar');
+    window.activarPincelRegion(ui.selectedRegion);
     cerrarModalUI();
+};
+
+// 🌟 SOLUCIÓN: Fila global para activar pincel y asegurar que esté en "Agregar"
+window.activarPincelRegion = (id) => {
+    ui.selectedRegion = id;
+    editor.selectedPropId = 'prop_region';
+    window.setHerramienta('agregar'); // Fuerza volver a "Agregar" si estaba en borrar
     renderPanel();
-    mostrarToastUI(`🖌️ Pincel activado para: ${mapaActual.regiones[ui.selectedRegion].nombre}`, 'info');
+    mostrarToastUI(`🖌️ Pincel activado para: ${mapaActual.regiones[id].nombre || 'Región'}`, 'info');
+};
+
+// 🌟 SOLUCIÓN: Asignar y desasignar misiones a la región
+window.toggleMisionRegion = (regionId, misionId, isChecked) => {
+    const reg = mapaActual.regiones[regionId];
+    if (!reg) return;
+    if (!reg.misiones) reg.misiones = [];
+
+    if (isChecked) {
+        if (!reg.misiones.includes(misionId)) reg.misiones.push(misionId);
+    } else {
+        reg.misiones = reg.misiones.filter(id => id !== misionId);
+    }
+    window.dispatchEvent(new Event('mapaModificado'));
+    renderPanel(); // Refresca UI
 };
 
 window.seleccionarPropUI = (id) => {
