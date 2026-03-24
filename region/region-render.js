@@ -127,10 +127,9 @@ function dibujarHexTop3D(q, r, hex, topPos) {
     context.fillStyle = '#0a0018'; 
     context.fill();
 
-    // SOLUCIÓN: Tinte visual tenue para los hexágonos de región
+    // Tinte visual tenue para los hexágonos de región
     if (reg) {
         context.fillStyle = reg.color || '#334'; 
-        // Genera un tinte muy ligero transparente (Max 15% de opacidad)
         context.globalAlpha = Math.max(0.05, (reg.opacidad || 0.3) * 0.2); 
         context.fill(); 
         context.globalAlpha = 1;
@@ -171,7 +170,7 @@ function dibujarHexTop3D(q, r, hex, topPos) {
     });
 }
 
-// ── BORDES DE REGIÓN (Inteligentes y Aislados) ──
+// ── BORDES DE REGIÓN (Método Clásico de Distancia - Perfecto para Isométrico) ──
 function dibujarHexRegionBorder(q, r, hex, topPos) {
     const reg = mapaActual.regiones[hex.region];
     if (!reg) return;
@@ -185,20 +184,30 @@ function dibujarHexRegionBorder(q, r, hex, topPos) {
     context.lineJoin = 'round';
     context.globalAlpha = reg.opacidad ? Math.min(1, reg.opacidad + 0.4) : 0.8;
 
-    const edgeNeighbors = [
-        {dq: 0, dr: 1},   // Arista 0 (Bottom-Right)
-        {dq: -1, dr: 1},  // Arista 1 (Bottom)
-        {dq: -1, dr: 0},  // Arista 2 (Bottom-Left)
-        {dq: 0, dr: -1},  // Arista 3 (Top-Left)
-        {dq: 1, dr: -1},  // Arista 4 (Top)
-        {dq: 1, dr: 0}    // Arista 5 (Top-Right)
+    const neighborDirs = [
+        {dq: 1, dr: 0}, {dq: 0, dr: 1}, {dq: -1, dr: 1},
+        {dq: -1, dr: 0}, {dq: 0, dr: -1}, {dq: 1, dr: -1}
     ];
 
     context.beginPath();
     for (let i = 0; i < 6; i++) {
-        const dir = edgeNeighbors[i];
-        const nHex = mapaActual.hexes[`${q + dir.dq},${r + dir.dr}`];
+        const midX = (verts[i].x + verts[(i+1)%6].x) / 2;
+        const midY = (verts[i].y + verts[(i+1)%6].y) / 2;
         
+        let closestNeighborKey = null;
+        let minD = Infinity;
+        
+        // Buscar cuál de los 6 vecinos teóricos es el dueño de esta arista por distancia real
+        for (const dir of neighborDirs) {
+            const nq = q + dir.dq; const nr = r + dir.dr;
+            const nPos = hexToPixel3D(nq, nr, 0);
+            const dist = Math.hypot(nPos.x - midX, nPos.y - midY);
+            if (dist < minD) { minD = dist; closestNeighborKey = `${nq},${nr}`; }
+        }
+
+        const nHex = closestNeighborKey ? mapaActual.hexes[closestNeighborKey] : null;
+        
+        // Si el vecino NO es de mi misma región, dibujamos esta arista
         if (!nHex || nHex.region !== hex.region) {
             context.moveTo(verts[i].x, verts[i].y);
             context.lineTo(verts[(i+1)%6].x, verts[(i+1)%6].y);
