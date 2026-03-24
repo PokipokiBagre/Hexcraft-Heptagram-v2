@@ -16,12 +16,12 @@ let rafId      = null;
 
 // ── Geometría Hexagonal (flat-top axial) ─────────────────────
 // Flat-top: el hexágono tiene vértices en izquierda y derecha
-const √3 = Math.sqrt(3);
+const SQRT3 = Math.sqrt(3);
 
 export function hexToPixel(q, r) {
     const size = HEX_SIZE * camara.zoom;
     const x = size * (3 / 2 * q);
-    const y = size * (√3 / 2 * q + √3 * r);
+    const y = size * (SQRT3 / 2 * q + SQRT3 * r);
     return { x: x + camara.x, y: y + camara.y };
 }
 
@@ -30,7 +30,7 @@ export function pixelToHex(px, py) {
     const x = (px - camara.x) / size;
     const y = (py - camara.y) / size;
     const q = (2 / 3) * x;
-    const r = (-1 / 3) * x + (√3 / 3) * y;
+    const r = (-1 / 3) * x + (SQRT3 / 3) * y;
     return hexRound(q, r);
 }
 
