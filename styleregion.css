@@ -139,25 +139,55 @@ body {
 }
 
 /* ── Props grid ── */
-.props-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
+.props-grid { 
+    display: grid; 
+    grid-template-columns: repeat(5, 1fr); /* 5 Columnas */
+    gap: 5px; 
+    margin-top: 8px; 
+}
 
 .prop-card {
     background: rgba(255,255,255,0.03);
     border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 6px; padding: 6px;
-    text-align: center; cursor: pointer;
-    transition: all 0.15s; position: relative;
+    border-radius: 6px; 
+    padding: 4px; /* Padding reducido para que quepa bien */
+    text-align: center; 
+    cursor: pointer;
+    transition: all 0.15s; 
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 .prop-card:hover { border-color: var(--gold-dim); background: rgba(212,175,55,0.06); }
 .prop-card-sel { border-color: var(--cyan) !important; background: rgba(0,255,255,0.08) !important; box-shadow: 0 0 8px rgba(0,255,255,0.3); }
-.prop-card img { width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 4px; image-rendering: pixelated; }
-.prop-card-nombre { font-size: 0.66em; color: var(--text); margin-top: 3px; word-break: break-word; line-height: 1.2; }
-.prop-card-meta { font-size: 0.58em; color: var(--text-dim); }
+
+.prop-card img { 
+    width: 100%; 
+    aspect-ratio: 1; 
+    object-fit: cover; 
+    border-radius: 4px; 
+    image-rendering: pixelated; 
+}
+
+.prop-card-nombre { 
+    font-size: 0.58em; /* Un poco más pequeño para acomodar textos largos */
+    color: var(--text); 
+    margin-top: 3px; 
+    word-break: break-word; 
+    line-height: 1.1; 
+}
+
+.prop-card-meta { 
+    font-size: 0.52em; 
+    color: var(--text-dim); 
+}
+
 .prop-card-del {
     position: absolute; top: 2px; right: 2px;
     background: rgba(255,68,85,0.7); border: none;
-    color: #fff; border-radius: 50%; width: 16px; height: 16px;
-    font-size: 0.6em; cursor: pointer;
+    color: #fff; border-radius: 50%; width: 14px; height: 14px;
+    font-size: 0.55em; cursor: pointer;
     display: flex; align-items: center; justify-content: center; line-height: 1;
     opacity: 0; transition: opacity 0.15s;
 }
