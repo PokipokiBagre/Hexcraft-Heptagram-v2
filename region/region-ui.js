@@ -33,21 +33,23 @@ export function renderPanel() {
 function htmlPropsPanel() {
     const busq = (ui.busqueda || '').toLowerCase();
     
-    // Filtramos para que no salga el prop interno de región
+    // Todos los props, incluyendo el de región universal
     const lista = Object.values(props).filter(p => {
-        if (p.id === 'prop_region') return false;
         if (busq && !p.nombre.toLowerCase().includes(busq)) return false;
         return true;
     });
 
     const grid = lista.map(p => {
         const selClase = editor.selectedPropId === p.id ? 'prop-card-sel' : '';
-        const esPincel = p.id === 'prop_pintar';
-        const icono = esPincel ? `🖌️` : `<img src="${p.imagen || NO_IMG}" onerror="this.src='${NO_IMG}'">`;
+        let iconoHtml;
+        if (p.id === 'prop_pintar') iconoHtml = `🖌️`;
+        else if (p.id === 'prop_region') iconoHtml = `🗺️`;
+        else iconoHtml = `<img src="${p.imagen || NO_IMG}" onerror="this.src='${NO_IMG}'">`;
+
         return `
         <div class="prop-card ${selClase}" onclick="window.seleccionarPropUI('${p.id}')">
-            ${icono} <div class="prop-card-nombre">${p.nombre}</div>
-            ${editor.activo && !esPincel && !p.id.startsWith('pj_') && !p.id.startsWith('npc_') ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarPropUI('${p.id}')">✕</button>` : ''}
+            ${iconoHtml} <div class="prop-card-nombre">${p.nombre}</div>
+            ${editor.activo && p.id !== 'prop_pintar' && p.id !== 'prop_region' && !p.id.startsWith('pj_') && !p.id.startsWith('npc_') ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarPropUI('${p.id}')">✕</button>` : ''}
         </div>`;
     }).join('');
 
@@ -91,7 +93,7 @@ function htmlRegionesPanel() {
         <div class="region-card ${ui.selectedRegion === reg.id ? 'region-card-sel' : ''}" onclick="window.seleccionarRegionUI('${reg.id}')">
             <div class="region-color-dot" style="background:${reg.color}"></div>
             <div class="region-info">
-                <div class="region-nombre">${reg.nombre} ${reg.tieneInterior ? '🏠' : ''}</div>
+                <div class="region-nombre">${reg.nombre} 🏠</div>
                 <div class="region-meta">${reg.hexes.length} hexes</div>
             </div>
             ${editor.activo ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarRegionUI('${reg.id}')">✕</button>` : ''}
@@ -101,37 +103,33 @@ function htmlRegionesPanel() {
     const detalleHtml = regSel ? htmlDetalleRegion(regSel) : '';
 
     return `<div class="panel-seccion">
-        ${editor.activo ? `<button class="btn-panel-add" style="width:100%; margin-bottom:10px;" onclick="window.crearRegionUI()">＋ Nueva Región</button>` : ''}
         <div class="lista-regiones">${lista}</div>
         ${detalleHtml}
     </div>`;
 }
 
 function htmlDetalleRegion(reg) {
-    if (!editor.activo) return ''; // Los jugadores la ven en Info Hex
+    if (!editor.activo) return ''; 
 
     return `
     <div class="region-detalle edit">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-            <div class="detalle-titulo" style="color:var(--gold); margin:0;">✏️ Editando Región</div>
-            <button onclick="window.eliminarRegionUI('${reg.id}')"
-                style="background:#4a0000; border:1px solid #ff4444; color:#fff; padding:3px 8px; border-radius:4px; font-size:0.72em; cursor:pointer;">
-                🗑️ Eliminar
-            </button>
+            <div class="detalle-titulo" style="color:var(--gold); margin:0;">✏️ Propiedades de Región</div>
+            <button onclick="window.eliminarRegionUI('${reg.id}')" style="background:#4a0000; border:1px solid #ff4444; color:#fff; padding:3px 8px; border-radius:4px; font-size:0.72em; cursor:pointer;">🗑️</button>
         </div>
         <label>Nombre
             <input type="text" value="${reg.nombre.replace(/"/g,'&quot;')}"
                 oninput="window.actualizarRegion('${reg.id}','nombre',this.value)"
                 style="width:100%;box-sizing:border-box;background:#0a0018;border:1px solid #444;color:#fff;padding:5px 8px;border-radius:4px;font-size:0.85em;margin-top:3px;">
         </label>
-
-        <div style="display:flex; gap:6px; margin-top:12px; flex-wrap:wrap;">
-            <button class="btn-accion ${editor.selectedPropId === 'prop_region' ? 'activo' : ''}" style="flex:1; background:#004a00; border-color:#00ff00;" onclick="window.activarPincelRegion('${reg.id}')">
-                🖌️ Pincel de Región
-            </button>
-            <button class="btn-accion" style="flex:1; background:#003344; border-color:#00aacc;" onclick="window.abrirInterior('${reg.id}')">
-                🏠 ${reg.tieneInterior ? 'Editor Interior' : 'Crear Interior'}
-            </button>
+        <label style="margin-top:8px; display:block;">Controlador
+            <input type="text" value="${(reg.controlador||'').replace(/"/g,'&quot;')}"
+                oninput="window.actualizarRegion('${reg.id}','controlador',this.value)"
+                style="width:100%;box-sizing:border-box;background:#0a0018;border:1px solid #444;color:#fff;padding:5px 8px;border-radius:4px;font-size:0.85em;margin-top:3px;">
+        </label>
+        <div style="display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap;">
+            <label style="font-size:0.78em; color:#aaa; display:flex; align-items:center; gap:6px;">Color <input type="color" value="${reg.color}" oninput="window.actualizarRegion('${reg.id}','color',this.value)" style="width:32px;height:26px;border:none;background:none;cursor:pointer;padding:0;"></label>
+            <label style="font-size:0.78em; color:#aaa; flex:1; min-width:120px; display:flex; align-items:center; gap:6px;">Opacidad <input type="range" min="0.05" max="0.75" step="0.05" value="${reg.opacidad||0.3}" oninput="window.actualizarRegion('${reg.id}','opacidad',parseFloat(this.value))" style="flex:1; accent-color:var(--cyan);"></label>
         </div>
     </div>`;
 }
@@ -144,6 +142,7 @@ function htmlNPCsPanel() {
                 <div class="npc-nombre">${n.nombre}</div>
                 <div class="npc-meta">${n.tipo} · ${n.hex_pos||'No pos'}</div>
             </div>
+            ${editor.activo ? `<button class="prop-card-del" style="position:absolute; top:4px; right:4px; z-index:10; background:#4a0000; color:#fff;" onclick="event.stopPropagation(); window.eliminarNPCUI('${n.id}')">✕</button>` : ''}
         </div>`).join('') || '<p class="sin-resultado">No hay NPCs de región.</p>';
 
     const listJugadoresDB = personajesDB.map(p => {
@@ -163,25 +162,6 @@ function htmlNPCsPanel() {
         <div class="lista-npcs">${listNPCsMap}</div>
         <div class="panel-sub-titulo" style="margin-top:15px;">Jugadores DB Activos</div>
         <div class="lista-npcs">${listJugadoresDB}</div>
-    </div>`;
-}
-
-export function htmlFormNPC(npcData = null) {
-    const n = npcData || { id: '', nombre: '', tipo: 'sistema', icono_url: '', hex_pos: '', capa: 'mid', descripcion: '' };
-    return `
-    <div style="display:flex; flex-direction:column; gap:10px;">
-        <input type="hidden" id="fn-id" value="${n.id}">
-        <label>Nombre
-            <input type="text" id="fn-nombre" value="${n.nombre}" class="form-input" placeholder="Nombre del NPC">
-        </label>
-        <label>Icono URL
-            <input type="text" id="fn-icono" value="${n.icono_url || ''}" class="form-input" placeholder="https://...">
-        </label>
-        <label>Descripción
-            <textarea id="fn-desc" class="form-input" rows="3">${n.descripcion || ''}</textarea>
-        </label>
-        <button class="btn-accion" style="background:var(--gold); color:#000;" onclick="window.guardarNPCUI()">💾 Guardar NPC</button>
-        ${n.id ? `<button type="button" class="btn-accion" style="background:#4a0000; color:#fff; margin-top:5px;" onclick="window.eliminarNPCUI('${n.id}'); window.cerrarModalRegion();">🗑️ Eliminar NPC Permanentemente</button>` : ''}
     </div>`;
 }
 
@@ -261,4 +241,4 @@ function actualizarTabsBotones() {
         b.classList.toggle('activo', b.dataset.panel === ui.panelActual);
     });
 }
-export async function cargarListaBG_UI(fonds) { /* Sin cambios */ }
+export async function cargarListaBG_UI(fonds) { /* ... */ }
