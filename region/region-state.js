@@ -1,5 +1,5 @@
 // ============================================================
-// region-state.js — Estado global del Editor de Mapa Regional (Isométrico 3D)
+// region-state.js — Estado global del Editor de Mapa Regional
 // ============================================================
 
 export const SUPABASE_URL = 'https://gkscqurkpyteusqyspsu.supabase.co';
@@ -9,13 +9,17 @@ export const STORAGE_URL  = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}`
 // ── Tamaño del hexágono y Elevación ──────────────────────────
 export const HEX_SIZE = 48; // px, ajustable
 
+// ── Offset visual de la capa OVER (Map Planes) ───────────────
+export const OVER_OFFSET_X = 0;                 // Alineado perfectamente al centro
+export const OVER_OFFSET_Y = -(HEX_SIZE * 2.4); // Desfase vertical puro (hacia arriba)
+
 // ── Tipos de prop ────────────────────────────────────────────
 export const PROP_TIPOS = ['terreno', 'estructura', 'entidad', 'elemento', 'objeto'];
 
 // ── Capas del mapa ──────────────────────────────────────────
 export const CAPAS = ['back', 'mid', 'over'];
 
-// ── Estado de la cámara (Ahora más estática, pitch fijo) ─────
+// ── Estado de la cámara ─────────────────────────────────────
 export const camara = {
     x: 0, y: 0,
     zoom: 1.0,
@@ -36,7 +40,7 @@ export const editor = {
     seleccion: new Set(),    // Set de "q,r" keys seleccionados (editor)
     brushSize: 1,            // 1 = un hex, 2 = radio 1 (+6), etc.
     colorActual: '#4488cc',  // Color para la herramienta colorear
-    opacidadPincel: 0.7,     // Opacidad al colorear
+    opacidadPincel: 1.0,     // Opacidad al colorear
     ruidoDensidad: 0.35,     // Densidad para aplicar ruido
 };
 
@@ -60,31 +64,31 @@ export let props = {};
 export let npcsMapaLocal = {};
 
 // ── Datos externos (personajes y misiones de DB) ────────────
-export let personajesDB    = [];   // <-- ¡AQUÍ ESTABA EL ERROR! (personnagesDB)
+export let personajesDB    = [];   
 export let misionesActivas = [];  
 
 // ── UI state ─────────────────────────────────────────────────
 export const ui = {
     panelActual:  'props',    
     filtroTipo:   'todos',
-    filtroPropSinImagen: false,  // Filtro "faltantes" en imágenes
+    filtroPropSinImagen: false,  
     busqueda:     '',
     hoveredHex:   null,       
     selectedRegion: null,     
-    modoPintar:   false,       // Estado de clic arrastrado
+    modoPintar:   false,       
 };
 
 // ── Estructura de un HexData ─────────────────────────────────
 export function crearHexData() {
     return {
-        back:       [],   // Lista de IDs de props o colores (COLOR:#rgb:op)
+        back:       [],   
         mid:        [],
         over:       [],
-        region:     null, // ID de la región
-        misiones:   [],   // Lista de IDs de misiones locales
-        color:      null,  // Color de base
-        opacidad:   null, // Opacidad de base
-        elevation:  0,    // Altura (entero)
+        region:     null, 
+        misiones:   [],   
+        color:      null,  
+        opacidad:   null, 
+        elevation:  0,    
     };
 }
 
