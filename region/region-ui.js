@@ -1,0 +1,425 @@
+// ============================================================
+// region-ui.js — Paneles de UI: props, regiones, NPCs, misiones, imágenes
+// ============================================================
+
+import {
+    editor, ui, mapaActual, props, npcsMapaLocal,
+    personajesDB, misionesActivas, PROP_TIPOS, CAPAS,
+    STORAGE_URL, crearRegion, crearHexData
+} from './region-state.js';
+import { normKey, guardarProp, eliminarProp, guardarNPC, eliminarNPC, subirImagenProp, listarImagenesBackground } from './region-data.js';
+import { setBackground, aplicarHerramienta, hexKey } from './region-engine.js';
+import { supabase } from '../hex-auth.js';
+
+const NO_IMG = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
+
+// ── Render panel lateral ──────────────────────────────────────
+export function renderPanel() {
+    const contenido = document.getElementById('panel-contenido');
+    if (!contenido) return;
+
+    switch (ui.panelActual) {
+        case 'props':    contenido.innerHTML = htmlProps();    break;
+        case 'regiones': contenido.innerHTML = htmlRegiones(); break;
+        case 'npcs':     contenido.innerHTML = htmlNPCs();     break;
+        case 'misiones': contenido.innerHTML = htmlMisiones(); break;
+        case 'imagenes': contenido.innerHTML = htmlImagenes(); break;
+        default:         contenido.innerHTML = '';
+    }
+
+    actualizarTabsBotones();
+}
+
+// ── TAB: PROPS ───────────────────────────────────────────────
+function htmlProps() {
+    const filtroTipo = ui.filtroTipo || 'todos';
+    const filtroCapa = ui.filtroCapa || 'todos';
+    const busq       = (ui.busqueda  || '').toLowerCase();
+
+    const lista = Object.values(props).filter(p => {
+        if (filtroTipo !== 'todos' && p.tipo !== filtroTipo) return false;
+        if (filtroCapa !== 'todos' && p.capa !== filtroCapa) return false;
+        if (busq && !p.nombre.toLowerCase().includes(busq)) return false;
+        return true;
+    });
+
+    const capsElems = CAPAS.map(c =>
+        `<button class="filtro-pill ${filtroCapa === c ? 'activo' : ''}" onclick="window.setFiltroCapa('${c}')">${c}</button>`
+    ).join('');
+    const tipoElems = ['todos', ...PROP_TIPOS].map(t =>
+        `<button class="filtro-pill ${filtroTipo === t ? 'activo' : ''}" onclick="window.setFiltroTipo('${t}')">${t}</button>`
+    ).join('');
+
+    const grid = lista.map(p => {
+        const selClase = editor.propSeleccionado?.id === p.id ? 'prop-card-sel' : '';
+        return `
+        <div class="prop-card ${selClase}" onclick="window.seleccionarProp('${p.id}')" title="${p.nombre} (${p.tipo} / ${p.capa})">
+            <img src="${p.imagen || NO_IMG()}" onerror="this.src='${NO_IMG()}'">
+            <div class="prop-card-nombre">${p.nombre}</div>
+            <div class="prop-card-meta">${p.tipo} · ${p.capa}</div>
+            ${editor.activo ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarPropUI('${p.id}')">✕</button>` : ''}
+        </div>`;
+    }).join('') || '<p class="sin-resultado">Sin props. Crea uno con el botón +</p>';
+
+    return `
+    <div class="panel-seccion">
+        <div class="panel-buscador-row">
+            <input type="text" placeholder="🔍 Buscar prop..." value="${ui.busqueda || ''}"
+                oninput="window.setBusquedaUI(this.value)"
+                style="flex:1; background:#0a0018; border:1px solid #444; color:#fff; padding:6px 10px; border-radius:4px; font-size:0.82em;">
+            ${editor.activo ? `<button class="btn-panel-add" onclick="window.abrirCrearProp()">＋ Nuevo</button>` : ''}
+        </div>
+        <div class="filtros-pills">${capsElems}</div>
+        <div class="filtros-pills">${tipoElems}</div>
+
+        ${editor.activo ? `
+        <div class="capa-selector">
+            <span style="color:#888; font-size:0.78em; font-family:sans-serif;">PINTAR EN:</span>
+            ${CAPAS.map(c => `<button class="filtro-pill capa-btn ${editor.capaActual === c ? 'activo' : ''}" onclick="window.setCapaActual('${c}')">${c}</button>`).join('')}
+        </div>
+        <div class="brush-row">
+            <span style="color:#888; font-size:0.78em;">BRUSH:</span>
+            ${[1,2,3,4].map(n => `<button class="filtro-pill ${editor.brushSize===n?'activo':''}" onclick="window.setBrushSize(${n})">${n}</button>`).join('')}
+        </div>
+        ` : ''}
+
+        <div class="props-grid">${grid}</div>
+    </div>`;
+}
+
+// ── TAB: REGIONES ─────────────────────────────────────────────
+function htmlRegiones() {
+    const regs = Object.values(mapaActual.regiones);
+    const lista = regs.map(reg => {
+        const selClase = ui.selectedRegion === reg.id ? 'region-card-sel' : '';
+        const tieneInt = reg.tieneInterior ? '🏠' : '';
+        return `
+        <div class="region-card ${selClase}" onclick="window.seleccionarRegion('${reg.id}')">
+            <div class="region-color-dot" style="background:${reg.color}"></div>
+            <div class="region-info">
+                <div class="region-nombre">${tieneInt} ${reg.nombre}</div>
+                <div class="region-meta">${reg.hexes.length} hexes · ${reg.controlador || 'Sin control'}</div>
+            </div>
+            ${editor.activo ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarRegionUI('${reg.id}')">✕</button>` : ''}
+        </div>`;
+    }).join('') || '<p class="sin-resultado">No hay regiones.</p>';
+
+    const regSel = ui.selectedRegion ? mapaActual.regiones[ui.selectedRegion] : null;
+    const detalleHtml = regSel ? htmlDetalleRegion(regSel) : '';
+
+    return `
+    <div class="panel-seccion">
+        ${editor.activo ? `<button class="btn-panel-add" style="width:100%; margin-bottom:10px;" onclick="window.crearRegionUI()">＋ Nueva Región</button>` : ''}
+        <div class="lista-regiones">${lista}</div>
+        ${detalleHtml}
+    </div>`;
+}
+
+function htmlDetalleRegion(reg) {
+    if (!editor.activo) {
+        // Vista de solo lectura
+        const misls = (reg.misiones || []).map(mid => {
+            const m = misionesActivas.find(x => x.id === mid);
+            return m ? `<span class="tag-mision">${m.titulo}</span>` : '';
+        }).join('');
+        return `
+        <div class="region-detalle">
+            <div class="detalle-titulo">${reg.nombre}</div>
+            <div class="detalle-fila"><b>Control:</b> ${reg.controlador || '—'}</div>
+            <div class="detalle-fila"><b>Accesible:</b> ${reg.accesible ? 'Sí' : 'No'}</div>
+            ${misls ? `<div class="detalle-fila"><b>Misiones:</b><br>${misls}</div>` : ''}
+        </div>`;
+    }
+
+    // Formulario de edición
+    const misionOpts = misionesActivas.map(m =>
+        `<option value="${m.id}" ${(reg.misiones||[]).includes(m.id) ? 'selected' : ''}>${m.titulo}</option>`
+    ).join('');
+
+    return `
+    <div class="region-detalle edit">
+        <div class="detalle-titulo" style="color:var(--gold);">✏️ Editando Región</div>
+        <label>Nombre
+            <input type="text" value="${reg.nombre}" oninput="window.actualizarRegion('${reg.id}','nombre',this.value)">
+        </label>
+        <label>Controlador
+            <input type="text" value="${reg.controlador||''}" oninput="window.actualizarRegion('${reg.id}','controlador',this.value)">
+        </label>
+        <label style="display:flex; align-items:center; gap:10px;">Color
+            <input type="color" value="${reg.color}" oninput="window.actualizarRegion('${reg.id}','color',this.value)" style="width:36px;height:28px;border:none;background:none;cursor:pointer;">
+        </label>
+        <label>Opacidad
+            <input type="range" min="0.05" max="0.7" step="0.05" value="${reg.opacidad||0.3}" oninput="window.actualizarRegion('${reg.id}','opacidad',parseFloat(this.value))">
+        </label>
+        <label style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" ${reg.accesible ? 'checked' : ''} onchange="window.actualizarRegion('${reg.id}','accesible',this.checked)">
+            Accesible (clickable)
+        </label>
+        <label>Misiones activas
+            <select multiple style="height:80px;" onchange="window.actualizarRegionMisiones('${reg.id}', this)">
+                ${misionOpts}
+            </select>
+        </label>
+        <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
+            <button class="btn-accion" onclick="window.activarHerramientaRegion('${reg.id}')">
+                🖊️ Pintar hexes de región
+            </button>
+            <button class="btn-accion" style="background:#003344;" onclick="window.abrirInterior('${reg.id}')">
+                🏠 ${reg.tieneInterior ? 'Editar Interior' : 'Crear Interior'}
+            </button>
+        </div>
+    </div>`;
+}
+
+// ── TAB: NPCs ─────────────────────────────────────────────────
+function htmlNPCs() {
+    const todos = Object.values(npcsMapaLocal);
+    const jugadores = personajesDB.filter(p => p.isPlayer || p.npcTipo === 'jugador');
+    const sistema   = personajesDB.filter(p => !p.isPlayer && p.npcTipo !== 'jugador');
+
+    const listaLocal = todos.map(n => `
+        <div class="npc-card" onclick="window.seleccionarNPCUI('${n.id}')">
+            <img src="${n.icono || NO_IMG()}" onerror="this.src='${NO_IMG()}'" class="npc-thumb">
+            <div>
+                <div class="npc-nombre">${n.nombre}</div>
+                <div class="npc-meta">${n.tipo} · ${n.hex||'Sin posición'}</div>
+            </div>
+            ${editor.activo ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarNPCUI('${n.id}')">✕</button>` : ''}
+        </div>`).join('') || '<p class="sin-resultado">No hay NPCs en el mapa.</p>';
+
+    const listaJug = jugadores.map(p => `
+        <div class="npc-card npc-db">
+            <img src="${STORAGE_URL}/imgpersonajes/${normKey(p.icon)}icon.png" onerror="this.src='${NO_IMG()}'" class="npc-thumb">
+            <div>
+                <div class="npc-nombre">${p.nombre}</div>
+                <div class="npc-meta">${p.isPlayer ? 'Jugador' : 'NPC Jugador'}</div>
+            </div>
+        </div>`).join('') || '<p class="sin-resultado sin-resultado-sm">Ninguno activo.</p>';
+
+    return `
+    <div class="panel-seccion">
+        <div class="panel-sub-titulo">NPCs del Mapa</div>
+        ${editor.activo ? `<button class="btn-panel-add" style="width:100%; margin-bottom:8px;" onclick="window.abrirCrearNPC()">＋ Nuevo NPC</button>` : ''}
+        <div class="lista-npcs">${listaLocal}</div>
+
+        <div class="panel-sub-titulo" style="margin-top:15px;">Jugadores & NPCs del Sistema</div>
+        <div class="lista-npcs">${listaJug}</div>
+    </div>`;
+}
+
+// ── TAB: MISIONES ────────────────────────────────────────────
+function htmlMisiones() {
+    const activas = misionesActivas;
+    if (!activas.length) return `<div class="panel-seccion"><p class="sin-resultado">No hay misiones activas.</p></div>`;
+
+    const items = activas.map(m => `
+        <div class="mision-item">
+            <span class="mision-estado mision-estado-${m.estado}">${m.estado === 1 ? 'Pendiente' : 'En curso'}</span>
+            <div class="mision-titulo">${m.titulo}</div>
+            <div class="mision-tipo">${m.tipo} · Clase ${m.clase}</div>
+        </div>`).join('');
+
+    return `<div class="panel-seccion"><div class="lista-misiones-panel">${items}</div></div>`;
+}
+
+// ── TAB: IMÁGENES ─────────────────────────────────────────────
+function htmlImagenes() {
+    return `
+    <div class="panel-seccion">
+        ${editor.activo ? `
+        <div class="panel-sub-titulo">Subir imagen de prop</div>
+        <div id="upload-prop-form">
+            <input type="text" id="up-prop-nombre" placeholder="Nombre del prop" style="width:100%;box-sizing:border-box;background:#0a0018;border:1px solid #444;color:#fff;padding:6px;border-radius:4px;font-size:0.82em;margin-bottom:6px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:6px;">
+                <select id="up-prop-tipo" style="background:#0a0018;border:1px solid #444;color:#fff;padding:5px;border-radius:4px;font-size:0.8em;">
+                    ${PROP_TIPOS.map(t => `<option value="${t}">${t}</option>`).join('')}
+                </select>
+                <select id="up-prop-capa" style="background:#0a0018;border:1px solid #444;color:#fff;padding:5px;border-radius:4px;font-size:0.8em;">
+                    ${CAPAS.map(c => `<option value="${c}">${c}</option>`).join('')}
+                </select>
+            </div>
+            <div class="drop-prop" id="drop-prop-zone"
+                onclick="document.getElementById('file-prop-input').click()"
+                ondragover="event.preventDefault(); this.classList.add('drag-sobre')"
+                ondragleave="this.classList.remove('drag-sobre')"
+                ondrop="window.dropPropImagen(event)">
+                🖼️ Arrastra o haz clic para subir imagen
+            </div>
+            <input type="file" id="file-prop-input" accept="image/*" style="display:none" onchange="window.subirPropImagen(event)">
+            <div id="up-prop-progress" style="display:none; margin-top:6px;">
+                <div style="height:4px; background:#0a0018; border-radius:2px; overflow:hidden;">
+                    <div id="up-prop-fill" style="height:100%; background:var(--cyan-magic); width:0%; transition:width 0.3s;"></div>
+                </div>
+                <p id="up-prop-status" style="font-size:0.75em; color:#aaa; text-align:center; margin:3px 0;"></p>
+            </div>
+        </div>
+
+        <hr style="border-color:#333; margin:15px 0;">
+        <div class="panel-sub-titulo">Fondo del mapa (Background)</div>
+        <div class="drop-prop" id="drop-bg-zone"
+            onclick="document.getElementById('file-bg-input').click()"
+            ondragover="event.preventDefault(); this.classList.add('drag-sobre')"
+            ondragleave="this.classList.remove('drag-sobre')"
+            ondrop="window.dropBGImagen(event)">
+            🌄 Subir nueva imagen de fondo
+        </div>
+        <input type="file" id="file-bg-input" accept="image/*" style="display:none" onchange="window.subirBGImagen(event)">
+        ` : '<p class="sin-resultado">Solo el OP puede gestionar imágenes.</p>'}
+
+        <div class="panel-sub-titulo" style="margin-top:15px;">Fondos disponibles</div>
+        <div id="lista-bg-imgs" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+            <p class="sin-resultado sin-resultado-sm">Cargando...</p>
+        </div>
+    </div>`;
+}
+
+// ── Info de hex seleccionado (modo jugador) ──────────────────
+export function renderInfoHex(q, r, key) {
+    const panel = document.getElementById('panel-info-hex');
+    if (!panel) return;
+
+    const hex = mapaActual.hexes[key];
+    if (!hex) { panel.innerHTML = `<p class="sin-resultado">Hex vacío (${q},${r})</p>`; return; }
+
+    const regionId = hex.region;
+    const reg = regionId ? mapaActual.regiones[regionId] : null;
+
+    const npcsAqui = Object.values(npcsMapaLocal).filter(n => n.hex === key);
+    const jugAqui  = personajesDB.filter(p => {
+        // Buscar si hay NPC de sistema con ese hex
+        return false; // Los jugadores no tienen posición en el mapa por ahora
+    });
+
+    const misHtml = reg ? (reg.misiones||[]).map(mid => {
+        const m = misionesActivas.find(x => x.id === mid);
+        return m ? `<span class="tag-mision">${m.titulo}</span>` : '';
+    }).join('') : '';
+
+    const npcsHtml = npcsAqui.map(n => `
+        <div class="npc-card mini" style="margin-bottom:4px;">
+            <img src="${n.icono||NO_IMG()}" onerror="this.src='${NO_IMG()}'" class="npc-thumb" style="width:32px;height:32px;">
+            <div>
+                <div class="npc-nombre">${n.nombre}</div>
+                ${n.desc ? `<div class="npc-meta">${n.desc}</div>` : ''}
+            </div>
+        </div>`).join('');
+
+    panel.innerHTML = `
+        <div style="padding:12px;">
+            <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:10px;">
+                <div style="color:var(--gold); font-family:'Cinzel'; font-weight:bold; font-size:1em;">
+                    ${reg ? reg.nombre : `Hex (${q},${r})`}
+                </div>
+                <button onclick="document.getElementById('panel-info-hex').innerHTML=''" style="background:none;border:none;color:#666;font-size:1em;cursor:pointer;">✕</button>
+            </div>
+            ${reg ? `
+            <div style="font-size:0.8em; color:#aaa; font-family:sans-serif; margin-bottom:8px;">
+                Control: <span style="color:#fff;">${reg.controlador||'—'}</span><br>
+                Acceso: <span style="color:${reg.accesible?'#00ff88':'#ff4444'}">${reg.accesible?'Abierto':'Cerrado'}</span>
+            </div>` : ''}
+            ${misHtml ? `<div style="margin-bottom:8px;">${misHtml}</div>` : ''}
+            ${npcsHtml ? `<div class="panel-sub-titulo" style="margin-bottom:5px;">Presentes</div>${npcsHtml}` : ''}
+            ${reg?.tieneInterior ? `
+            <button class="btn-accion" style="width:100%; margin-top:8px;" onclick="window.entrarInterior('${reg.id}')">
+                🚪 Entrar al interior
+            </button>` : ''}
+        </div>`;
+}
+
+// ── Modales ───────────────────────────────────────────────────
+export function abrirModal(contenidoHtml, titulo = '') {
+    document.getElementById('modal-titulo').innerText = titulo;
+    document.getElementById('modal-cuerpo').innerHTML = contenidoHtml;
+    document.getElementById('modal-region').classList.remove('oculto');
+}
+
+export function cerrarModal() {
+    document.getElementById('modal-region').classList.add('oculto');
+}
+
+export function htmlFormProp(propData = null) {
+    const p = propData || { nombre:'', tipo:'terreno', capa:'background', ancho:1, alto:1, forma:'hex', imagen:'' };
+    return `
+    <div style="display:flex; flex-direction:column; gap:10px;">
+        <label>Nombre
+            <input type="text" id="fp-nombre" value="${p.nombre}" class="form-input">
+        </label>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <label>Tipo
+                <select id="fp-tipo" class="form-input">
+                    ${PROP_TIPOS.map(t => `<option value="${t}" ${p.tipo===t?'selected':''}>${t}</option>`).join('')}
+                </select>
+            </label>
+            <label>Capa
+                <select id="fp-capa" class="form-input">
+                    ${CAPAS.map(c => `<option value="${c}" ${p.capa===c?'selected':''}>${c}</option>`).join('')}
+                </select>
+            </label>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <label>Ancho (hexes)
+                <input type="number" id="fp-ancho" value="${p.ancho||1}" min="1" max="5" class="form-input">
+            </label>
+            <label>Alto (hexes)
+                <input type="number" id="fp-alto" value="${p.alto||1}" min="1" max="5" class="form-input">
+            </label>
+        </div>
+        <label>Imagen URL (o sube una imagen)
+            <input type="text" id="fp-imagen" value="${p.imagen||''}" placeholder="https://... o sube en la pestaña Imágenes" class="form-input">
+        </label>
+        <button class="btn-accion" style="background:var(--gold); color:#000;" onclick="window.guardarPropUI()">💾 Guardar Prop</button>
+    </div>`;
+}
+
+export function htmlFormNPC(npcData = null) {
+    const n = npcData || { nombre:'', tipo:'sistema', icono:'', hex:'', capa:'mid', desc:'', stats:{} };
+    const hexOpts = Object.keys(mapaActual.hexes).slice(0, 200);
+    return `
+    <div style="display:flex; flex-direction:column; gap:10px;">
+        <label>Nombre
+            <input type="text" id="fn-nombre" value="${n.nombre}" class="form-input">
+        </label>
+        <label>Tipo
+            <select id="fn-tipo" class="form-input">
+                <option value="sistema" ${n.tipo==='sistema'?'selected':''}>NPC Sistema (solo mapa)</option>
+                <option value="jugador" ${n.tipo==='jugador'?'selected':''}>NPC Jugador (tiene ficha)</option>
+            </select>
+        </label>
+        <label>Icono URL
+            <input type="text" id="fn-icono" value="${n.icono||''}" class="form-input" placeholder="URL de imagen">
+        </label>
+        <label>Posición (hex q,r) — deja en blanco para sin posición
+            <input type="text" id="fn-hex" value="${n.hex||''}" class="form-input" placeholder="ej: 3,2">
+        </label>
+        <label>Capa
+            <select id="fn-capa" class="form-input">
+                <option value="mid" ${n.capa==='mid'?'selected':''}>Mid</option>
+                <option value="over" ${n.capa==='over'?'selected':''}>Over</option>
+            </select>
+        </label>
+        <label>Descripción
+            <textarea id="fn-desc" class="form-input" rows="3">${n.desc||''}</textarea>
+        </label>
+        <button class="btn-accion" style="background:var(--gold); color:#000;" onclick="window.guardarNPCUI('${n.id||''}')">💾 Guardar NPC</button>
+    </div>`;
+}
+
+// ── Actualizar tabs ───────────────────────────────────────────
+function actualizarTabsBotones() {
+    document.querySelectorAll('.tab-panel-btn').forEach(b => {
+        b.classList.toggle('activo', b.dataset.panel === ui.panelActual);
+    });
+}
+
+// ── Cargar backgrounds ────────────────────────────────────────
+export async function cargarListaBG() {
+    const cont = document.getElementById('lista-bg-imgs');
+    if (!cont) return;
+    const imgs = await listarImagenesBackground();
+    if (!imgs.length) { cont.innerHTML = '<p class="sin-resultado sin-resultado-sm">Ningún fondo subido aún.</p>'; return; }
+    cont.innerHTML = imgs.map(img => `
+        <div class="bg-thumb" onclick="window.aplicarBG('${img.url}')" title="${img.nombre}">
+            <img src="${img.url}" onerror="this.src='${NO_IMG()}'">
+            <div style="font-size:0.6em; color:#888; word-break:break-all;">${img.nombre.replace('region_bg_','')}</div>
+        </div>`).join('');
+}
