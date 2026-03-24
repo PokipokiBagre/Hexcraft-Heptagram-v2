@@ -9,9 +9,9 @@ export const STORAGE_URL  = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}`
 // ── Tamaño del hexágono y Elevación ──────────────────────────
 export const HEX_SIZE = 48; // px, ajustable
 
-// ── Offset visual de la capa OVER (Map Planes) ───────────────
-export const OVER_OFFSET_X = 0;                 // Alineado perfectamente al centro
-export const OVER_OFFSET_Y = -(HEX_SIZE * 2.4); // Desfase vertical puro (hacia arriba)
+// ── Offset visual de la capa OVER (Plataforma perfectamente alineada arriba) 
+export const OVER_OFFSET_X = 0;                 // 0% de desviación horizontal
+export const OVER_OFFSET_Y = -(HEX_SIZE * 1.5); // Altura justa "arriba nomás"
 
 // ── Tipos de prop ────────────────────────────────────────────
 export const PROP_TIPOS = ['terreno', 'estructura', 'entidad', 'elemento', 'objeto'];
