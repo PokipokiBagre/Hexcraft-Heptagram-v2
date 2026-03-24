@@ -84,11 +84,12 @@ function htmlPropsPanel() {
 }
 
 function htmlRegionesPanel() {
-    const regs = Object.values(mapaActual.regiones || {});
+    const regs = Object.values(mapaActual.regiones);
 
-    // 🌟 RASTREADOR DE ENTIDADES POR REGIÓN (Para vista de Jugadores)
+    // 🌟 NUEVO: RASTREADOR AVANZADO DE ENTIDADES PARA LISTA DE REGIONES
     const entidadesPorRegion = {};
     
+    // Rastrea NPCs de Sistema
     Object.values(npcsMapaLocal || {}).forEach(n => {
         const h = mapaActual.hexes[n.hex_pos];
         if (h && h.region) {
@@ -97,13 +98,14 @@ function htmlRegionesPanel() {
         }
     });
 
+    // Rastrea Props de la BD y Props Manuales con tipo 'entidad'
     Object.values(mapaActual.hexes || {}).forEach(hex => {
         if (hex.region && hex.mid) {
             hex.mid.forEach(pid => {
                 let basePid = typeof pid === 'string' ? pid.split(':')[0] : pid;
-                if (basePid.startsWith('pj_') || basePid.startsWith('npc_')) {
-                    const p = props[basePid];
-                    if (p && !entidadesPorRegion[hex.region]?.some(e => e.nombre === p.nombre)) {
+                const p = props[basePid];
+                if (p && (basePid.startsWith('pj_') || basePid.startsWith('npc_') || p.tipo === 'entidad')) {
+                    if (!entidadesPorRegion[hex.region]?.some(e => e.nombre === p.nombre)) {
                         if (!entidadesPorRegion[hex.region]) entidadesPorRegion[hex.region] = [];
                         entidadesPorRegion[hex.region].push({ nombre: p.nombre, img: p.imagen });
                     }
@@ -113,27 +115,26 @@ function htmlRegionesPanel() {
     });
 
     const lista = regs.map(reg => {
-        // Renderizamos las miniaturas de los personajes adentro
         const avataresHtml = (entidadesPorRegion[reg.id] || []).map(e => `
             <div style="display:inline-flex; align-items:center; gap:4px; margin-top:4px; margin-right:6px; background:rgba(0,0,0,0.5); padding:2px 6px; border-radius:12px; font-size:0.75em; border:1px solid #444;">
                 <img src="${e.img || NO_IMG}" style="width:16px; height:16px; border-radius:50%; object-fit:cover;">
-                ${e.nombre}
+                <span style="color:var(--text);">${e.nombre}</span>
             </div>
         `).join('');
 
         return `
         <div class="region-card ${ui.selectedRegion === reg.id ? 'region-card-sel' : ''}" onclick="window.seleccionarRegionUI('${reg.id}')">
-            <div class="region-color-dot" style="background:${reg.color || '#334'}"></div>
+            <div class="region-color-dot" style="background:${reg.color}"></div>
             <div class="region-info">
-                <div class="region-nombre">${reg.nombre || 'Región'} 🏠</div>
-                <div class="region-meta">${(reg.hexes || []).length} hexes</div>
+                <div class="region-nombre">${reg.nombre} 🏠</div>
+                <div class="region-meta">${reg.hexes.length} hexes</div>
                 ${avataresHtml ? `<div style="margin-top:4px;">${avataresHtml}</div>` : ''}
             </div>
             ${editor.activo ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarRegionUI('${reg.id}')">✕</button>` : ''}
         </div>`;
     }).join('');
 
-    const regSel = ui.selectedRegion && mapaActual.regiones ? mapaActual.regiones[ui.selectedRegion] : null;
+    const regSel = ui.selectedRegion ? mapaActual.regiones[ui.selectedRegion] : null;
     const detalleHtml = regSel ? htmlDetalleRegion(regSel) : '';
 
     return `<div class="panel-seccion">
@@ -159,8 +160,6 @@ function htmlDetalleRegion(reg) {
         }).join('');
     }
 
-    const btnActivoClass = editor.selectedPropId === 'prop_region' && editor.herramienta === 'agregar' ? 'activo' : '';
-
     return `
     <div class="region-detalle edit">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -168,7 +167,7 @@ function htmlDetalleRegion(reg) {
             <button onclick="window.eliminarRegionUI('${reg.id}')" style="background:#4a0000; border:1px solid #ff4444; color:#fff; padding:3px 8px; border-radius:4px; font-size:0.72em; cursor:pointer;">🗑️</button>
         </div>
         <label>Nombre
-            <input type="text" value="${(reg.nombre || '').replace(/"/g,'&quot;')}"
+            <input type="text" value="${reg.nombre.replace(/"/g,'&quot;')}"
                 oninput="window.actualizarRegion('${reg.id}','nombre',this.value)"
                 style="width:100%;box-sizing:border-box;background:#0a0018;border:1px solid #444;color:#fff;padding:5px 8px;border-radius:4px;font-size:0.85em;margin-top:3px;">
         </label>
@@ -178,7 +177,7 @@ function htmlDetalleRegion(reg) {
                 style="width:100%;box-sizing:border-box;background:#0a0018;border:1px solid #444;color:#fff;padding:5px 8px;border-radius:4px;font-size:0.85em;margin-top:3px;">
         </label>
         <div style="display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap;">
-            <label style="font-size:0.78em; color:#aaa; display:flex; align-items:center; gap:6px;">Color <input type="color" value="${reg.color || '#000000'}" oninput="window.actualizarRegion('${reg.id}','color',this.value)" style="width:32px;height:26px;border:none;background:none;cursor:pointer;padding:0;"></label>
+            <label style="font-size:0.78em; color:#aaa; display:flex; align-items:center; gap:6px;">Color <input type="color" value="${reg.color}" oninput="window.actualizarRegion('${reg.id}','color',this.value)" style="width:32px;height:26px;border:none;background:none;cursor:pointer;padding:0;"></label>
             <label style="font-size:0.78em; color:#aaa; flex:1; min-width:120px; display:flex; align-items:center; gap:6px;">Opacidad <input type="range" min="0.05" max="0.75" step="0.05" value="${reg.opacidad||0.3}" oninput="window.actualizarRegion('${reg.id}','opacidad',parseFloat(this.value))" style="flex:1; accent-color:var(--cyan);"></label>
         </div>
 
@@ -190,7 +189,7 @@ function htmlDetalleRegion(reg) {
         </div>
 
         <div style="display:flex; gap:6px; margin-top:12px; flex-wrap:wrap;">
-            <button class="btn-accion ${btnActivoClass}" style="flex:1; background:#004a00; border-color:#00ff00; color:#fff;" onclick="window.activarPincelRegion('${reg.id}')">
+            <button class="btn-accion ${editor.selectedPropId === 'prop_region' ? 'activo' : ''}" style="flex:1; background:#004a00; border-color:#00ff00;" onclick="window.activarPincelRegion('${reg.id}')">
                 🖌️ Pincel de Región
             </button>
         </div>
@@ -198,23 +197,23 @@ function htmlDetalleRegion(reg) {
 }
 
 function htmlNPCsPanel() {
-    const listNPCsMap = Object.values(npcsMapaLocal || {}).map(n => `
+    const listNPCsMap = Object.values(npcsMapaLocal).map(n => `
         <div class="npc-card" style="position:relative; cursor:pointer;" onclick="window.seleccionarNPCUI('${n.id}')">
             <img src="${n.icono_url || NO_IMG}" onerror="this.src='${NO_IMG}'" class="npc-thumb">
             <div>
-                <div class="npc-nombre">${n.nombre || 'NPC'}</div>
-                <div class="npc-meta">${n.tipo || 'Desconocido'} · ${n.hex_pos||'No pos'}</div>
+                <div class="npc-nombre">${n.nombre}</div>
+                <div class="npc-meta">${n.tipo} · ${n.hex_pos||'No pos'}</div>
             </div>
             ${editor.activo ? `<button class="prop-card-del" style="position:absolute; top:4px; right:4px; z-index:10; background:#4a0000; color:#fff;" onclick="event.stopPropagation(); window.eliminarNPCUI('${n.id}')">✕</button>` : ''}
         </div>`).join('') || '<p class="sin-resultado">No hay NPCs de región.</p>';
 
-    const listJugadoresDB = (personajesDB || []).map(p => {
+    const listJugadoresDB = personajesDB.map(p => {
         const pid = `pj_${normKey(p.nombre)}`;
         const sel = editor.selectedPropId === pid ? 'npc-card-sel' : '';
         return `
         <div class="npc-card ${sel}" onclick="window.seleccionarPropEntidadUI('${pid}')">
             <img src="${STORAGE_URL}/imgpersonajes/${normKey(p.icon)}icon.png" onerror="this.src='${NO_IMG}'" class="npc-thumb">
-            <div><div class="npc-nombre">${p.nombre || 'Jugador'}</div> <div class="npc-meta">Jugador DB</div></div>
+            <div><div class="npc-nombre">${p.nombre}</div> <div class="npc-meta">Jugador DB</div></div>
         </div>`;
     }).join('');
 
@@ -229,13 +228,13 @@ function htmlNPCsPanel() {
 }
 
 function htmlImagenesPanel() {
-    let listaProps = Object.values(props || {});
+    let listaProps = Object.values(props);
     if (ui.filtroPropSinImagen) listaProps = listaProps.filter(p => !p.imagen && p.id !== 'prop_pintar' && p.id !== 'prop_region');
 
     const grid = listaProps.filter(p => p.id !== 'prop_region').map(p => `
         <div style="background:rgba(0,0,0,0.3); padding:5px; text-align:center; position:relative; border-radius:4px; border:1px solid #333;">
             <img src="${p.imagen || NO_IMG}" onerror="this.src='${NO_IMG}'" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:3px;">
-            <div style="font-size:0.65em; margin-top:3px; word-break:break-word;">${p.nombre || 'Prop'}</div>
+            <div style="font-size:0.65em; margin-top:3px; word-break:break-word;">${p.nombre}</div>
             ${editor.activo && p.id !== 'prop_pintar' ? `<button class="btn-accion-mini" onclick="window.abrirSubidaPropUI('${p.id}')" style="margin-top:4px; width:100%; font-size:0.7em; padding:2px;">📤 Subir</button>` : ''}
         </div>`).join('');
 
@@ -257,7 +256,7 @@ function htmlImagenesPanel() {
         <div class="panel-sub-titulo">👤 Subir imagen de NPC de Región</div>
         <select id="up-npc-id" style="width:100%;box-sizing:border-box;background:#0a0018;border:1px solid #444;color:#fff;padding:6px;border-radius:4px;font-size:0.82em;margin-bottom:6px;">
             <option value="">-- Selecciona un NPC --</option>
-            ${Object.values(npcsMapaLocal || {}).map(n => `<option value="${n.id}">${n.nombre || 'NPC'}</option>`).join('')}
+            ${Object.values(npcsMapaLocal).map(n => `<option value="${n.id}">${n.nombre}</option>`).join('')}
         </select>
         <div class="drop-zone" id="drop-npc-zone" onclick="document.getElementById('file-npc-input').click()" style="padding:6px; cursor:pointer; background:#3a1a6a; text-align:center; border-radius:4px;">
             👤 Haz clic para subir imagen
@@ -274,53 +273,66 @@ function htmlImagenesPanel() {
 }
 
 export function htmlMisionesPanel() {
-    const list = (misionesActivas || []).map(m => `
+    const list = misionesActivas.map(m => `
         <div class="mision-item">
             <span class="mision-estado m-${m.estado}">${m.estado===1?'Pendiente':'En curso'}</span>
-            <div class="mision-titulo">${m.titulo || 'Misión'}</div>
-            <div class="mision-tipo">${m.tipo || 'General'} · Clase ${m.clase || '-'}</div>
+            <div class="mision-titulo">${m.titulo}</div>
+            <div class="mision-tipo">${m.tipo} · Clase ${m.clase}</div>
         </div>`).join('');
     return `<div class="panel-seccion"><div class="lista-misiones-panel">${list}</div></div>`;
 }
 
 export function renderInfoHexPanel(q, r, key) {
-    const hex = mapaActual.hexes ? mapaActual.hexes[key] : null;
+    const hex = mapaActual.hexes[key];
     const el = document.getElementById('panel-info-hex');
-    if (!el) return;
     if (!hex) { el.innerHTML = ''; return; }
 
-    const reg = hex.region && mapaActual.regiones ? mapaActual.regiones[hex.region] : null;
-    const npcsAqui = Object.values(npcsMapaLocal || {}).filter(n => n.hex_pos === key);
+    const reg = hex.region ? mapaActual.regiones[hex.region] : null;
     
+    // 🌟 RASTREADOR AVANZADO DE ENTIDADES PARA TOOLTIP
+    const entidadesAqui = Object.values(npcsMapaLocal || {}).filter(n => n.hex_pos === key).map(n => ({nombre: n.nombre, img: n.icono_url, desc: n.descripcion}));
+    
+    if (hex.mid) {
+        hex.mid.forEach(pid => {
+            let basePid = typeof pid === 'string' ? pid.split(':')[0] : pid;
+            const p = props[basePid];
+            if (p && (basePid.startsWith('pj_') || basePid.startsWith('npc_') || p.tipo === 'entidad')) {
+                if (!entidadesAqui.some(e => e.nombre === p.nombre)) {
+                    entidadesAqui.push({nombre: p.nombre, img: p.imagen, desc: p.tipo === 'entidad' ? 'Personaje' : 'Jugador DB'});
+                }
+            }
+        });
+    }
+
+    const npcsHtml = entidadesAqui.map(n => `
+        <div style="display:flex; align-items:center; gap:6px; font-size:0.8em; margin-top:4px;">
+            <img src="${n.img || NO_IMG}" onerror="this.src='${NO_IMG}'" style="width:28px; height:28px; border-radius:50%; object-fit:cover; border:1px solid #555;">
+            <div><div style="font-weight:bold; color:var(--text);">${n.nombre}</div> <div style="color:var(--text-dim); font-size:0.9em;">${n.desc||''}</div></div>
+        </div>`).join('');
+
     const misionesHtml = reg ? (reg.misiones || []).map(mid => {
         const m = misionesActivas.find(x => x.id === mid);
         return m ? `<div style="font-size:0.82em; color:var(--text); margin-bottom:3px;"><span class="mision-estado m-${m.estado}" style="font-size:0.65em; padding:1px 4px; border-radius:3px;">${m.estado===1?'Pendiente':'En curso'}</span> ${m.titulo || 'Misión'}</div>` : '';
     }).join('') : '';
 
-    const npcsHtml = npcsAqui.map(n => `
-        <div style="display:flex; align-items:center; gap:6px; font-size:0.8em; margin-top:4px;">
-            <img src="${n.icono_url || NO_IMG}" onerror="this.src='${NO_IMG}'" style="width:28px; height:28px; border-radius:50%; object-fit:cover; border:1px solid #555;">
-            <div><div style="font-weight:bold; color:var(--text);">${n.nombre || 'NPC'}</div> <div style="color:var(--text-dim); font-size:0.9em;">${n.descripcion||''}</div></div>
-        </div>`).join('');
-
     el.innerHTML = `
-    <div style="padding:12px;">
+    <div style="padding:10px;">
         <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px;">
-            <div class="info-hex-titulo" style="font-family:'Cinzel', serif; font-size:1em; font-weight:bold; color:var(--gold);">${reg ? (reg.nombre || 'Región') : `Hex (${q},${r})`}</div>
+            <div class="info-hex-titulo" style="font-family:'Cinzel', serif; font-size:1em; font-weight:bold; color:var(--gold);">${reg ? reg.nombre : `Hex (${q},${r})`}</div>
             <button onclick="document.getElementById('panel-info-hex').innerHTML=''" style="background:none; border:none; color:#666; font-size:1.1em; cursor:pointer;">✕</button>
         </div>
         ${reg ? `<div class="detalle-fila" style="color:var(--text-dim);">Control: <span style="color:var(--text);">${reg.controlador || '—'}</span></div>` : ''}
         
         ${misionesHtml ? `
             <div style="margin-top:10px; padding-top:10px; border-top:1px solid #333;">
-                <div style="font-size:0.8em; font-weight:bold; color:#88ccdd; margin-bottom:4px; text-transform:uppercase;">⚔️ Misiones de la Región:</div>
+                <div style="font-size:0.8em; font-weight:bold; color:#88ccdd; margin-bottom:4px; text-transform:uppercase;">⚔️ Misiones:</div>
                 ${misionesHtml}
             </div>
         ` : ''}
 
         ${npcsHtml ? `
             <div style="margin-top:10px; padding-top:10px; border-top:1px solid #333;">
-                <div style="font-size:0.8em; font-weight:bold; color:#00ff88; margin-bottom:4px; text-transform:uppercase;">👤 Presentes aquí:</div>
+                <div style="font-size:0.8em; font-weight:bold; color:#00ff88; margin-bottom:4px; text-transform:uppercase;">👤 Personajes:</div>
                 ${npcsHtml}
             </div>
         ` : ''}
@@ -328,7 +340,7 @@ export function renderInfoHexPanel(q, r, key) {
         ${editor.activo ? `
         <div style="margin-top:10px; padding-top:10px; border-top:1px solid #333;">
             <div class="brush-row" style="display:flex; justify-content:space-between; align-items:center;">
-                <span style="color:#aaa; font-size:0.75em;">Elevación (3D):</span>
+                <span style="color:#aaa; font-size:0.75em;">Elevación:</span>
                 <input type="number" value="${hex.elevation || 0}" style="width:60px; background:#000; border:1px solid #444; color:#fff; padding:3px; border-radius:3px;"
                     onchange="window.actualizarElevacionUI('${key}', this.value)">
             </div>
