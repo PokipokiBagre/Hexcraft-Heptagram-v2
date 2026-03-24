@@ -10,7 +10,7 @@ export function htmlFormProp(propData = null) {
     <div style="display:flex; flex-direction:column; gap:10px;">
         <input type="hidden" id="fp-id" value="${p.id || ''}">
         <label>Nombre
-            <input type="text" id="fp-nombre" value="${p.nombre}" class="form-input" placeholder="Nombre del prop">
+            <input type="text" id="fp-nombre" value="${p.nombre || ''}" class="form-input" placeholder="Nombre del prop">
         </label>
         <label>Tipo
             <select id="fp-tipo" class="form-input">
@@ -18,7 +18,7 @@ export function htmlFormProp(propData = null) {
             </select>
         </label>
         <label>Imagen URL
-            <input type="text" id="fp-imagen" value="${p.imagen}" class="form-input" placeholder="https://...">
+            <input type="text" id="fp-imagen" value="${p.imagen || ''}" class="form-input" placeholder="https://...">
         </label>
         <button class="btn-accion" style="background:var(--gold); color:#000;" onclick="window.guardarPropUI()">💾 Guardar Prop</button>
     </div>`;
@@ -28,9 +28,9 @@ export function htmlFormNPC(npcData = null) {
     const n = npcData || { id: '', nombre: '', tipo: 'sistema', icono_url: '', hex_pos: '', capa: 'mid', descripcion: '' };
     return `
     <div style="display:flex; flex-direction:column; gap:10px;">
-        <input type="hidden" id="fn-id" value="${n.id}">
+        <input type="hidden" id="fn-id" value="${n.id || ''}">
         <label>Nombre
-            <input type="text" id="fn-nombre" value="${n.nombre}" class="form-input" placeholder="Nombre del NPC">
+            <input type="text" id="fn-nombre" value="${n.nombre || ''}" class="form-input" placeholder="Nombre del NPC">
         </label>
         <label>Icono URL
             <input type="text" id="fn-icono" value="${n.icono_url || ''}" class="form-input" placeholder="https://...">
