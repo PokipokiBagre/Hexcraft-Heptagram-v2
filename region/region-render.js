@@ -80,7 +80,7 @@ function getDrawingList(W, H) {
 
         list.push({ type: 'gridOverlay', q, r, hex, projPos: baseProjPos, layer: 'base', depth: baseDepth + 3 });
 
-        // PLANO OVER (Flotante)
+        // PLANO OVER (Flotante Limpio)
         if (hex.over?.length > 0) {
             const overProjPos = { 
                 x: baseProjPos.x + (OVER_OFFSET_X * camara.zoom), 
@@ -158,34 +158,20 @@ function dibujarHexTop3D(q, r, hex, topPos) {
     });
 }
 
-// ── PLANO OVER (Pincel) ──
+// ── PLANO OVER (Limpio y plano) ──
 function dibujarHexOverBackground(q, r, propId, hex, overPos, opac) {
     const parts = propId.split(':');
     const color = parts[1];
-    
     const verts = isometricHexVertices(overPos.x, overPos.y, 0);
-    const size = HEX_SIZE * camara.zoom;
 
     context.save();
     context.globalAlpha = opac;
     trazarHexPath(verts);
     context.fillStyle = color;
     context.fill();
-    
-    // Relieve 3D flotante (grosor limpio sin sombras)
-    context.beginPath();
-    context.moveTo(verts[2].x, verts[2].y);
-    context.lineTo(verts[3].x, verts[3].y);
-    context.lineTo(verts[4].x, verts[4].y);
-    context.lineTo(verts[4].x, verts[4].y + size * 0.15);
-    context.lineTo(verts[2].x, verts[2].y + size * 0.15);
-    context.closePath();
-    context.fillStyle = 'rgba(0,0,0,0.3)'; 
-    context.fill();
     context.restore();
 }
 
-// ── PLANO OVER (Objetos) ──
 function dibujarHexOverItem(q, r, propId, hex, overPos, opac) {
     let basePid = propId;
     if (typeof propId === 'string' && propId.includes(':')) basePid = propId.split(':')[0];
@@ -198,29 +184,13 @@ function dibujarHexOverItem(q, r, propId, hex, overPos, opac) {
     const size = HEX_SIZE * camara.zoom;
     const drawW = size * 2.85; 
     const drawH = drawW * camara.PITCH_SCALE;
-    
     const vertsOver = isometricHexVertices(overPos.x, overPos.y, 0);
 
-    // Dibuja imagen clipeada
     context.save();
     context.globalAlpha = opac;
     trazarHexPath(vertsOver);
     context.clip();
     context.drawImage(img, overPos.x - drawW / 2, overPos.y - drawH / 2, drawW, drawH);
-    context.restore();
-
-    // Relieve 3D flotante (grosor limpio sin sombras)
-    context.save();
-    context.globalAlpha = opac;
-    context.beginPath();
-    context.moveTo(vertsOver[2].x, vertsOver[2].y);
-    context.lineTo(vertsOver[3].x, vertsOver[3].y);
-    context.lineTo(vertsOver[4].x, vertsOver[4].y);
-    context.lineTo(vertsOver[4].x, vertsOver[4].y + size * 0.15);
-    context.lineTo(vertsOver[2].x, vertsOver[2].y + size * 0.15);
-    context.closePath();
-    context.fillStyle = 'rgba(0,0,0,0.3)';
-    context.fill();
     context.restore();
 }
 
