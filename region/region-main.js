@@ -10,13 +10,13 @@ import {
 } from './region-state.js';
 import { 
     cargarTodo, guardarMapa, guardarProp, eliminarProp, 
-    guardarNPC, eliminarNPC, subirImagenStorage 
+    guardarNPC, eliminarNPC, subirImagenStorage, listarImagenesBackground 
 } from './region-data.js';
 import { inicializarEngine, aplicarRuidoVisible, centrarCamara } from './region-engine.js';
 import { setBackground } from './region-render.js';
 
 // IMPORTACIONES PERFECTAMENTE SINCRONIZADAS:
-import { renderPanel, renderInfoHexPanel, cargarListaBG_UI } from './region-ui.js';
+import { renderPanel, renderInfoHexPanel } from './region-ui.js';
 import { htmlFormProp, htmlFormNPC, abrirModalUI, cerrarModalUI, mostrarToastUI } from './region-ui-elements.js';
 import { normKey } from './region-utils.js';
 
@@ -62,7 +62,24 @@ window.onload = async () => {
     });
 };
 
-window.cambiarPanelUI = (panel) => { ui.panelActual = panel; renderPanel(); };
+window.cambiarPanelUI = async (panel) => { 
+    ui.panelActual = panel; 
+    renderPanel(); 
+    
+    // Cargar fondos si se abre el panel de imágenes
+    if (panel === 'imagenes') {
+        const fonds = await listarImagenesBackground();
+        const cont = document.getElementById('lista-bg-imgs');
+        if (cont) {
+            if (!fonds.length) cont.innerHTML = '<p class="sin-resultado sin-resultado-sm">Ningún fondo subido aún.</p>';
+            else cont.innerHTML = fonds.map(url => `
+                <div class="bg-thumb" onclick="window.aplicarFondUI('${url}')">
+                    <img src="${url}">
+                </div>`).join('');
+        }
+    }
+};
+
 window.setBusquedaUI = (v) => { ui.busqueda = v; renderPanel(); };
 window.setFiltroPropSinImagenUI = (v) => { ui.filtroPropSinImagen = v; renderPanel(); };
 window.setBrushSizeUI = (n) => { editor.brushSize = n; renderPanel(); };
