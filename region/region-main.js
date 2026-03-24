@@ -17,36 +17,29 @@ import {
 import { supabase } from '../hex-auth.js';
 import { aplicarRuidoVisible } from './region-engine.js';
 
-// ── Estado de cambios pendientes ─────────────────────────────
 let cambiosPendientes = false;
 let mapaIdActual = 'mundo';
-let historialMapas = []; // Para el botón "volver" al salir de un interior
+let historialMapas = []; 
 
-// ── Arranque ─────────────────────────────────────────────────
 window.onload = async () => {
-    // Favicon
     let fav = document.querySelector("link[rel='icon']");
     if (!fav) { fav = document.createElement("link"); fav.rel = "icon"; document.head.appendChild(fav); }
     fav.href = `${STORAGE_URL}/imginterfaz/icon.png`;
 
-    // Auth
     await hexAuth.init();
     editor.activo = hexAuth.esAdmin();
 
     const badge = document.getElementById('hex-session-badge');
     if (badge) badge.innerHTML = hexAuth.renderStatusBadge ? hexAuth.renderStatusBadge() : '';
 
-    // Mostrar/ocultar controles OP
     document.querySelectorAll('.solo-op').forEach(el => {
         el.style.display = editor.activo ? '' : 'none';
     });
 
-    // Canvas
     const canvas = document.getElementById('mapa-canvas');
     inicializarEngine(canvas);
     centrarCamara();
 
-    // Cargar datos
     const loader = document.getElementById('loader-mapa');
     if (loader) loader.style.display = 'flex';
 
@@ -54,15 +47,11 @@ window.onload = async () => {
 
     if (loader) loader.style.display = 'none';
 
-    if (!ok) {
-        mostrarToast('⚠️ Error cargando datos del mapa', 'error');
-    }
+    if (!ok) mostrarToast('⚠️ Error cargando datos del mapa', 'error');
 
-    // Panel lateral
     renderPanel();
     actualizarBreadcrumb();
 
-    // Eventos personalizados del engine
     window.addEventListener('hexSeleccionado', (e) => {
         const { q, r, key } = e.detail;
         renderInfoHex(q, r, key);
@@ -74,32 +63,24 @@ window.onload = async () => {
         if (btn) { btn.classList.remove('oculto'); btn.innerText = '💾 Guardar Cambios'; }
     });
 
-    // Cargar lista de fondos si estamos en tab imágenes
     if (editor.activo) cargarListaBG();
 };
 
-// ── Navegación entre paneles ─────────────────────────────────
 window.cambiarPanelUI = (panel) => {
     ui.panelActual = panel;
     renderPanel();
     if (panel === 'imagenes') cargarListaBG();
 };
 
-// ── Filtros de props ─────────────────────────────────────────
-window.setFiltroTipo = (t) => { ui.filtroTipo = t; renderPanel(); };
-window.setFiltroCapa = (c) => { ui.filtroCapa = c; renderPanel(); };
 window.setBusquedaUI = (v) => { ui.busqueda   = v; renderPanel(); };
 window.setBrushSize  = (n) => { editor.brushSize = n; renderPanel(); };
 window.setCapaActual = (c) => { editor.capaActual = c; renderPanel(); };
 
-// ── Acciones OP ───────────────────────────────────────────────
 window.abrirMenuOP = async () => {
     if (hexAuth.esAdmin()) {
         editor.activo = !editor.activo;
         mostrarToast(editor.activo ? '✏️ Modo Editor Activado' : '👁️ Modo Visualización', 'info');
-        document.querySelectorAll('.solo-op').forEach(el => {
-            el.style.display = editor.activo ? '' : 'none';
-        });
+        document.querySelectorAll('.solo-op').forEach(el => el.style.display = editor.activo ? '' : 'none');
         renderPanel();
     } else {
         await hexAuth._mostrarModalLogin();
@@ -111,28 +92,22 @@ window.abrirMenuOP = async () => {
     }
 };
 
-// ── Props ─────────────────────────────────────────────────────
 window.seleccionarProp = (id) => {
     editor.propSeleccionado = props[id] || null;
-    editor.herramienta = 'pintar';
+    editor.herramienta = 'agregar'; // Actualizado de 'pintar' a 'agregar'
     renderPanel();
 };
 
-window.abrirCrearProp = () => {
-    abrirModal(htmlFormProp(), '➕ Nuevo Prop');
-};
+window.abrirCrearProp = () => abrirModal(htmlFormProp(), '➕ Nuevo Prop');
 
 window.guardarPropUI = async () => {
     const nombre = document.getElementById('fp-nombre')?.value?.trim();
     if (!nombre) return mostrarToast('El nombre es obligatorio', 'error');
-    const id   = `prop_${normKey(nombre)}_${Date.now()}`;
-    const tipo = document.getElementById('fp-tipo').value;
-    const capa = document.getElementById('fp-capa').value;
-    const ancho = parseInt(document.getElementById('fp-ancho').value) || 1;
-    const alto  = parseInt(document.getElementById('fp-alto').value)  || 1;
+    const id     = `prop_${normKey(nombre)}_${Date.now()}`;
+    const tipo   = document.getElementById('fp-tipo').value;
     const imagen = document.getElementById('fp-imagen').value.trim();
 
-    const propData = { id, nombre, tipo, capa, ancho, alto, forma: 'hex', imagen };
+    const propData = { id, nombre, tipo, imagen };
     props[id] = propData;
     const ok = await guardarProp(propData);
     if (ok) { mostrarToast('Prop guardado ✅'); cerrarModal(); renderPanel(); }
