@@ -70,7 +70,11 @@ function getDrawingList(W, H) {
         list.push({ type: 'hexTop', q, r, hex, projPos: baseProjPos, depth: baseDepth });
 
         hex.mid?.forEach(pid => {
-            const opac = typeof pid === 'string' && pid.includes(':') ? parseFloat(pid.split(':')[1]) : 1.0;
+            let opac = 1.0;
+            if (typeof pid === 'string') {
+                if (pid.startsWith('COLOR:')) opac = parseFloat(pid.split(':')[2]) || 1.0;
+                else if (pid.includes(':')) opac = parseFloat(pid.split(':')[1]) || 1.0;
+            }
             list.push({ type: 'itemMid', q, r, propId: pid, projPos: baseProjPos, opacidad: opac, depth: baseDepth + 1 });
         });
         
@@ -87,11 +91,13 @@ function getDrawingList(W, H) {
                 y: baseProjPos.y + (OVER_OFFSET_Y * camara.zoom)
             };
             
-            const overDepth = baseDepth + 5000; // Siempre arriba
+            const overDepth = baseDepth + 5000;
 
             hex.over.forEach(pid => {
                 const isColor = typeof pid === 'string' && pid.startsWith('COLOR:');
-                const opac = typeof pid === 'string' && pid.includes(':') ? parseFloat(pid.split(':')[1]) : 1.0;
+                let opac = 1.0;
+                if (isColor) opac = parseFloat(pid.split(':')[2]) || 1.0;
+                else if (typeof pid === 'string' && pid.includes(':')) opac = parseFloat(pid.split(':')[1]) || 1.0;
                 
                 if (isColor) {
                     list.push({ type: 'hexOverBg', q, r, propId: pid, hex, projPos: overProjPos, opacidad: opac, depth: overDepth });
@@ -115,9 +121,7 @@ function dibujarHexTop3D(q, r, hex, topPos) {
     
     const reg = hex.region ? mapaActual.regiones[hex.region] : null;
     if (reg) {
-        context.fillStyle = reg.color; context.globalAlpha = reg.opacidad; context.fill(); context.globalAlpha = 1;
-    } else if (hex.color) {
-        context.fillStyle = hex.color; context.globalAlpha = hex.opacidad ?? 1.0; context.fill(); context.globalAlpha = 1;
+        context.fillStyle = reg.color || '#334'; context.globalAlpha = reg.opacidad || 0.3; context.fill(); context.globalAlpha = 1;
     } else {
         context.fillStyle = '#0a0018'; 
         context.fill();
@@ -158,7 +162,7 @@ function dibujarHexTop3D(q, r, hex, topPos) {
     });
 }
 
-// ── PLANO OVER (Limpio y plano) ──
+// ── PLANO OVER (Limpio y plano sin sombras) ──
 function dibujarHexOverBackground(q, r, propId, hex, overPos, opac) {
     const parts = propId.split(':');
     const color = parts[1];
@@ -249,9 +253,8 @@ function dibujarGridAndOverlay(q, r, hex, projPos, layer) {
 
     const isHov = ui.hoveredHex === key;
     const isSelH = editor.selectedHexKey === key;
-    const isSel = editor.seleccion.has(key);
 
-    if (isHov || isSelH || isSel) {
+    if (isHov || isSelH) {
         if (editor.activo) {
             if (layer === 'over' && editor.capaActual !== 'over') return;
             if (layer === 'base' && editor.capaActual === 'over') return;
@@ -260,10 +263,9 @@ function dibujarGridAndOverlay(q, r, hex, projPos, layer) {
         }
 
         trazarHexPath(verts);
-        if (isSel) { context.fillStyle = 'rgba(100,200,255,0.2)'; context.fill(); }
-        else if (isHov) { context.fillStyle = 'rgba(255,255,255,0.06)'; context.fill(); }
+        if (isHov) { context.fillStyle = 'rgba(255,255,255,0.06)'; context.fill(); }
         
-        context.strokeStyle = isSelH ? '#f1c40f' : (isSel ? '#3498db' : 'rgba(255,255,255,0.3)');
+        context.strokeStyle = isSelH ? '#f1c40f' : 'rgba(255,255,255,0.3)';
         context.lineWidth = isSelH ? 2.5 : 1.5;
         context.stroke();
     }
