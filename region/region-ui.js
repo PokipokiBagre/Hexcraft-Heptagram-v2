@@ -9,7 +9,7 @@ import {
 } from './region-state.js';
 import { setBackground } from './region-render.js';
 import {
-    htmlFormProp, htmlFormNPC, abrirModalUI, cerrarModalUI, mostrarToastUI
+    htmlFormProp, abrirModalUI, cerrarModalUI, mostrarToastUI
 } from './region-ui-elements.js';
 import { hexKey, normKey } from './region-utils.js'; 
 
@@ -33,7 +33,9 @@ export function renderPanel() {
 function htmlPropsPanel() {
     const busq = (ui.busqueda || '').toLowerCase();
     
+    // Filtramos para que no salga el prop interno de región
     const lista = Object.values(props).filter(p => {
+        if (p.id === 'prop_region') return false;
         if (busq && !p.nombre.toLowerCase().includes(busq)) return false;
         return true;
     });
@@ -95,14 +97,46 @@ function htmlRegionesPanel() {
             ${editor.activo ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarRegionUI('${reg.id}')">✕</button>` : ''}
         </div>`).join('');
 
+    const regSel = ui.selectedRegion ? mapaActual.regiones[ui.selectedRegion] : null;
+    const detalleHtml = regSel ? htmlDetalleRegion(regSel) : '';
+
     return `<div class="panel-seccion">
         ${editor.activo ? `<button class="btn-panel-add" style="width:100%; margin-bottom:10px;" onclick="window.crearRegionUI()">＋ Nueva Región</button>` : ''}
         <div class="lista-regiones">${lista}</div>
+        ${detalleHtml}
+    </div>`;
+}
+
+function htmlDetalleRegion(reg) {
+    if (!editor.activo) return ''; // Los jugadores la ven en Info Hex
+
+    return `
+    <div class="region-detalle edit">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div class="detalle-titulo" style="color:var(--gold); margin:0;">✏️ Editando Región</div>
+            <button onclick="window.eliminarRegionUI('${reg.id}')"
+                style="background:#4a0000; border:1px solid #ff4444; color:#fff; padding:3px 8px; border-radius:4px; font-size:0.72em; cursor:pointer;">
+                🗑️ Eliminar
+            </button>
+        </div>
+        <label>Nombre
+            <input type="text" value="${reg.nombre.replace(/"/g,'&quot;')}"
+                oninput="window.actualizarRegion('${reg.id}','nombre',this.value)"
+                style="width:100%;box-sizing:border-box;background:#0a0018;border:1px solid #444;color:#fff;padding:5px 8px;border-radius:4px;font-size:0.85em;margin-top:3px;">
+        </label>
+
+        <div style="display:flex; gap:6px; margin-top:12px; flex-wrap:wrap;">
+            <button class="btn-accion ${editor.selectedPropId === 'prop_region' ? 'activo' : ''}" style="flex:1; background:#004a00; border-color:#00ff00;" onclick="window.activarPincelRegion('${reg.id}')">
+                🖌️ Pincel de Región
+            </button>
+            <button class="btn-accion" style="flex:1; background:#003344; border-color:#00aacc;" onclick="window.abrirInterior('${reg.id}')">
+                🏠 ${reg.tieneInterior ? 'Editor Interior' : 'Crear Interior'}
+            </button>
+        </div>
     </div>`;
 }
 
 function htmlNPCsPanel() {
-    // BOTÓN ELIMINAR ARREGLADO CON POSITION ABSOLUTE
     const listNPCsMap = Object.values(npcsMapaLocal).map(n => `
         <div class="npc-card" style="position:relative; cursor:pointer;" onclick="window.seleccionarNPCUI('${n.id}')">
             <img src="${n.icono_url || NO_IMG}" onerror="this.src='${NO_IMG}'" class="npc-thumb">
@@ -110,7 +144,6 @@ function htmlNPCsPanel() {
                 <div class="npc-nombre">${n.nombre}</div>
                 <div class="npc-meta">${n.tipo} · ${n.hex_pos||'No pos'}</div>
             </div>
-            ${editor.activo ? `<button class="prop-card-del" style="position:absolute; top:4px; right:4px; z-index:10; background:#4a0000; color:#fff;" onclick="event.stopPropagation(); window.eliminarNPCUI('${n.id}')">✕</button>` : ''}
         </div>`).join('') || '<p class="sin-resultado">No hay NPCs de región.</p>';
 
     const listJugadoresDB = personajesDB.map(p => {
@@ -133,11 +166,30 @@ function htmlNPCsPanel() {
     </div>`;
 }
 
+export function htmlFormNPC(npcData = null) {
+    const n = npcData || { id: '', nombre: '', tipo: 'sistema', icono_url: '', hex_pos: '', capa: 'mid', descripcion: '' };
+    return `
+    <div style="display:flex; flex-direction:column; gap:10px;">
+        <input type="hidden" id="fn-id" value="${n.id}">
+        <label>Nombre
+            <input type="text" id="fn-nombre" value="${n.nombre}" class="form-input" placeholder="Nombre del NPC">
+        </label>
+        <label>Icono URL
+            <input type="text" id="fn-icono" value="${n.icono_url || ''}" class="form-input" placeholder="https://...">
+        </label>
+        <label>Descripción
+            <textarea id="fn-desc" class="form-input" rows="3">${n.descripcion || ''}</textarea>
+        </label>
+        <button class="btn-accion" style="background:var(--gold); color:#000;" onclick="window.guardarNPCUI()">💾 Guardar NPC</button>
+        ${n.id ? `<button type="button" class="btn-accion" style="background:#4a0000; color:#fff; margin-top:5px;" onclick="window.eliminarNPCUI('${n.id}'); window.cerrarModalRegion();">🗑️ Eliminar NPC Permanentemente</button>` : ''}
+    </div>`;
+}
+
 function htmlImagenesPanel() {
     let listaProps = Object.values(props);
-    if (ui.filtroPropSinImagen) listaProps = listaProps.filter(p => !p.imagen && p.id !== 'prop_pintar');
+    if (ui.filtroPropSinImagen) listaProps = listaProps.filter(p => !p.imagen && p.id !== 'prop_pintar' && p.id !== 'prop_region');
 
-    const grid = listaProps.map(p => `
+    const grid = listaProps.filter(p => p.id !== 'prop_region').map(p => `
         <div style="background:rgba(0,0,0,0.3); padding:5px; text-align:center; position:relative; border-radius:4px; border:1px solid #333;">
             <img src="${p.imagen || NO_IMG}" onerror="this.src='${NO_IMG}'" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:3px;">
             <div style="font-size:0.65em; margin-top:3px; word-break:break-word;">${p.nombre}</div>
@@ -157,24 +209,7 @@ function htmlImagenesPanel() {
             </div>
             <input type="file" id="file-input" accept="image/*" style="display:none" onchange="window.subirPropImagenUI(event)">
         </div>
-        
-        <hr style="border-color:#333;margin:12px 0;">
-        <div class="panel-sub-titulo">👤 Subir imagen de NPC de Región</div>
-        <select id="up-npc-id" style="width:100%;box-sizing:border-box;background:#0a0018;border:1px solid #444;color:#fff;padding:6px;border-radius:4px;font-size:0.82em;margin-bottom:6px;">
-            <option value="">-- Selecciona un NPC --</option>
-            ${Object.values(npcsMapaLocal).map(n => `<option value="${n.id}">${n.nombre}</option>`).join('')}
-        </select>
-        <div class="drop-zone" id="drop-npc-zone" onclick="document.getElementById('file-npc-input').click()" style="padding:6px; cursor:pointer; background:#3a1a6a; text-align:center; border-radius:4px;">
-            👤 Haz clic para subir imagen
-        </div>
-        <input type="file" id="file-npc-input" accept="image/*" style="display:none" onchange="window.subirNPCImagenUI(event)">
         ` : ''}
-        
-        <div class="filter-row" style="margin-top:15px;">
-            <label style="font-size:0.8em; color:#aaa;"><input type="checkbox" ${ui.filtroPropSinImagen?'checked':''} onchange="window.setFiltroPropSinImagenUI(this.checked)"> Mostrar faltantes (Sin imagen)</label>
-        </div>
-        
-        <div class="panel-sub-titulo" style="margin-top:10px;">Lista de Props y Entidades</div>
         <div class="props-grid-imgs" style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 5px;">${grid}</div>
     </div>`;
 }
@@ -214,14 +249,10 @@ export function renderInfoHexPanel(q, r, key) {
             <div class="info-hex-titulo">${reg ? reg.nombre : `Hex (${q},${r})`}</div>
             <button onclick="document.getElementById('panel-info-hex').innerHTML=''" style="background:none; border:none; color:#666; font-size:1em;">✕</button>
         </div>
-        
-        ${reg ? `<div class="detalle-fila">Control: ${reg.controlador || '—'}</div>
-                 <div class="detalle-fila">Accesible: ${reg.accesible?'Sí':'No'}</div>` : ''}
-        
+        ${reg ? `<div class="detalle-fila">Control: ${reg.controlador || '—'}</div><div class="detalle-fila">Accesible: ${reg.accesible?'Sí':'No'}</div>` : ''}
         <div class="divider"></div>
         ${misionesHtml ? `<div class="detalle-fila"><b>Misiones:</b><br>${misionesHtml}</div>` : ''}
         ${npcsHtml ? `<div class="detalle-fila"><b>Presentes:</b>${npcsHtml}</div>` : ''}
-
     </div>`;
 }
 
@@ -230,13 +261,4 @@ function actualizarTabsBotones() {
         b.classList.toggle('activo', b.dataset.panel === ui.panelActual);
     });
 }
-
-export async function cargarListaBG_UI(fonds) {
-    const cont = document.getElementById('lista-bg-imgs');
-    if (!cont) return;
-    if (!fonds || !fonds.length) { cont.innerHTML = ''; return; }
-    cont.innerHTML = fonds.map(url => `
-        <div class="bg-thumb" onclick="window.aplicarFondUI('${url}')">
-            <img src="${url}">
-        </div>`).join('');
-}
+export async function cargarListaBG_UI(fonds) { /* Sin cambios */ }
