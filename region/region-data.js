@@ -7,8 +7,7 @@ import { db }       from '../hex-db.js';
 import {
     BUCKET, STORAGE_URL,
     mapaActual, props, npcsMapaLocal,
-    personajesDB, misionesActivas,
-    crearHexData
+    personajesDB, misionesActivas
 } from './region-state.js';
 import { normKey } from './region-utils.js';
 
@@ -25,8 +24,16 @@ export async function cargarTodo(mapaId = 'mundo') {
             db.misiones.getAll()
         ]);
 
-        // 1. Props
+        // 1. Props y Pincel Universal
         for (const k in props) delete props[k];
+        
+        props['prop_pintar'] = {
+            id: 'prop_pintar',
+            nombre: '🖌️ PINCEL DE COLOR',
+            tipo: 'terreno', 
+            imagen: null
+        };
+
         propsRes.data?.forEach(p => {
             props[p.id] = { id:p.id, nombre:p.nombre, tipo:p.tipo, imagen:p.imagen_url };
         });
@@ -84,7 +91,6 @@ export async function guardarMapa() {
 
 export async function guardarProp(propData) {
     try {
-        // Upsert usa onConflict:id, así que actualiza el existente si hay ID.
         const { error } = await supabase.from('region_props').upsert({
             id: propData.id, nombre: propData.nombre, tipo: propData.tipo, imagen_url: propData.imagen || ''
         }, { onConflict: 'id' });
