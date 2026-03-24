@@ -14,8 +14,6 @@ import {
 } from './region-data.js';
 import { inicializarEngine, aplicarRuidoVisible, centrarCamara } from './region-engine.js';
 import { setBackground } from './region-render.js';
-
-// IMPORTACIONES PERFECTAMENTE SINCRONIZADAS:
 import { renderPanel, renderInfoHexPanel } from './region-ui.js';
 import { htmlFormProp, htmlFormNPC, abrirModalUI, cerrarModalUI, mostrarToastUI } from './region-ui-elements.js';
 import { normKey } from './region-utils.js';
@@ -24,18 +22,27 @@ let cambiosPendientes = false;
 let mapaIdActual = 'mundo';
 let historialMapas = []; 
 
-window.onload = async () => {
+async function initApp() {
     let fav = document.querySelector("link[rel='icon']");
     if (!fav) { fav = document.createElement("link"); fav.rel = "icon"; document.head.appendChild(fav); }
     fav.href = `${STORAGE_URL}/imginterfaz/icon.png`;
 
-    await hexAuth.init();
-    editor.activo = hexAuth.esAdmin();
+    try {
+        await hexAuth.init();
+        editor.activo = hexAuth.esAdmin();
+    } catch(e) { console.error('Error de Auth:', e); }
 
     const badge = document.getElementById('hex-session-badge');
     if (badge && hexAuth.renderStatusBadge) badge.innerHTML = hexAuth.renderStatusBadge();
 
-    document.querySelectorAll('.solo-op').forEach(el => { el.style.display = editor.activo ? '' : 'none'; });
+    // Fuerza que los contenedores usen Flexbox o Block correctamente según el diseño general.
+    document.querySelectorAll('.solo-op').forEach(el => { 
+        if (editor.activo) {
+            el.style.display = (el.classList.contains('bottom-tools') || el.classList.contains('panel-tabs') || el.classList.contains('navbar-center')) ? 'flex' : 'block';
+        } else {
+            el.style.display = 'none';
+        }
+    });
 
     const canvas = document.getElementById('mapa-canvas');
     inicializarEngine(canvas);
@@ -47,7 +54,7 @@ window.onload = async () => {
     if (loader) loader.style.display = 'none';
     if (!ok) mostrarToastUI('⚠️ Error cargando datos del mapa', 'error');
 
-    renderPanel();
+    try { renderPanel(); } catch(e) { console.error('Error renderizando panel inicial:', e); }
     actualizarBreadcrumb();
 
     window.addEventListener('hexSeleccionado', (e) => {
@@ -60,13 +67,16 @@ window.onload = async () => {
         const btn = document.getElementById('btn-guardar-mapa');
         if (btn) { btn.classList.remove('oculto'); btn.innerText = '💾 Guardar Cambios'; }
     });
-};
+}
+
+// Previene que window.onload se pierda si el documento ya cargó
+if (document.readyState === 'complete') { initApp(); } 
+else { window.addEventListener('load', initApp); }
 
 window.cambiarPanelUI = async (panel) => { 
     ui.panelActual = panel; 
-    renderPanel(); 
+    try { renderPanel(); } catch(e) { console.error('Error al renderizar panel:', e); }
     
-    // Cargar fondos si se abre el panel de imágenes
     if (panel === 'imagenes') {
         const fonds = await listarImagenesBackground();
         const cont = document.getElementById('lista-bg-imgs');
@@ -97,13 +107,21 @@ window.abrirMenuOP = async () => {
     if (hexAuth.esAdmin()) {
         editor.activo = !editor.activo;
         mostrarToastUI(editor.activo ? '✏️ Modo Editor Activado' : '👁️ Modo Visualización', 'info');
-        document.querySelectorAll('.solo-op').forEach(el => el.style.display = editor.activo ? '' : 'none');
+        document.querySelectorAll('.solo-op').forEach(el => {
+            if (editor.activo) {
+                el.style.display = (el.classList.contains('bottom-tools') || el.classList.contains('panel-tabs') || el.classList.contains('navbar-center')) ? 'flex' : 'block';
+            } else {
+                el.style.display = 'none';
+            }
+        });
         renderPanel();
     } else {
         await hexAuth._mostrarModalLogin();
         editor.activo = hexAuth.esAdmin();
         if (editor.activo) {
-            document.querySelectorAll('.solo-op').forEach(el => el.style.display = '');
+            document.querySelectorAll('.solo-op').forEach(el => {
+                el.style.display = (el.classList.contains('bottom-tools') || el.classList.contains('panel-tabs') || el.classList.contains('navbar-center')) ? 'flex' : 'block';
+            });
             renderPanel();
         }
     }
@@ -133,8 +151,8 @@ window.guardarMapaUI = async () => {
 };
 
 window.abrirModalRegionBrush = () => {
-    const regs = Object.values(mapaActual.regiones);
-    const options = regs.map(r => `<option value="${r.id}">${r.nombre}</option>`).join('');
+    const regs = Object.values(mapaActual.regiones || {});
+    const options = regs.map(r => `<option value="${r.id}">${r.nombre || 'Sin nombre'}</option>`).join('');
     const html = `
         <div style="display:flex; flex-direction:column; gap:10px;">
             <label>Seleccionar Región Existente:
@@ -159,6 +177,7 @@ window.confirmarPincelRegion = () => {
     
     if (inputVal) {
         const id = `reg_${Date.now()}`;
+        if (!mapaActual.regiones) mapaActual.regiones = {};
         mapaActual.regiones[id] = crearRegion(id);
         mapaActual.regiones[id].nombre = inputVal;
         ui.selectedRegion = id;
@@ -206,10 +225,10 @@ window.guardarPropUI = async () => {
 };
 
 window.eliminarPropUI = async (id) => {
-    if (!confirm(`¿Eliminar el prop "${props[id]?.nombre}"?`)) return;
+    if (!confirm(`¿Eliminar el prop "${props[id]?.nombre || 'Sin nombre'}"?`)) return;
     if (editor.selectedPropId === id) editor.selectedPropId = null;
     
-    Object.values(mapaActual.hexes).forEach(hex => {
+    Object.values(mapaActual.hexes || {}).forEach(hex => {
         ['back','mid','over'].forEach(capa => {
             if (Array.isArray(hex[capa])) hex[capa] = hex[capa].filter(pid => {
                 const basePid = typeof pid === 'string' ? pid.split(':')[0] : pid;
@@ -231,10 +250,10 @@ window.abrirSubidaPropUI = (propId) => {
     const tipo = document.getElementById('up-prop-tipo');
     
     if (idHidden) idHidden.value = p.id;
-    if (nombre) nombre.value = p.nombre;
+    if (nombre) nombre.value = p.nombre || '';
     if (tipo) tipo.value = p.tipo;
     document.getElementById('upload-form')?.scrollIntoView({ behavior: 'smooth' });
-    mostrarToastUI(`Sube imagen para: ${p.nombre}`, 'info');
+    mostrarToastUI(`Sube imagen para: ${p.nombre || 'Prop'}`, 'info');
 };
 
 window.subirPropImagenUI = async (e) => {
@@ -254,7 +273,7 @@ window.subirPropImagenUI = async (e) => {
     try {
         const url = await subirImagenStorage(file, 'imgregion', key);
         const existente = props[id];
-        const propData = { id, nombre: existente ? existente.nombre : nombreInput, tipo: existente ? existente.tipo : tipo, imagen: url };
+        const propData = { id, nombre: existente ? (existente.nombre || nombreInput) : nombreInput, tipo: existente ? existente.tipo : tipo, imagen: url };
         props[id] = propData;
         await guardarProp(propData);
         mostrarToastUI(`Prop actualizado ✅`);
@@ -268,7 +287,7 @@ window.abrirCrearNPCUI = () => abrirModalUI(htmlFormNPC(), '➕ Nuevo NPC');
 window.seleccionarNPCUI = (id) => {
     if (!editor.activo) return;
     const npc = npcsMapaLocal[id];
-    if (npc) abrirModalUI(htmlFormNPC(npc), `✏️ ${npc.nombre}`);
+    if (npc) abrirModalUI(htmlFormNPC(npc), `✏️ ${npc.nombre || 'NPC'}`);
 };
 window.guardarNPCUI = async () => {
     const idExistente = document.getElementById('fn-id')?.value;
@@ -292,7 +311,7 @@ window.guardarNPCUI = async () => {
     else mostrarToastUI('Error guardando NPC', 'error');
 };
 window.eliminarNPCUI = async (id) => {
-    if (!confirm(`¿Eliminar al NPC "${npcsMapaLocal[id]?.nombre}"?`)) return;
+    if (!confirm(`¿Eliminar al NPC "${npcsMapaLocal[id]?.nombre || 'Sin nombre'}"?`)) return;
     delete npcsMapaLocal[id];
     await eliminarNPC(id);
     renderPanel();
@@ -301,6 +320,7 @@ window.eliminarNPCUI = async (id) => {
 
 window.crearRegionUI = () => {
     const id = `reg_${Date.now()}`;
+    if (!mapaActual.regiones) mapaActual.regiones = {};
     mapaActual.regiones[id] = crearRegion(id);
     ui.selectedRegion = id;
     renderPanel();
@@ -311,7 +331,7 @@ window.eliminarRegionUI = (id) => {
     if (!confirm('¿Eliminar esta región completamente?')) return;
     const reg = mapaActual.regiones[id];
     if (reg) {
-        reg.hexes.forEach(key => { if (mapaActual.hexes[key]) mapaActual.hexes[key].region = null; });
+        (reg.hexes || []).forEach(key => { if (mapaActual.hexes[key]) mapaActual.hexes[key].region = null; });
     }
     delete mapaActual.regiones[id];
     ui.selectedRegion = null;
@@ -337,7 +357,7 @@ window.abrirInterior = async (regionId) => {
     const ok = await cargarTodo(interiorId);
     if (!ok) {
         mapaActual.id   = interiorId;
-        mapaActual.nombre = `Interior de ${reg.nombre}`;
+        mapaActual.nombre = `Interior de ${reg.nombre || 'Región'}`;
         mapaActual.ancho = 12;
         mapaActual.alto  = 10;
         mapaActual.esInterior = true;
@@ -405,8 +425,8 @@ window.aplicarFondUI = (url) => {
 function actualizarBreadcrumb() {
     const el = document.getElementById('breadcrumb');
     if (!el) return;
-    const partes = historialMapas.map(h => `<span class="bread-item" onclick="window.volverMapaPadre()">🗺️ ${h.nombre}</span> ›`).join(' ');
-    el.innerHTML = partes + ` <span class="bread-actual">📍 ${mapaActual.nombre}</span>`;
+    const partes = historialMapas.map(h => `<span class="bread-item" onclick="window.volverMapaPadre()">🗺️ ${h.nombre || 'Mundo'}</span> ›`).join(' ');
+    el.innerHTML = partes + ` <span class="bread-actual">📍 ${mapaActual.nombre || 'Mundo'}</span>`;
     
     const btnVolver = document.getElementById('btn-volver-mapa');
     if (btnVolver) btnVolver.style.display = historialMapas.length > 0 ? '' : 'none';
