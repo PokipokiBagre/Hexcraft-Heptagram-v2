@@ -119,14 +119,7 @@ function dibujarHexTop3D(q, r, hex, topPos) {
     const reg = hex.region ? mapaActual.regiones[hex.region] : null;
 
     if (reg) {
-        // 1. Relleno súper tenue para que no sea un hueco oscuro completo
-        trazarHexPath(verts);
-        context.fillStyle = reg.color || '#334'; 
-        context.globalAlpha = (reg.opacidad || 0.3) * 0.15; // Casi invisible
-        context.fill(); 
-        context.globalAlpha = 1;
-
-        // 2. Trazado matemático de los bordes exteriores (Contorno de Región)
+        // 🌟 CORRECCIÓN: SIN RELLENO, SÓLO CONTORNOS
         context.save();
         context.strokeStyle = reg.color || '#334';
         context.lineWidth = 4 * camara.zoom; // Contorno grueso y visible
