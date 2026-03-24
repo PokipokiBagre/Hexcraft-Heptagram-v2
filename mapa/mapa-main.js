@@ -31,6 +31,7 @@ window.onload = async () => {
         await cargarDatos(barra);
         centrarCamaraAuto(); 
         inicializarSidebar(); 
+        inicializarBuscador();
         
         if (loadScreen) {
             loadScreen.style.opacity = '0';
@@ -57,26 +58,69 @@ window.cambiarModoVisual = (modo) => {
 
 const normalizarNombre = (str) => str ? str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/\s+/g,'_').replace(/[^a-z0-9ñ_]/g,'') : "";
 
+// ── MODO SIDEBAR: 'jugadores' | 'npcs' ──────────────────────
+let modoSidebar = 'jugadores';
+
 function inicializarSidebar() {
+    const sidebar = document.getElementById('sidebar-jugadores');
+    if (!sidebar) return;
+
+    // Inject toggle buttons above player list
+    const headerEl = sidebar.querySelector('h3');
+    if (headerEl && !document.getElementById('sidebar-toggle-bar')) {
+        const toggleBar = document.createElement('div');
+        toggleBar.id = 'sidebar-toggle-bar';
+        toggleBar.style.cssText = 'display:flex; gap:6px; margin-bottom:12px;';
+        toggleBar.innerHTML = `
+            <button id="sb-tab-jugadores" onclick="window.setSidebarModo('jugadores')"
+                style="flex:1; background:var(--gold); color:#000; border:1px solid var(--gold); padding:5px; border-radius:4px; font-family:'Cinzel'; font-size:0.72em; font-weight:bold; cursor:pointer;">Jugadores</button>
+            <button id="sb-tab-npcs" onclick="window.setSidebarModo('npcs')"
+                style="flex:1; background:#111; color:#888; border:1px solid #555; padding:5px; border-radius:4px; font-family:'Cinzel'; font-size:0.72em; font-weight:bold; cursor:pointer;">NPCs</button>`;
+        headerEl.insertAdjacentElement('afterend', toggleBar);
+    }
+
+    renderSidebarLista();
+}
+
+function renderSidebarLista() {
     const container = document.getElementById('lista-jugadores');
-    if(!container) return;
+    if (!container) return;
     container.innerHTML = '';
-    
-    estadoMapa.jugadores.forEach(jug => {
+
+    const fuente = modoSidebar === 'jugadores' ? estadoMapa.jugadores : (estadoMapa.npcJugadores || []);
+    fuente.forEach(jug => {
         const btn = document.createElement('button');
         btn.className = 'btn-jugador';
         btn.id = 'btn-jug-' + jug.replace(/\s+/g, '-');
-        
         btn.innerHTML = `
             <img src="${db.storage.urlBase}/imgpersonajes/${normalizarNombre(jug)}icon.png" 
                  onerror="this.onerror=null; this.src='${db.storage.urlBase}/imginterfaz/no_encontrado.png'" 
                  style="width:24px; height:24px; border-radius:50%; object-fit:cover; border:1px solid var(--gold);">
             <span>${jug}</span>`;
-            
         btn.onclick = () => window.seleccionarJugador(jug);
         container.appendChild(btn);
     });
+
+    // Actualizar estilos de las tabs
+    const tabJug = document.getElementById('sb-tab-jugadores');
+    const tabNpc = document.getElementById('sb-tab-npcs');
+    if (tabJug && tabNpc) {
+        if (modoSidebar === 'jugadores') {
+            tabJug.style.background = 'var(--gold)'; tabJug.style.color = '#000';
+            tabNpc.style.background = '#111'; tabNpc.style.color = '#888';
+        } else {
+            tabNpc.style.background = 'var(--gold)'; tabNpc.style.color = '#000';
+            tabJug.style.background = '#111'; tabJug.style.color = '#888';
+        }
+    }
 }
+
+window.setSidebarModo = (modo) => {
+    modoSidebar = modo;
+    // Reset jugador activo al cambiar de tab
+    window.seleccionarJugador('Todos');
+    renderSidebarLista();
+};
 
 // ── LÓGICA DE SELECCIÓN BLINDADA ──────────────────────────────────
 window.seleccionarJugador = (nombre) => {
@@ -549,6 +593,178 @@ function iniciarEventosInput() {
         }
     });
 }
+
+// ── BUSCADOR ─────────────────────────────────────────────────
+function inicializarBuscador() {
+    // Inject search UI into the UI overlay
+    const overlay = document.getElementById('ui-overlay');
+    if (!overlay || document.getElementById('buscador-container')) return;
+
+    const buscadorEl = document.createElement('div');
+    buscadorEl.id = 'buscador-container';
+    buscadorEl.style.cssText = `
+        position: absolute;
+        top: 70px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 40;
+        pointer-events: auto;
+        width: 320px;
+        font-family: 'Cinzel', serif;
+    `;
+    buscadorEl.innerHTML = `
+        <div style="position:relative;">
+            <input id="buscador-input" type="text" placeholder="🔍 Buscar hechizo... (Tab para completar)"
+                autocomplete="off"
+                style="width:100%; box-sizing:border-box; background:rgba(5,0,10,0.92); color:#fff; border:1px solid var(--gold); border-radius:6px; padding:8px 36px 8px 12px; font-family:'Cinzel',serif; font-size:0.8em; outline:none;">
+            <button id="buscador-clear" onclick="window.limpiarBuscador()" style="display:none; position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; color:#888; font-size:1em; cursor:pointer; padding:0;">✕</button>
+        </div>
+        <div id="buscador-sugerencias" style="display:none; background:rgba(5,0,10,0.96); border:1px solid var(--gold); border-top:none; border-radius:0 0 6px 6px; max-height:220px; overflow-y:auto;"></div>
+    `;
+    overlay.appendChild(buscadorEl);
+
+    const input = document.getElementById('buscador-input');
+    const sugerenciasEl = document.getElementById('buscador-sugerencias');
+    let sugerenciasActuales = [];
+    let indiceSugerencia = -1;
+
+    function getNombreBusqueda(nodo) {
+        // Para usuarios normales: si no está descubierto, solo buscar por número/id
+        // Para admin: buscar por nombre real
+        if (estadoMapa.esAdmin) return nodo.nombreOriginal.toLowerCase();
+        if (nodo.esConocido) return nodo.nombreOriginal.toLowerCase();
+        // Extraer solo el número del ID
+        const match = nodo.id.match(/\d+/);
+        return match ? match[0] : nodo.id.toLowerCase();
+    }
+
+    function getTextoMostrado(nodo) {
+        if (estadoMapa.esAdmin) return `${nodo.nombreOriginal} (${nodo.hex})`;
+        if (nodo.esConocido) return `${nodo.nombreOriginal} (${nodo.hex})`;
+        const match = nodo.id.match(/\d+/);
+        return `Hechizo ${match ? match[0] : nodo.id} (${nodo.hex})`;
+    }
+
+    function calcularSugerencias(texto) {
+        if (!texto || texto.length < 1) return [];
+        const q = texto.toLowerCase().trim();
+        return estadoMapa.nodos
+            .filter(n => {
+                const termino = getNombreBusqueda(n);
+                return termino.startsWith(q) || termino.includes(q);
+            })
+            .sort((a, b) => {
+                const tA = getNombreBusqueda(a);
+                const tB = getNombreBusqueda(b);
+                const startsA = tA.startsWith(q);
+                const startsB = tB.startsWith(q);
+                if (startsA && !startsB) return -1;
+                if (!startsA && startsB) return 1;
+                return tA.localeCompare(tB);
+            })
+            .slice(0, 12);
+    }
+
+    function mostrarSugerencias(lista) {
+        if (lista.length === 0) { sugerenciasEl.style.display = 'none'; return; }
+        sugerenciasEl.style.display = 'block';
+        sugerenciasEl.innerHTML = lista.map((n, i) => {
+            const txt = getTextoMostrado(n);
+            const colorData = window.mapaColores[n.afinidad];
+            const color = colorData ? colorData.t : '#888';
+            return `<div class="sug-item" data-idx="${i}" 
+                style="padding:7px 14px; cursor:pointer; font-size:0.78em; color:${n.esConocido || estadoMapa.esAdmin ? '#fff' : '#aaa'}; border-left:3px solid ${color}; transition:background 0.15s;"
+                onmouseenter="this.style.background='rgba(212,175,55,0.18)'"
+                onmouseleave="this.style.background='transparent'"
+                onclick="window.navegarAHechizo(${n.x}, ${n.y}, '${n.id.replace(/'/g,"\\'")}')">
+                <span style="color:${color}; font-weight:bold;">${txt}</span>
+                <span style="color:#666; font-size:0.85em; margin-left:6px;">${n.afinidad || ''}</span>
+            </div>`;
+        }).join('');
+        indiceSugerencia = -1;
+    }
+
+    input.addEventListener('input', () => {
+        const val = input.value.trim();
+        document.getElementById('buscador-clear').style.display = val ? 'block' : 'none';
+        sugerenciasActuales = calcularSugerencias(val);
+        mostrarSugerencias(sugerenciasActuales);
+    });
+
+    input.addEventListener('keydown', (e) => {
+        if (e.key === 'Tab') {
+            e.preventDefault();
+            // Autocompletar con la primera sugerencia
+            if (sugerenciasActuales.length > 0) {
+                const nodo = sugerenciasActuales[indiceSugerencia >= 0 ? indiceSugerencia : 0];
+                input.value = getTextoMostrado(nodo).replace(/\s*\(\d+\)$/, '').trim();
+                document.getElementById('buscador-clear').style.display = 'block';
+                sugerenciasActuales = calcularSugerencias(input.value);
+                mostrarSugerencias(sugerenciasActuales);
+                indiceSugerencia = 0;
+            }
+        } else if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            indiceSugerencia = Math.min(indiceSugerencia + 1, sugerenciasActuales.length - 1);
+            resaltarSugerencia();
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            indiceSugerencia = Math.max(indiceSugerencia - 1, 0);
+            resaltarSugerencia();
+        } else if (e.key === 'Enter') {
+            if (indiceSugerencia >= 0 && sugerenciasActuales[indiceSugerencia]) {
+                const n = sugerenciasActuales[indiceSugerencia];
+                window.navegarAHechizo(n.x, n.y, n.id);
+                sugerenciasEl.style.display = 'none';
+            } else if (sugerenciasActuales.length === 1) {
+                const n = sugerenciasActuales[0];
+                window.navegarAHechizo(n.x, n.y, n.id);
+                sugerenciasEl.style.display = 'none';
+            }
+        } else if (e.key === 'Escape') {
+            sugerenciasEl.style.display = 'none';
+            input.blur();
+        }
+    });
+
+    function resaltarSugerencia() {
+        const items = sugerenciasEl.querySelectorAll('.sug-item');
+        items.forEach((el, i) => {
+            el.style.background = i === indiceSugerencia ? 'rgba(212,175,55,0.25)' : 'transparent';
+        });
+    }
+
+    // Cerrar sugerencias al hacer clic fuera
+    document.addEventListener('click', (e) => {
+        if (!buscadorEl.contains(e.target)) {
+            sugerenciasEl.style.display = 'none';
+        }
+    });
+}
+
+window.limpiarBuscador = () => {
+    const input = document.getElementById('buscador-input');
+    if (input) { input.value = ''; input.dispatchEvent(new Event('input')); }
+};
+
+window.navegarAHechizo = (x, y, id) => {
+    const targetZoom = 1.2;
+    estadoMapa.camara.zoom = targetZoom;
+    estadoMapa.camara.x = (window.innerWidth / 2) - (x * targetZoom);
+    estadoMapa.camara.y = (window.innerHeight / 2) - (y * targetZoom);
+
+    const nodo = estadoMapa.nodos.find(n => n.id === id);
+    if (nodo) {
+        estadoMapa.interaccion.selectedNode = nodo;
+        resetearPosicionPanel();
+        actualizarPanelInfo();
+    }
+
+    const sug = document.getElementById('buscador-sugerencias');
+    if (sug) sug.style.display = 'none';
+
+    dibujarFrame();
+};
 
 function bucleRender() {
     dibujarFrame();
