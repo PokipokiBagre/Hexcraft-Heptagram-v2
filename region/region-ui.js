@@ -7,11 +7,7 @@ import {
     personajesDB, misionesActivas, PROP_TIPOS, CAPAS,
     STORAGE_URL
 } from './region-state.js';
-import { setBackground } from './region-render.js';
-import {
-    htmlFormProp, abrirModalUI, cerrarModalUI, mostrarToastUI
-} from './region-ui-elements.js';
-import { hexKey, normKey } from './region-utils.js'; 
+import { normKey } from './region-utils.js'; 
 
 const NO_IMG = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 
@@ -33,7 +29,6 @@ export function renderPanel() {
 function htmlPropsPanel() {
     const busq = (ui.busqueda || '').toLowerCase();
     
-    // Todos los props, incluyendo el de región universal
     const lista = Object.values(props).filter(p => {
         if (p.id === 'prop_region') return false;
         if (busq && !p.nombre.toLowerCase().includes(busq)) return false;
@@ -274,4 +269,3 @@ function actualizarTabsBotones() {
         b.classList.toggle('activo', b.dataset.panel === ui.panelActual);
     });
 }
-export async function cargarListaBG_UI(fonds) { /* ... */ }
