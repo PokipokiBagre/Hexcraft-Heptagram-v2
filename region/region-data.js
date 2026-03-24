@@ -20,24 +20,24 @@ export async function cargarTodo(mapaId = 'mundo') {
 
         for (const k in props) delete props[k];
         
-        // Pincel de Color
         props['prop_pintar'] = { id: 'prop_pintar', nombre: '🖌️ PINCEL DE COLOR', tipo: 'terreno', imagen: null };
-        // Pincel de Región (Nuevo prop inyectado)
         props['prop_region'] = { id: 'prop_region', nombre: '🗺️ PINCEL DE REGIÓN', tipo: 'terreno', imagen: null };
 
         propsRes.data?.forEach(p => {
-            props[p.id] = { id:p.id, nombre:p.nombre, tipo:p.tipo, imagen:p.imagen_url };
+            props[p.id] = { id:p.id, nombre: p.nombre || 'Prop', tipo:p.tipo, imagen:p.imagen_url };
         });
 
         personajesDB.length = 0;
-        personajesArr.forEach(p => {
-            const pid = `pj_${normKey(p.nombre)}`;
-            props[pid] = { id: pid, nombre: p.nombre, tipo: 'entidad', imagen: `${STORAGE_URL}/imgpersonajes/${normKey(p.icono_override || p.nombre)}icon.png` };
-            personajesDB.push({ ...p, icon: p.icono_override || p.nombre });
+        (personajesArr || []).forEach(p => {
+            const nombreStr = p.nombre || 'Jugador';
+            const pid = `pj_${normKey(nombreStr)}`;
+            const iconoBase = p.icono_override || p.icon || nombreStr;
+            props[pid] = { id: pid, nombre: nombreStr, tipo: 'entidad', imagen: `${STORAGE_URL}/imgpersonajes/${normKey(iconoBase)}icon.png` };
+            personajesDB.push({ ...p, icon: iconoBase });
         });
 
         misionesActivas.length = 0;
-        misionesArr.forEach(m => { if (m.estado === 1 || m.estado === 2) misionesActivas.push(m); });
+        (misionesArr || []).forEach(m => { if (m.estado === 1 || m.estado === 2) misionesActivas.push(m); });
 
         if (mapaRes.data) {
             Object.assign(mapaActual, mapaRes.data);
@@ -48,12 +48,15 @@ export async function cargarTodo(mapaId = 'mundo') {
         for (const k in npcsMapaLocal) delete npcsMapaLocal[k];
         npcsRes.data?.forEach(n => {
             if (n.mapa_id === mapaId) {
-                npcsMapaLocal[n.id] = { ...n };
-                props[n.id] = { id: n.id, nombre: n.nombre, tipo: 'entidad', imagen: n.icono_url || '' };
+                npcsMapaLocal[n.id] = { ...n, nombre: n.nombre || 'NPC' };
+                props[n.id] = { id: n.id, nombre: n.nombre || 'NPC', tipo: 'entidad', imagen: n.icono_url || '' };
             }
         });
         return true;
-    } catch (e) { return false; }
+    } catch (e) { 
+        console.error("Error al cargarTodo:", e);
+        return false; 
+    }
 }
 
 export async function guardarMapa() {
