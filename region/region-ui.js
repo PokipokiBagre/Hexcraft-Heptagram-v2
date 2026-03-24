@@ -160,50 +160,115 @@ function htmlDetalleRegion(reg) {
             const m = misionesActivas.find(x => x.id === mid);
             return m ? `<span class="tag-mision">${m.titulo}</span>` : '';
         }).join('');
+
+        // NPCs en hexes de esta región
+        const npcsRegion = Object.values(npcsMapaLocal).filter(n => {
+            if (!n.hex) return false;
+            return (reg.hexes || []).includes(n.hex);
+        });
+        const npcsHtml = npcsRegion.map(n => `
+            <div style="display:flex; align-items:center; gap:6px; font-size:0.78em; margin-top:4px;">
+                <img src="${n.icono || NO_IMG()}" onerror="this.src='${NO_IMG()}'"
+                    style="width:24px;height:24px;border-radius:50%;object-fit:cover;border:1px solid #555;">
+                <span>${n.nombre}</span>
+            </div>`).join('');
+
         return `
         <div class="region-detalle">
             <div class="detalle-titulo">${reg.nombre}</div>
             <div class="detalle-fila"><b>Control:</b> ${reg.controlador || '—'}</div>
             <div class="detalle-fila"><b>Accesible:</b> ${reg.accesible ? 'Sí' : 'No'}</div>
-            ${misls ? `<div class="detalle-fila"><b>Misiones:</b><br>${misls}</div>` : ''}
+            ${misls ? `<div class="detalle-fila" style="margin-top:6px;"><b>Misiones:</b><br>${misls}</div>` : ''}
+            ${npcsHtml ? `<div class="detalle-fila" style="margin-top:8px;"><b>Personajes presentes:</b>${npcsHtml}</div>` : ''}
+            ${reg.tieneInterior ? `
+            <button class="btn-accion" style="width:100%;margin-top:8px;" onclick="window.entrarInterior('${reg.id}')">
+                🚪 Entrar al interior
+            </button>` : ''}
         </div>`;
     }
 
-    // Formulario de edición
-    const misionOpts = misionesActivas.map(m =>
-        `<option value="${m.id}" ${(reg.misiones||[]).includes(m.id) ? 'selected' : ''}>${m.titulo}</option>`
-    ).join('');
+    // ── Formulario de edición ──────────────────────────────────
+    // Misiones como checkboxes individuales (no multi-select problemático)
+    const misionChecks = misionesActivas.map(m => {
+        const checked = (reg.misiones || []).includes(m.id) ? 'checked' : '';
+        const safeId  = m.id.replace(/'/g, "\\'");
+        return `
+        <label style="display:flex; align-items:center; gap:6px; font-size:0.78em; padding:3px 0; cursor:pointer;">
+            <input type="checkbox" ${checked}
+                onchange="window.toggleMisionRegion('${reg.id}','${safeId}',this.checked)"
+                style="accent-color:var(--gold);">
+            <span style="color:#ccc;">${m.titulo}</span>
+            <span style="color:#666; font-size:0.85em;">(${m.tipo})</span>
+        </label>`;
+    }).join('') || '<p style="font-size:0.75em;color:#666;">Sin misiones activas</p>';
+
+    // NPCs en esta región (solo lectura en la lista)
+    const npcsRegion = Object.values(npcsMapaLocal).filter(n => {
+        if (!n.hex) return false;
+        return (reg.hexes || []).includes(n.hex);
+    });
 
     return `
     <div class="region-detalle edit">
-        <div class="detalle-titulo" style="color:var(--gold);">✏️ Editando Región</div>
-        <label>Nombre
-            <input type="text" value="${reg.nombre}" oninput="window.actualizarRegion('${reg.id}','nombre',this.value)">
-        </label>
-        <label>Controlador
-            <input type="text" value="${reg.controlador||''}" oninput="window.actualizarRegion('${reg.id}','controlador',this.value)">
-        </label>
-        <label style="display:flex; align-items:center; gap:10px;">Color
-            <input type="color" value="${reg.color}" oninput="window.actualizarRegion('${reg.id}','color',this.value)" style="width:36px;height:28px;border:none;background:none;cursor:pointer;">
-        </label>
-        <label>Opacidad
-            <input type="range" min="0.05" max="0.7" step="0.05" value="${reg.opacidad||0.3}" oninput="window.actualizarRegion('${reg.id}','opacidad',parseFloat(this.value))">
-        </label>
-        <label style="display:flex; align-items:center; gap:8px;">
-            <input type="checkbox" ${reg.accesible ? 'checked' : ''} onchange="window.actualizarRegion('${reg.id}','accesible',this.checked)">
-            Accesible (clickable)
-        </label>
-        <label>Misiones activas
-            <select multiple style="height:80px;" onchange="window.actualizarRegionMisiones('${reg.id}', this)">
-                ${misionOpts}
-            </select>
-        </label>
-        <div style="display:flex; gap:8px; margin-top:8px; flex-wrap:wrap;">
-            <button class="btn-accion" onclick="window.activarHerramientaRegion('${reg.id}')">
-                🖊️ Pintar hexes de región
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+            <div class="detalle-titulo" style="color:var(--gold); margin:0;">✏️ Editando Región</div>
+            <button onclick="window.eliminarRegionUI('${reg.id}')"
+                style="background:#4a0000; border:1px solid #ff4444; color:#fff; padding:3px 8px; border-radius:4px; font-size:0.72em; cursor:pointer;">
+                🗑️ Eliminar
             </button>
-            <button class="btn-accion" style="background:#003344;" onclick="window.abrirInterior('${reg.id}')">
-                🏠 ${reg.tieneInterior ? 'Editar Interior' : 'Crear Interior'}
+        </div>
+        <label>Nombre
+            <input type="text" value="${reg.nombre.replace(/"/g,'&quot;')}"
+                oninput="window.actualizarRegion('${reg.id}','nombre',this.value)"
+                style="width:100%;box-sizing:border-box;background:#0a0018;border:1px solid #444;color:#fff;padding:5px 8px;border-radius:4px;font-size:0.85em;margin-top:3px;">
+        </label>
+        <label style="margin-top:8px; display:block;">Controlador
+            <input type="text" value="${(reg.controlador||'').replace(/"/g,'&quot;')}"
+                oninput="window.actualizarRegion('${reg.id}','controlador',this.value)"
+                style="width:100%;box-sizing:border-box;background:#0a0018;border:1px solid #444;color:#fff;padding:5px 8px;border-radius:4px;font-size:0.85em;margin-top:3px;">
+        </label>
+        <div style="display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap;">
+            <label style="font-size:0.78em; color:#aaa; display:flex; align-items:center; gap:6px;">
+                Color
+                <input type="color" value="${reg.color}"
+                    oninput="window.actualizarRegion('${reg.id}','color',this.value)"
+                    style="width:32px;height:26px;border:none;background:none;cursor:pointer;padding:0;">
+            </label>
+            <label style="font-size:0.78em; color:#aaa; flex:1; min-width:120px; display:flex; align-items:center; gap:6px;">
+                Opacidad
+                <input type="range" min="0.05" max="0.75" step="0.05" value="${reg.opacidad||0.3}"
+                    oninput="window.actualizarRegion('${reg.id}','opacidad',parseFloat(this.value))"
+                    style="flex:1; accent-color:var(--cyan);">
+            </label>
+        </div>
+        <label style="display:flex; align-items:center; gap:8px; font-size:0.78em; color:#aaa; margin-top:8px; cursor:pointer;">
+            <input type="checkbox" ${reg.accesible ? 'checked' : ''}
+                onchange="window.actualizarRegion('${reg.id}','accesible',this.checked)"
+                style="accent-color:var(--gold);">
+            Accesible (clickable para jugadores)
+        </label>
+
+        <div style="margin-top:10px;">
+            <div style="font-size:0.72em; color:#888; font-family:sans-serif; text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px;">
+                Misiones activas
+            </div>
+            <div style="background:rgba(0,0,0,0.3); border:1px solid #333; border-radius:5px; padding:6px 8px; max-height:110px; overflow-y:auto;">
+                ${misionChecks}
+            </div>
+        </div>
+
+        ${npcsRegion.length ? `
+        <div style="margin-top:8px; font-size:0.72em; color:#888; font-family:sans-serif;">
+            PERSONAJES EN LA REGIÓN (${npcsRegion.length}):
+            ${npcsRegion.map(n=>`<div style="font-size:1em;color:#aaa;padding:2px 0;">${n.nombre}</div>`).join('')}
+        </div>` : ''}
+
+        <div style="display:flex; gap:6px; margin-top:12px; flex-wrap:wrap;">
+            <button class="btn-accion" style="flex:1;" onclick="window.activarHerramientaRegion('${reg.id}')">
+                🖊️ Pintar hexes
+            </button>
+            <button class="btn-accion" style="flex:1; background:#003344; border-color:#00aacc;" onclick="window.abrirInterior('${reg.id}')">
+                🏠 ${reg.tieneInterior ? 'Editor Interior' : 'Crear Interior'}
             </button>
         </div>
     </div>`;
