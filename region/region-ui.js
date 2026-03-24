@@ -5,13 +5,15 @@
 import {
     editor, ui, mapaActual, props, npcsMapaLocal,
     personajesDB, misionesActivas, PROP_TIPOS, CAPAS,
-    STORAGE_URL, crearRegion, crearHexData
+    STORAGE_URL
 } from './region-state.js';
-import { normKey, guardarProp, eliminarProp, guardarNPC, eliminarNPC, subirImagenProp, listarImagenesBackground } from './region-data.js';
-import { setBackground, aplicarHerramienta, hexKey } from './region-engine.js';
-import { supabase } from '../hex-auth.js';
+import { setBackground } from './region-render.js';
+import {
+    htmlFormProp, htmlFormNPC, abrirModalUI, cerrarModalUI, mostrarToastUI
+} from './region-ui-elements.js';
+import { hexKey, normKey } from './region-utils.js'; // <-- ¡IMPORTACIÓN CORREGIDA!
 
-const NO_IMG = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
+const NO_IMG = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 
 export function renderPanel() {
     const contenido = document.getElementById('panel-contenido');
@@ -39,7 +41,7 @@ function htmlPropsPanel() {
     const grid = lista.map(p => {
         const selClase = editor.selectedPropId === p.id ? 'prop-card-sel' : '';
         const esPincel = p.id === 'prop_pintar';
-        const icono = esPincel ? `🖌️` : `<img src="${p.imagen || NO_IMG()}" onerror="this.src='${NO_IMG()}'">`;
+        const icono = esPincel ? `🖌️` : `<img src="${p.imagen || NO_IMG}" onerror="this.src='${NO_IMG}'">`;
         return `
         <div class="prop-card ${selClase}" onclick="window.seleccionarPropUI('${p.id}')">
             ${icono} <div class="prop-card-nombre">${p.nombre}</div>
@@ -102,7 +104,7 @@ function htmlRegionesPanel() {
 function htmlNPCsPanel() {
     const listNPCsMap = Object.values(npcsMapaLocal).map(n => `
         <div class="npc-card" onclick="window.seleccionarNPCUI('${n.id}')">
-            <img src="${n.icono_url || NO_IMG()}" onerror="this.src='${NO_IMG()}'" class="npc-thumb">
+            <img src="${n.icono_url || NO_IMG}" onerror="this.src='${NO_IMG}'" class="npc-thumb">
             <div><div class="npc-nombre">${n.nombre}</div> <div class="npc-meta">${n.hex_pos||'No pos'}</div></div>
             ${editor.activo ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarNPCUI('${n.id}')">✕</button>` : ''}
         </div>`).join('') || '<p class="sin-resultado">No hay NPCs de región.</p>';
@@ -112,7 +114,7 @@ function htmlNPCsPanel() {
         const sel = editor.selectedPropId === pid ? 'npc-card-sel' : '';
         return `
         <div class="npc-card ${sel}" onclick="window.seleccionarPropEntidadUI('${pid}')">
-            <img src="${STORAGE_URL}/imgpersonajes/${normKey(p.icon)}icon.png" onerror="this.src='${NO_IMG()}'" class="npc-thumb">
+            <img src="${STORAGE_URL}/imgpersonajes/${normKey(p.icon)}icon.png" onerror="this.src='${NO_IMG}'" class="npc-thumb">
             <div><div class="npc-nombre">${p.nombre}</div> <div class="npc-meta">Jugador DB</div></div>
         </div>`;
     }).join('');
@@ -129,12 +131,11 @@ function htmlNPCsPanel() {
 
 function htmlImagenesPanel() {
     let listaProps = Object.values(props);
-    
     if (ui.filtroPropSinImagen) listaProps = listaProps.filter(p => !p.imagen && p.id !== 'prop_pintar');
 
     const grid = listaProps.map(p => `
         <div style="background:rgba(0,0,0,0.3); padding:5px; text-align:center; position:relative; border-radius:4px; border:1px solid #333;">
-            <img src="${p.imagen || NO_IMG()}" onerror="this.src='${NO_IMG()}'" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:3px;">
+            <img src="${p.imagen || NO_IMG}" onerror="this.src='${NO_IMG}'" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:3px;">
             <div style="font-size:0.65em; margin-top:3px; word-break:break-word;">${p.nombre}</div>
             ${editor.activo && p.id !== 'prop_pintar' ? `<button class="btn-accion-mini" onclick="window.abrirSubidaPropUI('${p.id}')" style="margin-top:4px; width:100%; font-size:0.7em; padding:2px;">📤 Subir</button>` : ''}
         </div>`).join('');
@@ -199,16 +200,14 @@ export function renderInfoHexPanel(q, r, key) {
 
     const npcsHtml = npcsAqui.map(n => `
         <div style="display:flex; align-items:center; gap:6px; font-size:0.8em; margin-top:4px;">
-            <img src="${n.icono_url || NO_IMG()}" onerror="this.src='${NO_IMG()}'" style="width:28px; height:28px; border-radius:50%; object-fit:cover; border:1px solid #555;">
+            <img src="${n.icono_url || NO_IMG}" style="width:28px; height:28px; border-radius:50%; object-fit:cover; border:1px solid #555;">
             <div><div style="font-weight:bold;">${n.nombre}</div> ${n.descripcion||''}</div>
         </div>`).join('');
 
     el.innerHTML = `
     <div style="padding:10px;">
         <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px;">
-            <div class="info-hex-titulo">
-                ${reg ? reg.nombre : `Hex (${q},${r})`}
-            </div>
+            <div class="info-hex-titulo">${reg ? reg.nombre : `Hex (${q},${r})`}</div>
             <button onclick="document.getElementById('panel-info-hex').innerHTML=''" style="background:none; border:none; color:#666; font-size:1em;">✕</button>
         </div>
         
