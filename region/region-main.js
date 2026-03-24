@@ -331,7 +331,6 @@ window.eliminarNPCUI = async (id) => {
     renderPanel();
 };
 
-// ── Herramientas ──────────────────────────────────────────────
 window.setHerramienta = (h) => {
     editor.herramienta = h;
     document.querySelectorAll('.tool-btn').forEach(b => {
@@ -339,7 +338,6 @@ window.setHerramienta = (h) => {
     });
 };
 
-// ── Guardar mapa ─────────────────────────────────────────────
 window.guardarMapaUI = async () => {
     const btn = document.getElementById('btn-guardar-mapa');
     if (btn) { btn.innerText = 'Guardando...'; btn.disabled = true; }
@@ -354,22 +352,17 @@ window.guardarMapaUI = async () => {
     }
 };
 
-// ── Modal global ──────────────────────────────────────────────
 window.cerrarModalRegion = cerrarModal;
 
-// ── Breadcrumb ────────────────────────────────────────────────
 function actualizarBreadcrumb() {
     const el = document.getElementById('breadcrumb');
     if (!el) return;
-    const partes = historialMapas.map(h =>
-        `<span class="bread-item" onclick="window.volverMapaPadre()">🗺️ ${h.nombre}</span> ›`
-    ).join(' ');
+    const partes = historialMapas.map(h => `<span class="bread-item" onclick="window.volverMapaPadre()">🗺️ ${h.nombre}</span> ›`).join(' ');
     el.innerHTML = partes + ` <span class="bread-actual">📍 ${mapaActual.nombre}</span>`;
     const btnVolver = document.getElementById('btn-volver-mapa');
     if (btnVolver) btnVolver.style.display = historialMapas.length > 0 ? '' : 'none';
 }
 
-// ── Toast notifications ───────────────────────────────────────
 function mostrarToast(msg, tipo = 'ok') {
     let toast = document.getElementById('toast-region');
     if (!toast) {
@@ -384,30 +377,23 @@ function mostrarToast(msg, tipo = 'ok') {
     toast._t = setTimeout(() => { toast.style.opacity = '0'; }, 2800);
 }
 
-// ── Atajos de teclado ─────────────────────────────────────────
 document.addEventListener('keydown', (e) => {
     if (!editor.activo) return;
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-    const tools = { 'p': 'pintar', 'b': 'borrar', 's': 'seleccionar', 'r': 'region', 'm': 'mover' };
-    if (tools[e.key]) window.setHerramienta(tools[e.key]);
+    // ACTUALIZADO: 'a' o 'p' para agregar
+    const tools = { 'a': 'agregar', 'p': 'agregar', 'b': 'borrar', 's': 'seleccionar', 'r': 'region', 'm': 'mover' };
+    if (tools[e.key.toLowerCase()]) window.setHerramienta(tools[e.key.toLowerCase()]);
 
     if (e.key === 's' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); window.guardarMapaUI(); }
     if (e.key === 'Escape') cerrarModal();
 
-    // Brush size con números
     const n = parseInt(e.key);
     if (n >= 1 && n <= 4) { editor.brushSize = n; renderPanel(); }
 });
 
-window.setColorActual = (color) => {
-    editor.colorActual = color;
-    renderPanel();
-};
-
-window.setOpacidadPincel = (val) => {
-    editor.opacidadPincel = val;
-};
+window.setColorActual = (color) => { editor.colorActual = color; renderPanel(); };
+window.setOpacidadPincel = (val) => { editor.opacidadPincel = val; };
 
 window.aplicarRuido = () => {
     const color = editor.colorActual || '#4488cc';
@@ -415,18 +401,13 @@ window.aplicarRuido = () => {
     mostrarToast('≋ Ruido aplicado', 'info');
 };
 
-// Abrir subida de imagen para un prop específico desde la tab Imgs
 window.abrirSubidaProp = (propId) => {
     const p = props[propId];
     if (!p) return;
-    // Rellenar el formulario de subida con los datos del prop
     const nombre = document.getElementById('up-prop-nombre');
     const tipo   = document.getElementById('up-prop-tipo');
-    const capa   = document.getElementById('up-prop-capa');
     if (nombre) nombre.value = p.nombre;
     if (tipo)   tipo.value   = p.tipo;
-    if (capa)   capa.value   = p.capa;
-    // Scroll up al formulario
     document.getElementById('drop-prop-zone')?.scrollIntoView({ behavior: 'smooth' });
     mostrarToast(`Sube imagen para: ${p.nombre}`, 'info');
 };
