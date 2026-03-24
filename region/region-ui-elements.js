@@ -24,6 +24,25 @@ export function htmlFormProp(propData = null) {
     </div>`;
 }
 
+export function htmlFormNPC(npcData = null) {
+    const n = npcData || { id: '', nombre: '', tipo: 'sistema', icono_url: '', hex_pos: '', capa: 'mid', descripcion: '' };
+    return `
+    <div style="display:flex; flex-direction:column; gap:10px;">
+        <input type="hidden" id="fn-id" value="${n.id}">
+        <label>Nombre
+            <input type="text" id="fn-nombre" value="${n.nombre}" class="form-input" placeholder="Nombre del NPC">
+        </label>
+        <label>Icono URL
+            <input type="text" id="fn-icono" value="${n.icono_url || ''}" class="form-input" placeholder="https://...">
+        </label>
+        <label>Descripción
+            <textarea id="fn-desc" class="form-input" rows="3">${n.descripcion || ''}</textarea>
+        </label>
+        <button class="btn-accion" style="background:var(--gold); color:#000;" onclick="window.guardarNPCUI()">💾 Guardar NPC</button>
+        ${n.id ? `<button type="button" class="btn-accion" style="background:#4a0000; color:#fff; margin-top:5px;" onclick="window.eliminarNPCUI('${n.id}'); window.cerrarModalRegion();">🗑️ Eliminar NPC Permanentemente</button>` : ''}
+    </div>`;
+}
+
 export function abrirModalUI(contenidoHtml, titulo = '') {
     document.getElementById('modal-titulo').innerText = titulo;
     document.getElementById('modal-cuerpo').innerHTML = contenidoHtml;
