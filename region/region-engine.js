@@ -4,7 +4,7 @@
 
 import {
     HEX_SIZE, camara, mapaActual, props, npcsMapaLocal,
-    editor, ui, STORAGE_URL, CAPAS
+    editor, ui, STORAGE_URL, CAPAS, crearHexData
 } from './region-state.js';
 
 let canvas, ctx;
