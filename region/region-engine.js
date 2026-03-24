@@ -612,8 +612,6 @@ function onTouchMove(e) {
 function onTouchEnd() { _mouseDown = false; ui.modoPintar = false; _pinchStart = 0; }
 
 // ── Aplicar herramienta ───────────────────────────────────────
-import { crearHexData } from './region-state.js';
-
 export function aplicarHerramienta(q, r, key) {
     const hexes = editor.brushSize > 1 ? hexesEnRadio(q, r, editor.brushSize - 1) : [{ q, r }];
     hexes.forEach(h => _accionHex(h.q, h.r, hexKey(h.q, h.r)));
