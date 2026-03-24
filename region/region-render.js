@@ -119,10 +119,22 @@ function getDrawingLayers(W, H) {
 // ── PLANO BASE ──
 function dibujarHexTop3D(q, r, hex, topPos) {
     const verts = isometricHexVertices(topPos.x, topPos.y, 0);
+    const reg = hex.region ? mapaActual.regiones[hex.region] : null;
 
     trazarHexPath(verts);
-    context.fillStyle = '#0a0018'; // Base obligatoria para ocultar agujeros
+    
+    // Suelo base oscuro para tapar el vacío
+    context.fillStyle = '#0a0018'; 
     context.fill();
+
+    // SOLUCIÓN: Tinte visual tenue para los hexágonos de región
+    if (reg) {
+        context.fillStyle = reg.color || '#334'; 
+        // Genera un tinte muy ligero transparente (Max 15% de opacidad)
+        context.globalAlpha = Math.max(0.05, (reg.opacidad || 0.3) * 0.2); 
+        context.fill(); 
+        context.globalAlpha = 1;
+    }
 
     const backItems = hex.back || [];
     const size = HEX_SIZE * camara.zoom;
@@ -174,12 +186,12 @@ function dibujarHexRegionBorder(q, r, hex, topPos) {
     context.globalAlpha = reg.opacidad ? Math.min(1, reg.opacidad + 0.4) : 0.8;
 
     const edgeNeighbors = [
-        {dq: 1, dr: 0},   // Bottom-Right
-        {dq: 0, dr: 1},   // Bottom
-        {dq: -1, dr: 1},  // Bottom-Left
-        {dq: -1, dr: 0},  // Top-Left
-        {dq: 0, dr: -1},  // Top
-        {dq: 1, dr: -1}   // Top-Right
+        {dq: 0, dr: 1},   // Arista 0 (Bottom-Right)
+        {dq: -1, dr: 1},  // Arista 1 (Bottom)
+        {dq: -1, dr: 0},  // Arista 2 (Bottom-Left)
+        {dq: 0, dr: -1},  // Arista 3 (Top-Left)
+        {dq: 1, dr: -1},  // Arista 4 (Top)
+        {dq: 1, dr: 0}    // Arista 5 (Top-Right)
     ];
 
     context.beginPath();
