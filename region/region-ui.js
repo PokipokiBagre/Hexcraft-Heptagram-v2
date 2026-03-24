@@ -15,23 +15,29 @@ export function renderPanel() {
     const contenido = document.getElementById('panel-contenido');
     if (!contenido) return;
 
-    switch (ui.panelActual) {
-        case 'props':    contenido.innerHTML = htmlPropsPanel(); break;
-        case 'regiones': contenido.innerHTML = htmlRegionesPanel(); break;
-        case 'npcs':     contenido.innerHTML = htmlNPCsPanel(); break;
-        case 'misiones': contenido.innerHTML = htmlMisionesPanel(); break;
-        case 'imagenes': contenido.innerHTML = htmlImagenesPanel(); break;
+    try {
+        switch (ui.panelActual) {
+            case 'props':    contenido.innerHTML = htmlPropsPanel(); break;
+            case 'regiones': contenido.innerHTML = htmlRegionesPanel(); break;
+            case 'npcs':     contenido.innerHTML = htmlNPCsPanel(); break;
+            case 'misiones': contenido.innerHTML = htmlMisionesPanel(); break;
+            case 'imagenes': contenido.innerHTML = htmlImagenesPanel(); break;
+        }
+        actualizarTabsBotones();
+    } catch (e) {
+        console.error("Error crítico renderizando el panel:", e);
+        contenido.innerHTML = `<p style="color:red; padding:10px;">Error al cargar datos del panel.</p>`;
     }
-
-    actualizarTabsBotones();
 }
 
 function htmlPropsPanel() {
     const busq = (ui.busqueda || '').toLowerCase();
     
-    const lista = Object.values(props).filter(p => {
+    const lista = Object.values(props || {}).filter(p => {
+        if (!p) return false;
         if (p.id === 'prop_region') return false;
-        if (busq && !p.nombre.toLowerCase().includes(busq)) return false;
+        const nombreStr = (p.nombre || '').toLowerCase();
+        if (busq && !nombreStr.includes(busq)) return false;
         return true;
     });
 
@@ -42,9 +48,11 @@ function htmlPropsPanel() {
         else if (p.id === 'prop_region') iconoHtml = `🗺️`;
         else iconoHtml = `<img src="${p.imagen || NO_IMG}" onerror="this.src='${NO_IMG}'">`;
 
+        const nombreMostrado = p.nombre || 'Sin nombre';
+
         return `
         <div class="prop-card ${selClase}" onclick="window.seleccionarPropUI('${p.id}')">
-            ${iconoHtml} <div class="prop-card-nombre">${p.nombre}</div>
+            ${iconoHtml} <div class="prop-card-nombre">${nombreMostrado}</div>
             ${editor.activo && p.id !== 'prop_pintar' && p.id !== 'prop_region' && !p.id.startsWith('pj_') && !p.id.startsWith('npc_') ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarPropUI('${p.id}')">✕</button>` : ''}
         </div>`;
     }).join('');
@@ -84,18 +92,18 @@ function htmlPropsPanel() {
 }
 
 function htmlRegionesPanel() {
-    const regs = Object.values(mapaActual.regiones);
+    const regs = Object.values(mapaActual.regiones || {});
     const lista = regs.map(reg => `
         <div class="region-card ${ui.selectedRegion === reg.id ? 'region-card-sel' : ''}" onclick="window.seleccionarRegionUI('${reg.id}')">
-            <div class="region-color-dot" style="background:${reg.color}"></div>
+            <div class="region-color-dot" style="background:${reg.color || '#334'}"></div>
             <div class="region-info">
-                <div class="region-nombre">${reg.nombre} 🏠</div>
-                <div class="region-meta">${reg.hexes.length} hexes</div>
+                <div class="region-nombre">${reg.nombre || 'Región'} 🏠</div>
+                <div class="region-meta">${(reg.hexes || []).length} hexes</div>
             </div>
             ${editor.activo ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarRegionUI('${reg.id}')">✕</button>` : ''}
         </div>`).join('');
 
-    const regSel = ui.selectedRegion ? mapaActual.regiones[ui.selectedRegion] : null;
+    const regSel = ui.selectedRegion && mapaActual.regiones ? mapaActual.regiones[ui.selectedRegion] : null;
     const detalleHtml = regSel ? htmlDetalleRegion(regSel) : '';
 
     return `<div class="panel-seccion">
@@ -115,7 +123,7 @@ function htmlDetalleRegion(reg) {
             <button onclick="window.eliminarRegionUI('${reg.id}')" style="background:#4a0000; border:1px solid #ff4444; color:#fff; padding:3px 8px; border-radius:4px; font-size:0.72em; cursor:pointer;">🗑️</button>
         </div>
         <label>Nombre
-            <input type="text" value="${reg.nombre.replace(/"/g,'&quot;')}"
+            <input type="text" value="${(reg.nombre || '').replace(/"/g,'&quot;')}"
                 oninput="window.actualizarRegion('${reg.id}','nombre',this.value)"
                 style="width:100%;box-sizing:border-box;background:#0a0018;border:1px solid #444;color:#fff;padding:5px 8px;border-radius:4px;font-size:0.85em;margin-top:3px;">
         </label>
@@ -125,7 +133,7 @@ function htmlDetalleRegion(reg) {
                 style="width:100%;box-sizing:border-box;background:#0a0018;border:1px solid #444;color:#fff;padding:5px 8px;border-radius:4px;font-size:0.85em;margin-top:3px;">
         </label>
         <div style="display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap;">
-            <label style="font-size:0.78em; color:#aaa; display:flex; align-items:center; gap:6px;">Color <input type="color" value="${reg.color}" oninput="window.actualizarRegion('${reg.id}','color',this.value)" style="width:32px;height:26px;border:none;background:none;cursor:pointer;padding:0;"></label>
+            <label style="font-size:0.78em; color:#aaa; display:flex; align-items:center; gap:6px;">Color <input type="color" value="${reg.color || '#000000'}" oninput="window.actualizarRegion('${reg.id}','color',this.value)" style="width:32px;height:26px;border:none;background:none;cursor:pointer;padding:0;"></label>
             <label style="font-size:0.78em; color:#aaa; flex:1; min-width:120px; display:flex; align-items:center; gap:6px;">Opacidad <input type="range" min="0.05" max="0.75" step="0.05" value="${reg.opacidad||0.3}" oninput="window.actualizarRegion('${reg.id}','opacidad',parseFloat(this.value))" style="flex:1; accent-color:var(--cyan);"></label>
         </div>
 
@@ -138,23 +146,23 @@ function htmlDetalleRegion(reg) {
 }
 
 function htmlNPCsPanel() {
-    const listNPCsMap = Object.values(npcsMapaLocal).map(n => `
+    const listNPCsMap = Object.values(npcsMapaLocal || {}).map(n => `
         <div class="npc-card" style="position:relative; cursor:pointer;" onclick="window.seleccionarNPCUI('${n.id}')">
             <img src="${n.icono_url || NO_IMG}" onerror="this.src='${NO_IMG}'" class="npc-thumb">
             <div>
-                <div class="npc-nombre">${n.nombre}</div>
-                <div class="npc-meta">${n.tipo} · ${n.hex_pos||'No pos'}</div>
+                <div class="npc-nombre">${n.nombre || 'NPC'}</div>
+                <div class="npc-meta">${n.tipo || 'Desconocido'} · ${n.hex_pos||'No pos'}</div>
             </div>
             ${editor.activo ? `<button class="prop-card-del" style="position:absolute; top:4px; right:4px; z-index:10; background:#4a0000; color:#fff;" onclick="event.stopPropagation(); window.eliminarNPCUI('${n.id}')">✕</button>` : ''}
         </div>`).join('') || '<p class="sin-resultado">No hay NPCs de región.</p>';
 
-    const listJugadoresDB = personajesDB.map(p => {
+    const listJugadoresDB = (personajesDB || []).map(p => {
         const pid = `pj_${normKey(p.nombre)}`;
         const sel = editor.selectedPropId === pid ? 'npc-card-sel' : '';
         return `
         <div class="npc-card ${sel}" onclick="window.seleccionarPropEntidadUI('${pid}')">
             <img src="${STORAGE_URL}/imgpersonajes/${normKey(p.icon)}icon.png" onerror="this.src='${NO_IMG}'" class="npc-thumb">
-            <div><div class="npc-nombre">${p.nombre}</div> <div class="npc-meta">Jugador DB</div></div>
+            <div><div class="npc-nombre">${p.nombre || 'Jugador'}</div> <div class="npc-meta">Jugador DB</div></div>
         </div>`;
     }).join('');
 
@@ -169,13 +177,13 @@ function htmlNPCsPanel() {
 }
 
 function htmlImagenesPanel() {
-    let listaProps = Object.values(props);
+    let listaProps = Object.values(props || {});
     if (ui.filtroPropSinImagen) listaProps = listaProps.filter(p => !p.imagen && p.id !== 'prop_pintar' && p.id !== 'prop_region');
 
     const grid = listaProps.filter(p => p.id !== 'prop_region').map(p => `
         <div style="background:rgba(0,0,0,0.3); padding:5px; text-align:center; position:relative; border-radius:4px; border:1px solid #333;">
             <img src="${p.imagen || NO_IMG}" onerror="this.src='${NO_IMG}'" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:3px;">
-            <div style="font-size:0.65em; margin-top:3px; word-break:break-word;">${p.nombre}</div>
+            <div style="font-size:0.65em; margin-top:3px; word-break:break-word;">${p.nombre || 'Prop'}</div>
             ${editor.activo && p.id !== 'prop_pintar' ? `<button class="btn-accion-mini" onclick="window.abrirSubidaPropUI('${p.id}')" style="margin-top:4px; width:100%; font-size:0.7em; padding:2px;">📤 Subir</button>` : ''}
         </div>`).join('');
 
@@ -197,7 +205,7 @@ function htmlImagenesPanel() {
         <div class="panel-sub-titulo">👤 Subir imagen de NPC de Región</div>
         <select id="up-npc-id" style="width:100%;box-sizing:border-box;background:#0a0018;border:1px solid #444;color:#fff;padding:6px;border-radius:4px;font-size:0.82em;margin-bottom:6px;">
             <option value="">-- Selecciona un NPC --</option>
-            ${Object.values(npcsMapaLocal).map(n => `<option value="${n.id}">${n.nombre}</option>`).join('')}
+            ${Object.values(npcsMapaLocal || {}).map(n => `<option value="${n.id}">${n.nombre || 'NPC'}</option>`).join('')}
         </select>
         <div class="drop-zone" id="drop-npc-zone" onclick="document.getElementById('file-npc-input').click()" style="padding:6px; cursor:pointer; background:#3a1a6a; text-align:center; border-radius:4px;">
             👤 Haz clic para subir imagen
@@ -214,38 +222,39 @@ function htmlImagenesPanel() {
 }
 
 export function htmlMisionesPanel() {
-    const list = misionesActivas.map(m => `
+    const list = (misionesActivas || []).map(m => `
         <div class="mision-item">
             <span class="mision-estado m-${m.estado}">${m.estado===1?'Pendiente':'En curso'}</span>
-            <div class="mision-titulo">${m.titulo}</div>
-            <div class="mision-tipo">${m.tipo} · Clase ${m.clase}</div>
+            <div class="mision-titulo">${m.titulo || 'Misión'}</div>
+            <div class="mision-tipo">${m.tipo || 'General'} · Clase ${m.clase || '-'}</div>
         </div>`).join('');
     return `<div class="panel-seccion"><div class="lista-misiones-panel">${list}</div></div>`;
 }
 
 export function renderInfoHexPanel(q, r, key) {
-    const hex = mapaActual.hexes[key];
+    const hex = mapaActual.hexes ? mapaActual.hexes[key] : null;
     const el = document.getElementById('panel-info-hex');
+    if (!el) return;
     if (!hex) { el.innerHTML = ''; return; }
 
-    const reg = hex.region ? mapaActual.regiones[hex.region] : null;
-    const npcsAqui = Object.values(npcsMapaLocal).filter(n => n.hex_pos === key);
+    const reg = hex.region && mapaActual.regiones ? mapaActual.regiones[hex.region] : null;
+    const npcsAqui = Object.values(npcsMapaLocal || {}).filter(n => n.hex_pos === key);
     
     const misionesHtml = reg ? (reg.misiones || []).map(mid => {
         const m = misionesActivas.find(x => x.id === mid);
-        return m ? `<span class="tag-mision">${m.titulo}</span>` : '';
+        return m ? `<span class="tag-mision">${m.titulo || 'Misión'}</span>` : '';
     }).join('') : '';
 
     const npcsHtml = npcsAqui.map(n => `
         <div style="display:flex; align-items:center; gap:6px; font-size:0.8em; margin-top:4px;">
             <img src="${n.icono_url || NO_IMG}" onerror="this.src='${NO_IMG}'" style="width:28px; height:28px; border-radius:50%; object-fit:cover; border:1px solid #555;">
-            <div><div style="font-weight:bold;">${n.nombre}</div> ${n.descripcion||''}</div>
+            <div><div style="font-weight:bold;">${n.nombre || 'NPC'}</div> ${n.descripcion||''}</div>
         </div>`).join('');
 
     el.innerHTML = `
     <div style="padding:10px;">
         <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px;">
-            <div class="info-hex-titulo">${reg ? reg.nombre : `Hex (${q},${r})`}</div>
+            <div class="info-hex-titulo">${reg ? (reg.nombre || 'Región') : `Hex (${q},${r})`}</div>
             <button onclick="document.getElementById('panel-info-hex').innerHTML=''" style="background:none; border:none; color:#666; font-size:1em;">✕</button>
         </div>
         ${reg ? `<div class="detalle-fila">Control: ${reg.controlador || '—'}</div><div class="detalle-fila">Accesible: ${reg.accesible?'Sí':'No'}</div>` : ''}
