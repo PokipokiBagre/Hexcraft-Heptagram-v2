@@ -24,23 +24,24 @@ let historialMapas = [];
 
 function actualizarVisibilidadUI() {
     document.querySelectorAll('.solo-op').forEach(el => {
-        if (editor.activo) {
-            el.style.display = (el.id === 'barra-herramientas' || el.classList.contains('tabs-panel') || el.classList.contains('navbar-center')) ? 'flex' : 'block';
-        } else {
-            el.style.display = 'none';
-        }
+        // En lugar de ocultar la barra entera, el HTML ahora solo oculta botones específicos
+        el.style.display = editor.activo ? (el.tagName === 'BUTTON' || el.tagName === 'DIV' ? 'flex' : 'block') : 'none';
     });
 }
 
-async function initApp() {
+window.onload = async () => {
     let fav = document.querySelector("link[rel='icon']");
     if (!fav) { fav = document.createElement("link"); fav.rel = "icon"; document.head.appendChild(fav); }
     fav.href = `${STORAGE_URL}/imginterfaz/icon.png`;
 
-    try {
-        await hexAuth.init();
-        editor.activo = hexAuth.esAdmin();
-    } catch(e) { console.error('Error de Auth:', e); }
+    await hexAuth.init();
+    editor.activo = hexAuth.esAdmin();
+
+    // 🌟 Si no es Admin, forzamos que el panel sea Regiones y su herramienta sea Mover
+    if (!editor.activo) {
+        ui.panelActual = 'regiones';
+        editor.herramienta = 'mover';
+    }
 
     const badge = document.getElementById('hex-session-badge');
     if (badge && hexAuth.renderStatusBadge) badge.innerHTML = hexAuth.renderStatusBadge();
@@ -57,7 +58,7 @@ async function initApp() {
     if (loader) loader.style.display = 'none';
     if (!ok) mostrarToastUI('⚠️ Error cargando datos del mapa', 'error');
 
-    try { renderPanel(); } catch(e) { console.error('Error renderizando panel inicial:', e); }
+    renderPanel();
     actualizarBreadcrumb();
 
     window.addEventListener('hexSeleccionado', (e) => {
@@ -70,14 +71,11 @@ async function initApp() {
         const btn = document.getElementById('btn-guardar-mapa');
         if (btn) { btn.classList.remove('oculto'); btn.innerText = '💾 Guardar Cambios'; }
     });
-}
-
-if (document.readyState === 'complete') { initApp(); } 
-else { window.addEventListener('load', initApp); }
+};
 
 window.cambiarPanelUI = async (panel) => { 
     ui.panelActual = panel; 
-    try { renderPanel(); } catch(e) { console.error('Error al renderizar panel:', e); }
+    renderPanel(); 
     
     if (panel === 'imagenes') {
         const fonds = await listarImagenesBackground();
@@ -126,7 +124,6 @@ window.setHerramienta = (h) => {
     document.querySelectorAll('.tool-btn').forEach(b => {
         b.classList.toggle('activo', b.dataset.tool === h);
     });
-    renderPanel();
 };
 
 window.cerrarModalRegion = cerrarModalUI;
@@ -146,8 +143,8 @@ window.guardarMapaUI = async () => {
 };
 
 window.abrirModalRegionBrush = () => {
-    const regs = Object.values(mapaActual.regiones || {});
-    const options = regs.map(r => `<option value="${r.id}">${r.nombre || 'Sin nombre'}</option>`).join('');
+    const regs = Object.values(mapaActual.regiones);
+    const options = regs.map(r => `<option value="${r.id}">${r.nombre}</option>`).join('');
     const html = `
         <div style="display:flex; flex-direction:column; gap:10px;">
             <label>Seleccionar Región Existente:
@@ -172,7 +169,6 @@ window.confirmarPincelRegion = () => {
     
     if (inputVal) {
         const id = `reg_${Date.now()}`;
-        if (!mapaActual.regiones) mapaActual.regiones = {};
         mapaActual.regiones[id] = crearRegion(id);
         mapaActual.regiones[id].nombre = inputVal;
         ui.selectedRegion = id;
@@ -239,10 +235,10 @@ window.guardarPropUI = async () => {
 };
 
 window.eliminarPropUI = async (id) => {
-    if (!confirm(`¿Eliminar el prop "${props[id]?.nombre || 'Sin nombre'}"?`)) return;
+    if (!confirm(`¿Eliminar el prop "${props[id]?.nombre}"?`)) return;
     if (editor.selectedPropId === id) editor.selectedPropId = null;
     
-    Object.values(mapaActual.hexes || {}).forEach(hex => {
+    Object.values(mapaActual.hexes).forEach(hex => {
         ['back','mid','over'].forEach(capa => {
             if (Array.isArray(hex[capa])) hex[capa] = hex[capa].filter(pid => {
                 const basePid = typeof pid === 'string' ? pid.split(':')[0] : pid;
@@ -264,10 +260,10 @@ window.abrirSubidaPropUI = (propId) => {
     const tipo = document.getElementById('up-prop-tipo');
     
     if (idHidden) idHidden.value = p.id;
-    if (nombre) nombre.value = p.nombre || '';
+    if (nombre) nombre.value = p.nombre;
     if (tipo) tipo.value = p.tipo;
     document.getElementById('upload-form')?.scrollIntoView({ behavior: 'smooth' });
-    mostrarToastUI(`Sube imagen para: ${p.nombre || 'Prop'}`, 'info');
+    mostrarToastUI(`Sube imagen para: ${p.nombre}`, 'info');
 };
 
 window.subirPropImagenUI = async (e) => {
@@ -287,7 +283,7 @@ window.subirPropImagenUI = async (e) => {
     try {
         const url = await subirImagenStorage(file, 'imgregion', key);
         const existente = props[id];
-        const propData = { id, nombre: existente ? (existente.nombre || nombreInput) : nombreInput, tipo: existente ? existente.tipo : tipo, imagen: url };
+        const propData = { id, nombre: existente ? existente.nombre : nombreInput, tipo: existente ? existente.tipo : tipo, imagen: url };
         props[id] = propData;
         await guardarProp(propData);
         mostrarToastUI(`Prop actualizado ✅`);
@@ -301,7 +297,7 @@ window.abrirCrearNPCUI = () => abrirModalUI(htmlFormNPC(), '➕ Nuevo NPC');
 window.seleccionarNPCUI = (id) => {
     if (!editor.activo) return;
     const npc = npcsMapaLocal[id];
-    if (npc) abrirModalUI(htmlFormNPC(npc), `✏️ ${npc.nombre || 'NPC'}`);
+    if (npc) abrirModalUI(htmlFormNPC(npc), `✏️ ${npc.nombre}`);
 };
 window.guardarNPCUI = async () => {
     const idExistente = document.getElementById('fn-id')?.value;
@@ -325,7 +321,7 @@ window.guardarNPCUI = async () => {
     else mostrarToastUI('Error guardando NPC', 'error');
 };
 window.eliminarNPCUI = async (id) => {
-    if (!confirm(`¿Eliminar al NPC "${npcsMapaLocal[id]?.nombre || 'Sin nombre'}"?`)) return;
+    if (!confirm(`¿Eliminar al NPC "${npcsMapaLocal[id]?.nombre}"?`)) return;
     delete npcsMapaLocal[id];
     await eliminarNPC(id);
     renderPanel();
@@ -334,7 +330,6 @@ window.eliminarNPCUI = async (id) => {
 
 window.crearRegionUI = () => {
     const id = `reg_${Date.now()}`;
-    if (!mapaActual.regiones) mapaActual.regiones = {};
     mapaActual.regiones[id] = crearRegion(id);
     ui.selectedRegion = id;
     renderPanel();
@@ -345,7 +340,7 @@ window.eliminarRegionUI = (id) => {
     if (!confirm('¿Eliminar esta región completamente?')) return;
     const reg = mapaActual.regiones[id];
     if (reg) {
-        (reg.hexes || []).forEach(key => { if (mapaActual.hexes[key]) mapaActual.hexes[key].region = null; });
+        reg.hexes.forEach(key => { if (mapaActual.hexes[key]) mapaActual.hexes[key].region = null; });
     }
     delete mapaActual.regiones[id];
     ui.selectedRegion = null;
@@ -373,7 +368,6 @@ window.abrirInterior = async (regionId) => {
     const ok = await cargarTodo(interiorId);
     
     if (!ok) {
-        // 🌟 CORRECCIÓN: El mapa es NUEVO, asignamos el nombre de la región limpiamente
         mapaActual.id   = interiorId;
         mapaActual.nombre = reg.nombre; 
         mapaActual.ancho = 12;
@@ -442,8 +436,8 @@ window.aplicarFondUI = (url) => {
 function actualizarBreadcrumb() {
     const el = document.getElementById('breadcrumb');
     if (!el) return;
-    const partes = historialMapas.map(h => `<span class="bread-item" onclick="window.volverMapaPadre()">🗺️ ${h.nombre || 'Mundo'}</span> ›`).join(' ');
-    el.innerHTML = partes + ` <span class="bread-actual">📍 ${mapaActual.nombre || 'Mundo'}</span>`;
+    const partes = historialMapas.map(h => `<span class="bread-item" onclick="window.volverMapaPadre()">🗺️ ${h.nombre}</span> ›`).join(' ');
+    el.innerHTML = partes + ` <span class="bread-actual">📍 ${mapaActual.nombre}</span>`;
     
     const btnVolver = document.getElementById('btn-volver-mapa');
     if (btnVolver) btnVolver.style.display = historialMapas.length > 0 ? '' : 'none';
