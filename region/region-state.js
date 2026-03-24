@@ -13,7 +13,7 @@ export const HEX_SIZE = 48; // px, ajustable
 export const PROP_TIPOS = ['terreno', 'estructura', 'entidad', 'elemento', 'objeto'];
 
 // ── Capas del mapa ───────────────────────────────────────────
-export const CAPAS = ['background', 'mid', 'over'];
+export const CAPAS = ['back', 'mid', 'over'];
 
 // ── Estado de la cámara ──────────────────────────────────────
 export const camara = {
@@ -26,18 +26,18 @@ export const camara = {
 // ── Estado del editor ────────────────────────────────────────
 export const editor = {
     activo: false,           // Solo OP
-    herramienta: 'pintar',   // 'pintar'|'borrar'|'seleccionar'|'region'|'colorear'|'interior'
-    capaActual: 'background',
-    propSeleccionado: null,  // { id, tipo, nombre, imagen, capa }
+    herramienta: 'agregar',  // 'agregar'|'borrar'|'seleccionar'|'region'
+    capaActual: 'back',
+    propSeleccionado: null,  // { id, tipo, nombre, imagen }
     seleccion: new Set(),    // Set de "q,r" keys seleccionados
     modoRegion: false,
     brushSize: 1,            // 1 = un hex, 2 = radio 1 (+6), 3 = radio 2, etc.
-    colorActual: '#4488cc',  // Color para la herramienta colorear
+    colorActual: '#4488cc',  // Color para la herramienta colorear (prop falso)
     opacidadPincel: 0.7,     // Opacidad al colorear
 };
 
 // ── Mapa principal ───────────────────────────────────────────
-// hexes[q][r] = { background:[...propIds], mid:[...], over:[...], region: regionId|null }
+// hexes[q][r] = { back:[...propIds], mid:[...], over:[...], region: regionId|null }
 export let mapaActual = {
     id:     'mundo',
     nombre: 'Mundo',
@@ -52,39 +52,36 @@ export let mapaActual = {
 };
 
 // ── Props (biblioteca de imágenes/tiles) ────────────────────
-// props[id] = { id, nombre, tipo, capa, imagen (url storage), forma:'hex'|'doble'|'triple', ancho:1, alto:1 }
 export let props = {};
 
-// ── NPCs del mapa ────────────────────────────────────────────
-// npcsMapaLocal[id] = { id, nombre, tipo:'sistema'|'jugador', icono, hex:'q,r', capa:'mid'|'over', desc, stats:{} }
+// ── NPCs del mapa (instancias colocadas) ─────────────────────
 export let npcsMapaLocal = {};
 
 // ── Datos de personajes y misiones (leídos de DB) ────────────
-export let personajesDB   = [];   // jugadores + npcs_jugador activos
-export let misionesActivas = [];  // misiones con estado 1 o 2
+export let personajesDB   = [];   // todos los jugadores + npcs
+export let misionesActivas = [];  
 
 // ── UI state ─────────────────────────────────────────────────
 export const ui = {
-    panelActual:  'props',    // 'props'|'regiones'|'npcs'|'misiones'|'imagenes'
+    panelActual:  'props',    
     filtroTipo:   'todos',
-    filtroCapa:   'todos',
     busqueda:     '',
-    hoveredHex:   null,       // "q,r"
-    selectedHex:  null,       // "q,r"
-    selectedRegion: null,     // regionId
-    modoPintar:   false,      // Mouse down pintando
+    hoveredHex:   null,       
+    selectedHex:  null,       
+    selectedRegion: null,     
+    modoAgregar:  false,      // Mouse down agregando
 };
 
 // ── Estructura de un HexData ─────────────────────────────────
 export function crearHexData() {
     return {
-        background: [],   // array de propIds
+        back:       [],   // array de propIds o colores "COLOR:#hex:opac"
         mid:        [],
         over:       [],
-        region:     null, // regionId
-        misiones:   [],   // misionIds activas
-        npcs:       [],   // npcIds presentes
-        color:      null  // color pintado con herramienta colorear (css string)
+        region:     null, 
+        misiones:   [],   
+        npcs:       [],   
+        color:      null  // color base legado
     };
 }
 
@@ -95,10 +92,10 @@ export function crearRegion(id) {
         nombre:      'Nueva Región',
         color:       '#4488cc',
         opacidad:    0.35,
-        controlador: '',      // nombre del personaje/facción
+        controlador: '',      
         accesible:   true,
         misiones:    [],
-        hexes:       [],      // ["q,r", ...]
+        hexes:       [],      
         tieneInterior: false,
         interiorId:  null
     };
