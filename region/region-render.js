@@ -113,16 +113,61 @@ function getDrawingList(W, H) {
     return list.sort((a, b) => a.depth - b.depth);
 }
 
-// ── PLANO BASE ──
+// ── PLANO BASE Y REGIONES (CONTORNO INTELIGENTE) ──
 function dibujarHexTop3D(q, r, hex, topPos) {
     const verts = isometricHexVertices(topPos.x, topPos.y, 0);
-
-    trazarHexPath(verts);
-    
     const reg = hex.region ? mapaActual.regiones[hex.region] : null;
+
     if (reg) {
-        context.fillStyle = reg.color || '#334'; context.globalAlpha = reg.opacidad || 0.3; context.fill(); context.globalAlpha = 1;
+        // 1. Relleno súper tenue para que no sea un hueco oscuro completo
+        trazarHexPath(verts);
+        context.fillStyle = reg.color || '#334'; 
+        context.globalAlpha = (reg.opacidad || 0.3) * 0.15; // Casi invisible
+        context.fill(); 
+        context.globalAlpha = 1;
+
+        // 2. Trazado matemático de los bordes exteriores (Contorno de Región)
+        context.save();
+        context.strokeStyle = reg.color || '#334';
+        context.lineWidth = 4 * camara.zoom; // Contorno grueso y visible
+        context.lineCap = 'round';
+        context.lineJoin = 'round';
+        context.globalAlpha = reg.opacidad ? Math.min(1, reg.opacidad + 0.4) : 0.8;
+
+        const neighborDirs = [
+            {dq: 1, dr: 0}, {dq: 0, dr: 1}, {dq: -1, dr: 1},
+            {dq: -1, dr: 0}, {dq: 0, dr: -1}, {dq: 1, dr: -1}
+        ];
+
+        context.beginPath();
+        for (let i = 0; i < 6; i++) {
+            const midX = (verts[i].x + verts[(i+1)%6].x) / 2;
+            const midY = (verts[i].y + verts[(i+1)%6].y) / 2;
+            
+            let closestNeighborKey = null;
+            let minD = Infinity;
+            
+            // Buscar cuál de los 6 vecinos teóricos es el dueño de esta arista
+            for (const dir of neighborDirs) {
+                const nq = q + dir.dq; const nr = r + dir.dr;
+                const nPos = hexToPixel3D(nq, nr, 0);
+                const dist = Math.hypot(nPos.x - midX, nPos.y - midY);
+                if (dist < minD) { minD = dist; closestNeighborKey = `${nq},${nr}`; }
+            }
+
+            const nHex = closestNeighborKey ? mapaActual.hexes[closestNeighborKey] : null;
+            
+            // Si el vecino NO es de mi misma región, entonces esto ES un borde exterior: Dibujar.
+            if (!nHex || nHex.region !== hex.region) {
+                context.moveTo(verts[i].x, verts[i].y);
+                context.lineTo(verts[(i+1)%6].x, verts[(i+1)%6].y);
+            }
+        }
+        context.stroke();
+        context.restore();
+
     } else {
+        trazarHexPath(verts);
         context.fillStyle = '#0a0018'; 
         context.fill();
     }
