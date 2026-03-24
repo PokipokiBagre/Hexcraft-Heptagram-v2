@@ -81,6 +81,25 @@ function htmlProps() {
             <span style="color:#888; font-size:0.78em;">BRUSH:</span>
             ${[1,2,3,4].map(n => `<button class="filtro-pill ${editor.brushSize===n?'activo':''}" onclick="window.setBrushSize(${n})">${n}</button>`).join('')}
         </div>
+        <div style="background:rgba(0,0,0,0.4);border:1px solid #333;border-radius:6px;padding:8px;margin-top:4px;">
+            <div style="font-size:0.7em;color:#888;font-family:sans-serif;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em;">🎨 Color / Textura</div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <button class="filtro-pill ${editor.herramienta==='colorear'?'activo':''}" onclick="window.setHerramienta('colorear')" style="padding:4px 10px;">🎨 Colorear</button>
+                <input type="color" value="${editor.colorActual||'#4488cc'}"
+                    onchange="window.setColorActual(this.value)"
+                    style="width:32px;height:26px;border:1px solid #555;border-radius:4px;background:none;cursor:pointer;padding:2px;">
+                <span style="font-size:0.7em;color:#888;">Opac:</span>
+                <input type="range" min="0.1" max="1" step="0.05" value="${editor.opacidadPincel??0.7}"
+                    oninput="window.setOpacidadPincel(parseFloat(this.value))"
+                    style="flex:1;min-width:60px;accent-color:#00ccff;">
+            </div>
+            <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap;">
+                ${['#2a5f8a','#3a7a3a','#8a3a2a','#7a6a2a','#6a2a7a','#2a6a6a'].map(c=>
+                    `<div onclick="window.setColorActual('${c}')" title="${c}" style="width:22px;height:22px;background:${c};border-radius:3px;border:2px solid ${c===editor.colorActual?'#fff':'#333'};cursor:pointer;"></div>`
+                ).join('')}
+                <button onclick="window.aplicarRuido()" style="background:#0a2a3a;border:1px solid #335566;color:#88ccdd;padding:2px 7px;border-radius:3px;font-size:0.7em;cursor:pointer;" title="Ruido de color">≋ Ruido</button>
+            </div>
+        </div>
         ` : ''}
 
         <div class="props-grid">${grid}</div>
@@ -224,13 +243,41 @@ function htmlMisiones() {
 
 // ── TAB: IMÁGENES ─────────────────────────────────────────────
 function htmlImagenes() {
+    const todosProps = Object.values(props);
+    const imgFallback = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
+
+    const gridProps = todosProps.length === 0
+        ? '<p class="sin-resultado">Aún no hay props. Crea uno y sube su imagen.</p>'
+        : todosProps.map(p => {
+            const tieneImg = !!p.imagen;
+            const claseCard = tieneImg ? 'ok' : 'falta';
+            const badge = tieneImg
+                ? `<div style="position:absolute;top:4px;right:4px;background:#00aa44;color:#fff;font-size:0.55em;padding:1px 4px;border-radius:3px;font-weight:bold;">✓</div>`
+                : `<div style="position:absolute;top:4px;right:4px;background:#ff4444;color:#fff;font-size:0.55em;padding:1px 4px;border-radius:3px;font-weight:bold;">!</div>`;
+            const src = tieneImg ? p.imagen : imgFallback;
+            const safeNombre = p.nombre.replace(/'/g,"\'");
+            return `
+            <div style="background:${tieneImg?'rgba(0,40,10,0.35)':'rgba(80,0,0,0.25)'};border:1px solid ${tieneImg?'#00aa44':'#ff4444'};border-radius:6px;padding:6px;text-align:center;position:relative;">
+                ${badge}
+                <img src="${src}" onerror="this.src='${imgFallback}'"
+                    style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:4px;display:block;">
+                <div style="font-size:0.62em;color:#ccc;margin-top:4px;word-break:break-word;font-family:sans-serif;">${p.nombre}</div>
+                <div style="font-size:0.57em;color:#666;">${p.tipo}·${p.capa}</div>
+                ${editor.activo ? `<button onclick="window.abrirSubidaProp('${p.id}')"
+                    style="margin-top:4px;background:${tieneImg?'#004a00':'#4a0000'};border:1px solid ${tieneImg?'#00ff00':'#ff4444'};color:#fff;padding:2px 6px;border-radius:3px;font-size:0.65em;cursor:pointer;width:100%;">
+                    ${tieneImg?'🔄 Cambiar':'📤 Subir'}
+                </button>` : ''}
+            </div>`;
+        }).join('');
+
     return `
     <div class="panel-seccion">
         ${editor.activo ? `
-        <div class="panel-sub-titulo">Subir imagen de prop</div>
+        <div class="panel-sub-titulo">📤 Subir imagen de prop</div>
         <div id="upload-prop-form">
-            <input type="text" id="up-prop-nombre" placeholder="Nombre del prop" style="width:100%;box-sizing:border-box;background:#0a0018;border:1px solid #444;color:#fff;padding:6px;border-radius:4px;font-size:0.82em;margin-bottom:6px;">
-            <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; margin-bottom:6px;">
+            <input type="text" id="up-prop-nombre" placeholder="Nombre del prop"
+                style="width:100%;box-sizing:border-box;background:#0a0018;border:1px solid #444;color:#fff;padding:6px;border-radius:4px;font-size:0.82em;margin-bottom:6px;">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
                 <select id="up-prop-tipo" style="background:#0a0018;border:1px solid #444;color:#fff;padding:5px;border-radius:4px;font-size:0.8em;">
                     ${PROP_TIPOS.map(t => `<option value="${t}">${t}</option>`).join('')}
                 </select>
@@ -246,16 +293,16 @@ function htmlImagenes() {
                 🖼️ Arrastra o haz clic para subir imagen
             </div>
             <input type="file" id="file-prop-input" accept="image/*" style="display:none" onchange="window.subirPropImagen(event)">
-            <div id="up-prop-progress" style="display:none; margin-top:6px;">
-                <div style="height:4px; background:#0a0018; border-radius:2px; overflow:hidden;">
-                    <div id="up-prop-fill" style="height:100%; background:var(--cyan-magic); width:0%; transition:width 0.3s;"></div>
+            <div id="up-prop-progress" style="display:none;margin-top:6px;">
+                <div style="height:4px;background:#0a0018;border-radius:2px;overflow:hidden;">
+                    <div id="up-prop-fill" style="height:100%;background:var(--cyan,#00ffff);width:0%;transition:width 0.3s;"></div>
                 </div>
-                <p id="up-prop-status" style="font-size:0.75em; color:#aaa; text-align:center; margin:3px 0;"></p>
+                <p id="up-prop-status" style="font-size:0.75em;color:#aaa;text-align:center;margin:3px 0;"></p>
             </div>
         </div>
 
-        <hr style="border-color:#333; margin:15px 0;">
-        <div class="panel-sub-titulo">Fondo del mapa (Background)</div>
+        <hr style="border-color:#333;margin:12px 0;">
+        <div class="panel-sub-titulo">🌄 Fondo del mapa</div>
         <div class="drop-prop" id="drop-bg-zone"
             onclick="document.getElementById('file-bg-input').click()"
             ondragover="event.preventDefault(); this.classList.add('drag-sobre')"
@@ -264,11 +311,16 @@ function htmlImagenes() {
             🌄 Subir nueva imagen de fondo
         </div>
         <input type="file" id="file-bg-input" accept="image/*" style="display:none" onchange="window.subirBGImagen(event)">
-        ` : '<p class="sin-resultado">Solo el OP puede gestionar imágenes.</p>'}
+        ` : ''}
 
-        <div class="panel-sub-titulo" style="margin-top:15px;">Fondos disponibles</div>
-        <div id="lista-bg-imgs" style="display:flex; flex-wrap:wrap; gap:6px; margin-top:8px;">
+        <div class="panel-sub-titulo" style="margin-top:12px;">Fondos disponibles</div>
+        <div id="lista-bg-imgs" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px;">
             <p class="sin-resultado sin-resultado-sm">Cargando...</p>
+        </div>
+
+        <div class="panel-sub-titulo">🧱 Props (${Object.values(props).filter(p=>p.imagen).length}/${Object.values(props).length} con imagen)</div>
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;margin-top:6px;">
+            ${gridProps}
         </div>
     </div>`;
 }
