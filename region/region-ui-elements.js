@@ -2,6 +2,8 @@
 // region-ui-elements.js — Elementos de UI Comunes y Formularios
 // ============================================================
 
+console.log("✅ region-ui-elements.js cargado correctamente con todas sus funciones");
+
 import { PROP_TIPOS } from './region-state.js';
 
 export function htmlFormProp(propData = null) {
@@ -24,7 +26,6 @@ export function htmlFormProp(propData = null) {
     </div>`;
 }
 
-// ¡AQUÍ ESTÁ LA FUNCIÓN QUE FALTABA!
 export function htmlFormNPC(npcData = null) {
     const n = npcData || { id: '', nombre: '', tipo: 'sistema', icono_url: '', hex_pos: '', capa: 'mid', descripcion: '' };
     return `
