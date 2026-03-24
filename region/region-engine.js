@@ -1,21 +1,25 @@
 // ============================================================
-// region-engine.js — Motor hexagonal: geometría, render, cámara
-// Sistema: "Offset flat-top" → coordenadas axiales (q, r)
+// region-engine.js — Motor hexagonal
+// CAMBIOS v2:
+//   - Fix franja diagonal: rango visible usa las 4 esquinas
+//   - Selección por arrastre + shift para acumular
+//   - Herramienta "colorear" (color sólido por hex)
+//   - Formas por tipo: terreno=clip hex, elemento=círculo,
+//     objeto=cuadrado, estructura/entidad=imagen completa
+//   - Posicionamiento dinámico de hasta 7 items por capa
 // ============================================================
 
 import {
     HEX_SIZE, camara, mapaActual, props, npcsMapaLocal,
     editor, ui, STORAGE_URL, CAPAS
 } from './region-state.js';
-import { db } from '../hex-db.js';
 
 let canvas, ctx;
-let imageCache = {};            // url → HTMLImageElement
-let bgImage    = null;          // Imagen de fondo del mapa
+let imageCache = {};
+let bgImage    = null;
 let rafId      = null;
 
 // ── Geometría Hexagonal (flat-top axial) ─────────────────────
-// Flat-top: el hexágono tiene vértices en izquierda y derecha
 const SQRT3 = Math.sqrt(3);
 
 export function hexToPixel(q, r) {
@@ -46,28 +50,32 @@ function hexRound(q, r) {
 export function hexKey(q, r) { return `${q},${r}`; }
 
 export function hexNeighbors(q, r) {
-    const dirs = [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]];
-    return dirs.map(([dq,dr]) => ({ q: q+dq, r: r+dr }));
+    return [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]]
+        .map(([dq,dr]) => ({ q: q+dq, r: r+dr }));
 }
 
 export function hexesEnRadio(q, r, radio) {
     const result = [];
-    for (let dq = -radio; dq <= radio; dq++) {
-        for (let dr = Math.max(-radio,-dq-radio); dr <= Math.min(radio,-dq+radio); dr++) {
+    for (let dq = -radio; dq <= radio; dq++)
+        for (let dr = Math.max(-radio,-dq-radio); dr <= Math.min(radio,-dq+radio); dr++)
             result.push({ q: q+dq, r: r+dr });
-        }
-    }
     return result;
 }
 
 function hexVertices(cx, cy) {
     const size = HEX_SIZE * camara.zoom;
-    const pts = [];
-    for (let i = 0; i < 6; i++) {
+    return Array.from({length: 6}, (_, i) => {
         const angle = (Math.PI / 180) * (60 * i);
-        pts.push({ x: cx + size * Math.cos(angle), y: cy + size * Math.sin(angle) });
-    }
-    return pts;
+        return { x: cx + size * Math.cos(angle), y: cy + size * Math.sin(angle) };
+    });
+}
+
+function trazarHexPath(cx, cy) {
+    const verts = hexVertices(cx, cy);
+    ctx.beginPath();
+    ctx.moveTo(verts[0].x, verts[0].y);
+    verts.forEach(v => ctx.lineTo(v.x, v.y));
+    ctx.closePath();
 }
 
 // ── Inicializar canvas ───────────────────────────────────────
@@ -104,7 +112,7 @@ export function dibujar() {
 
     ctx.clearRect(0, 0, W, H);
 
-    // ── Fondo ─────────────────────────────────────────────────
+    // Fondo
     if (bgImage && bgImage.complete) {
         ctx.globalAlpha = 0.18;
         const escala = Math.max(W / bgImage.naturalWidth, H / bgImage.naturalHeight);
@@ -116,39 +124,50 @@ export function dibujar() {
         ctx.fillRect(0, 0, W, H);
     }
 
-    // ── Calcular rango visible de hexes ───────────────────────
-    const size  = HEX_SIZE * camara.zoom;
-    const margen = size * 2;
-    const topLeft = pixelToHex(-margen, -margen);
-    const botRight= pixelToHex(W + margen, H + margen);
-    const qMin = topLeft.q - 2, qMax = botRight.q + 2;
-    const rMin = topLeft.r - 2, rMax = botRight.r + 2;
+    // ── Rango visible: convertir las 4 esquinas de pantalla ───
+    // BUG FIX: las coords axiales son sesgadas, convertir solo
+    // 2 esquinas diagonales produce una franja en vez del área
+    // completa. Hay que calcular los extremos de las 4 esquinas.
+    const margen = HEX_SIZE * camara.zoom * 2;
+    const corners = [
+        pixelToHex(-margen,    -margen),
+        pixelToHex(W + margen, -margen),
+        pixelToHex(-margen,    H + margen),
+        pixelToHex(W + margen, H + margen)
+    ];
+    const qMin = Math.min(...corners.map(c => c.q)) - 1;
+    const qMax = Math.max(...corners.map(c => c.q)) + 1;
+    const rMin = Math.min(...corners.map(c => c.r)) - 1;
+    const rMax = Math.max(...corners.map(c => c.r)) + 1;
 
-    // ── Paso 1: Fondo de todos los hexes + regiones ───────────
-    for (let q = qMin; q <= qMax; q++) {
+    // Paso 1: base del hex (región + color pintado)
+    for (let q = qMin; q <= qMax; q++)
         for (let r = rMin; r <= rMax; r++) {
-            const key  = hexKey(q, r);
-            const hex  = mapaActual.hexes[key];
+            const key = hexKey(q, r);
             const { x: cx, y: cy } = hexToPixel(q, r);
-
-            dibujarHexBase(q, r, cx, cy, hex, key);
+            dibujarHexBase(cx, cy, mapaActual.hexes[key]);
         }
-    }
 
-    // ── Paso 2: Props por capa (background → mid → over) ─────
-    for (const capa of CAPAS) {
-        for (let q = qMin; q <= qMax; q++) {
+    // Paso 2: props background (terrain, clipped to hex shape)
+    for (let q = qMin; q <= qMax; q++)
+        for (let r = rMin; r <= rMax; r++) {
+            const hex = mapaActual.hexes[hexKey(q, r)];
+            if (!hex?.background?.length) continue;
+            const { x: cx, y: cy } = hexToPixel(q, r);
+            dibujarBackgroundProps(hex.background, cx, cy);
+        }
+
+    // Paso 3: props mid y over (entidades, slots dinámicos)
+    for (const capa of ['mid', 'over'])
+        for (let q = qMin; q <= qMax; q++)
             for (let r = rMin; r <= rMax; r++) {
-                const key = hexKey(q, r);
-                const hex = mapaActual.hexes[key];
-                if (!hex || !hex[capa] || hex[capa].length === 0) continue;
+                const hex = mapaActual.hexes[hexKey(q, r)];
+                if (!hex?.[capa]?.length) continue;
                 const { x: cx, y: cy } = hexToPixel(q, r);
-                dibujarPropsCapa(hex[capa], cx, cy);
+                dibujarEntidadProps(hex[capa], cx, cy);
             }
-        }
-    }
 
-    // ── Paso 3: NPCs ──────────────────────────────────────────
+    // Paso 4: NPCs
     Object.values(npcsMapaLocal).forEach(npc => {
         if (!npc.hex) return;
         const [nq, nr] = npc.hex.split(',').map(Number);
@@ -156,85 +175,183 @@ export function dibujar() {
         dibujarNPC(npc, cx, cy);
     });
 
-    // ── Paso 4: Overlay de selección y región ────────────────
-    for (let q = qMin; q <= qMax; q++) {
+    // Paso 5: overlays (hover, selección)
+    for (let q = qMin; q <= qMax; q++)
         for (let r = rMin; r <= rMax; r++) {
             const key = hexKey(q, r);
             const { x: cx, y: cy } = hexToPixel(q, r);
             dibujarOverlay(q, r, cx, cy, key);
         }
-    }
 
-    // ── Paso 5: Grid ──────────────────────────────────────────
-    for (let q = qMin; q <= qMax; q++) {
+    // Paso 6: grid
+    for (let q = qMin; q <= qMax; q++)
         for (let r = rMin; r <= rMax; r++) {
             const { x: cx, y: cy } = hexToPixel(q, r);
-            dibujarGrid(cx, cy);
+            trazarHexPath(cx, cy);
+            ctx.strokeStyle = 'rgba(100, 70, 160, 0.25)';
+            ctx.lineWidth = 0.8;
+            ctx.stroke();
         }
+
+    // Paso 7: rectángulo de arrastre de selección
+    if (_drag.activo) {
+        const xMin = Math.min(_drag.x1, _drag.x2);
+        const yMin = Math.min(_drag.y1, _drag.y2);
+        const w = Math.abs(_drag.x2 - _drag.x1);
+        const h = Math.abs(_drag.y2 - _drag.y1);
+        ctx.strokeStyle = 'rgba(100,200,255,0.9)';
+        ctx.lineWidth = 1.5;
+        ctx.setLineDash([4, 3]);
+        ctx.strokeRect(xMin, yMin, w, h);
+        ctx.fillStyle = 'rgba(100,200,255,0.07)';
+        ctx.fillRect(xMin, yMin, w, h);
+        ctx.setLineDash([]);
     }
 
-    // ── Paso 6: HUD del editor ────────────────────────────────
+    // Paso 8: HUD
     if (editor.activo) dibujarHUDEditor(W, H);
 }
 
-function dibujarHexBase(q, r, cx, cy, hex, key) {
-    const verts = hexVertices(cx, cy);
-    ctx.beginPath();
-    ctx.moveTo(verts[0].x, verts[0].y);
-    verts.forEach(v => ctx.lineTo(v.x, v.y));
-    ctx.closePath();
-
-    // Color base
-    const tieneRegion = hex && hex.region;
-    if (tieneRegion) {
-        const reg = mapaActual.regiones[hex.region];
-        if (reg) {
-            ctx.fillStyle = reg.color || '#334';
-            ctx.globalAlpha = reg.opacidad || 0.3;
-            ctx.fill();
-            ctx.globalAlpha = 1;
-        } else {
-            ctx.fillStyle = 'rgba(20,10,40,0.5)';
-            ctx.fill();
-        }
+// ── Base del hex ─────────────────────────────────────────────
+function dibujarHexBase(cx, cy, hex) {
+    trazarHexPath(cx, cy);
+    const reg = hex?.region ? mapaActual.regiones[hex.region] : null;
+    if (reg) {
+        ctx.fillStyle = reg.color || '#334';
+        ctx.globalAlpha = reg.opacidad || 0.3;
+        ctx.fill();
+        ctx.globalAlpha = 1;
     } else {
         ctx.fillStyle = hex ? 'rgba(10,5,20,0.6)' : 'rgba(5,0,10,0.85)';
         ctx.fill();
     }
+    // Color pintado con herramienta colorear
+    if (hex?.color) {
+        trazarHexPath(cx, cy);
+        ctx.fillStyle = hex.color;
+        ctx.globalAlpha = editor.opacidadPincel ?? 0.7;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+    }
 }
 
-function dibujarGrid(cx, cy) {
-    const verts = hexVertices(cx, cy);
-    ctx.beginPath();
-    ctx.moveTo(verts[0].x, verts[0].y);
-    verts.forEach(v => ctx.lineTo(v.x, v.y));
-    ctx.closePath();
-    ctx.strokeStyle = 'rgba(100, 70, 160, 0.25)';
-    ctx.lineWidth = 0.8;
-    ctx.stroke();
-}
-
-function dibujarPropsCapa(propIds, cx, cy) {
+// ── Props terreno — imagen clipeada al hex ───────────────────
+function dibujarBackgroundProps(propIds, cx, cy) {
     const size = HEX_SIZE * camara.zoom;
     propIds.forEach(pid => {
         const p = props[pid];
-        if (!p || !p.imagen) return;
+        if (!p) return;
+        // Sin imagen: pintar el color base del prop si lo tiene
+        if (!p.imagen) {
+            if (p.colorBase) {
+                trazarHexPath(cx, cy);
+                ctx.fillStyle = p.colorBase;
+                ctx.globalAlpha = 0.8;
+                ctx.fill();
+                ctx.globalAlpha = 1;
+            }
+            return;
+        }
         const img = getCachedImage(p.imagen);
-        if (!img || !img.complete) return;
-
-        const w = size * 2 * (p.ancho || 1);
-        const h = size * 2 * (p.alto  || 1);
-        ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
+        if (!img?.complete) return;
+        ctx.save();
+        trazarHexPath(cx, cy);
+        ctx.clip();
+        const w = size * 2.15, h = w * 0.9;
+        ctx.drawImage(img, cx - w/2, cy - h/2, w, h);
+        ctx.restore();
     });
 }
 
+// ── Props entidades — posicionamiento con slots ──────────────
+function dibujarEntidadProps(propIds, cx, cy) {
+    const size  = HEX_SIZE * camara.zoom;
+    const limit = Math.min(propIds.length, 7);
+
+    for (let i = 0; i < limit; i++) {
+        const p = props[propIds[i]];
+        if (!p) continue;
+
+        const { sx, sy } = slotPos(i, limit, cx, cy, size);
+        const isize = slotSize(p.tipo, size, limit);
+
+        ctx.save();
+        clipPorTipo(p.tipo, sx, sy, isize);
+
+        if (p.imagen) {
+            const img = getCachedImage(p.imagen);
+            if (img?.complete) ctx.drawImage(img, sx - isize/2, sy - isize/2, isize, isize);
+        }
+
+        bordeDecorativo(p.tipo, sx, sy, isize);
+        ctx.restore();
+    }
+
+    if (propIds.length > 7) {
+        ctx.font = `bold ${Math.max(8, 9 * camara.zoom)}px sans-serif`;
+        ctx.fillStyle = '#ffcc00';
+        ctx.textAlign = 'center';
+        ctx.fillText(`+${propIds.length - 7}`, cx, cy - size * 0.85);
+    }
+}
+
+function slotPos(i, total, cx, cy, size) {
+    if (total === 1) return { sx: cx, sy: cy };
+    if (total === 7 && i === 0) return { sx: cx, sy: cy };
+
+    const ci    = total === 7 ? i - 1 : i;
+    const count = total === 7 ? 6 : total;
+    const radio = size * (total <= 3 ? 0.46 : 0.53);
+    const angle = (2 * Math.PI / count) * ci - Math.PI / 2;
+    return { sx: cx + radio * Math.cos(angle), sy: cy + radio * Math.sin(angle) };
+}
+
+function slotSize(tipo, hexSize, total) {
+    const factor = total === 1 ? 1.4 : total <= 3 ? 1.0 : total <= 6 ? 0.72 : 0.62;
+    return hexSize * factor;
+}
+
+function clipPorTipo(tipo, x, y, size) {
+    const r = size / 2;
+    ctx.beginPath();
+    if (tipo === 'elemento') {
+        ctx.arc(x, y, r, 0, Math.PI * 2);
+    } else if (tipo === 'objeto') {
+        const rd = size * 0.12;
+        if (ctx.roundRect) ctx.roundRect(x - r, y - r, size, size, rd);
+        else ctx.rect(x - r, y - r, size, size);
+    } else {
+        ctx.rect(x - r, y - r, size, size);
+    }
+    ctx.clip();
+}
+
+function bordeDecorativo(tipo, x, y, size) {
+    const r = size / 2;
+    ctx.beginPath();
+    const colores = {
+        elemento:  'rgba(0,200,255,0.75)',
+        objeto:    'rgba(212,175,55,0.75)',
+        estructura:'rgba(255,120,30,0.65)',
+        entidad:   'rgba(180,80,220,0.65)',
+    };
+    const color = colores[tipo];
+    if (!color) return;
+    if (tipo === 'elemento') ctx.arc(x, y, r, 0, Math.PI * 2);
+    else ctx.rect(x - r, y - r, size, size);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = Math.max(1, size * 0.06);
+    ctx.stroke();
+}
+
+// ── NPC ──────────────────────────────────────────────────────
 function dibujarNPC(npc, cx, cy) {
     const size = HEX_SIZE * camara.zoom;
     const r    = size * 0.55;
 
     if (npc.icono) {
         const img = getCachedImage(npc.icono);
-        if (img && img.complete) {
+        if (img?.complete) {
             ctx.save();
             ctx.beginPath();
             ctx.arc(cx, cy - r * 0.2, r * 0.85, 0, Math.PI * 2);
@@ -244,7 +361,6 @@ function dibujarNPC(npc, cx, cy) {
         }
     }
 
-    // Badge nombre
     if (camara.zoom > 0.5) {
         ctx.font = `bold ${Math.max(9, 11 * camara.zoom)}px sans-serif`;
         ctx.textAlign = 'center';
@@ -256,38 +372,27 @@ function dibujarNPC(npc, cx, cy) {
     }
 }
 
+// ── Overlay ──────────────────────────────────────────────────
 function dibujarOverlay(q, r, cx, cy, key) {
-    const verts  = hexVertices(cx, cy);
     const isHov  = ui.hoveredHex  === key;
     const isSel  = editor.seleccion.has(key);
     const isSelH = ui.selectedHex === key;
 
     if (!isHov && !isSel && !isSelH) return;
 
-    ctx.beginPath();
-    ctx.moveTo(verts[0].x, verts[0].y);
-    verts.forEach(v => ctx.lineTo(v.x, v.y));
-    ctx.closePath();
-
+    trazarHexPath(cx, cy);
     if (isSel) {
-        ctx.fillStyle = 'rgba(100,200,255,0.2)';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(100,200,255,0.9)';
-        ctx.lineWidth = 2;
-        ctx.stroke();
+        ctx.fillStyle = 'rgba(100,200,255,0.2)'; ctx.fill();
+        trazarHexPath(cx, cy);
+        ctx.strokeStyle = 'rgba(100,200,255,0.9)'; ctx.lineWidth = 2; ctx.stroke();
     } else if (isSelH) {
-        ctx.strokeStyle = 'rgba(212,175,55,0.95)';
-        ctx.lineWidth = 2.5;
-        ctx.stroke();
+        ctx.strokeStyle = 'rgba(212,175,55,0.95)'; ctx.lineWidth = 2.5; ctx.stroke();
     } else if (isHov) {
-        ctx.fillStyle = 'rgba(255,255,255,0.06)';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-        ctx.lineWidth = 1.2;
-        ctx.stroke();
+        ctx.fillStyle = 'rgba(255,255,255,0.06)'; ctx.fill();
+        trazarHexPath(cx, cy);
+        ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 1.2; ctx.stroke();
     }
 
-    // Coordenadas en debug
     if (editor.activo && camara.zoom > 0.8) {
         ctx.font = `${Math.max(7, 8 * camara.zoom)}px monospace`;
         ctx.fillStyle = 'rgba(150,130,200,0.5)';
@@ -296,15 +401,18 @@ function dibujarOverlay(q, r, cx, cy, key) {
     }
 }
 
+// ── HUD ──────────────────────────────────────────────────────
 function dibujarHUDEditor(W, H) {
-    // Barra inferior: herramienta activa
     ctx.fillStyle = 'rgba(10,0,20,0.7)';
     ctx.fillRect(0, H - 32, W, 32);
     ctx.font = '12px monospace';
     ctx.fillStyle = '#00ffff';
     ctx.textAlign = 'left';
+    const extra = editor.herramienta === 'colorear'
+        ? `  Color: ${editor.colorActual}  Opac: ${Math.round((editor.opacidadPincel ?? 0.7) * 100)}%`
+        : `  Prop: ${editor.propSeleccionado?.nombre || 'ninguno'}`;
     ctx.fillText(
-        `  EDITOR ACTIVO  |  Herramienta: ${editor.herramienta.toUpperCase()}  |  Capa: ${editor.capaActual.toUpperCase()}  |  Prop: ${editor.propSeleccionado?.nombre || 'ninguno'}  |  Brush: ${editor.brushSize}`,
+        `  EDITOR  |  ${editor.herramienta.toUpperCase()}  |  Capa: ${editor.capaActual.toUpperCase()}  |${extra}  |  Brush: ${editor.brushSize}`,
         10, H - 11
     );
 }
@@ -328,41 +436,78 @@ export function setBackground(url) {
 
 export function limpiarImageCache() { imageCache = {}; }
 
+// ── Generador de ruido ────────────────────────────────────────
+export function aplicarRuidoVisible(color, opacidad, densidad = 0.4) {
+    if (!canvas) return;
+    const W = canvas.width  / (window.devicePixelRatio || 1);
+    const H = canvas.height / (window.devicePixelRatio || 1);
+    const margen = HEX_SIZE * camara.zoom * 2;
+    const cs = [
+        pixelToHex(-margen, -margen),     pixelToHex(W+margen, -margen),
+        pixelToHex(-margen, H+margen),    pixelToHex(W+margen, H+margen)
+    ];
+    const qMin = Math.min(...cs.map(c=>c.q))-1, qMax = Math.max(...cs.map(c=>c.q))+1;
+    const rMin = Math.min(...cs.map(c=>c.r))-1, rMax = Math.max(...cs.map(c=>c.r))+1;
+
+    for (let q = qMin; q <= qMax; q++)
+        for (let r = rMin; r <= rMax; r++) {
+            if (Math.random() > densidad) continue;
+            const key = hexKey(q, r);
+            if (!mapaActual.hexes[key]) mapaActual.hexes[key] = {
+                background:[], mid:[], over:[], region:null, misiones:[], npcs:[], color:null
+            };
+            // Variar el color ligeramente por ruido
+            const h = parseInt(color.slice(1,3),16), s = parseInt(color.slice(3,5),16), l = parseInt(color.slice(5,7),16);
+            const v = Math.round((Math.random()-0.5)*40);
+            const clamp = n => Math.max(0,Math.min(255,n));
+            const toHex = n => n.toString(16).padStart(2,'0');
+            mapaActual.hexes[key].color = `#${toHex(clamp(h+v))}${toHex(clamp(s+v))}${toHex(clamp(l+v))}`;
+        }
+
+    window.dispatchEvent(new Event('mapaModificado'));
+}
+
 // ── Eventos de input ──────────────────────────────────────────
 let _mouseDown = false;
 let _pinchStart = 0;
 let _lastX = 0, _lastY = 0;
 
+// Estado de selección por arrastre
+const _drag = { activo: false, x1:0, y1:0, x2:0, y2:0 };
+
 function registrarEventos() {
-    canvas.addEventListener('mousemove',  onMouseMove);
-    canvas.addEventListener('mousedown',  onMouseDown);
-    canvas.addEventListener('mouseup',    onMouseUp);
-    canvas.addEventListener('wheel',      onWheel,     { passive: false });
-    canvas.addEventListener('touchstart', onTouchStart, { passive: false });
-    canvas.addEventListener('touchmove',  onTouchMove,  { passive: false });
-    canvas.addEventListener('touchend',   onTouchEnd);
+    canvas.addEventListener('mousemove',   onMouseMove);
+    canvas.addEventListener('mousedown',   onMouseDown);
+    canvas.addEventListener('mouseup',     onMouseUp);
+    canvas.addEventListener('wheel',       onWheel,      { passive: false });
+    canvas.addEventListener('touchstart',  onTouchStart, { passive: false });
+    canvas.addEventListener('touchmove',   onTouchMove,  { passive: false });
+    canvas.addEventListener('touchend',    onTouchEnd);
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 }
 
-function getHexAtEvent(e) {
+function screenPos(e) {
     const rect = canvas.getBoundingClientRect();
-    const px = (e.clientX - rect.left);
-    const py = (e.clientY - rect.top);
-    return pixelToHex(px, py);
+    return { px: e.clientX - rect.left, py: e.clientY - rect.top };
 }
 
 function onMouseMove(e) {
-    const { q, r } = getHexAtEvent(e);
-    const key = hexKey(q, r);
-    ui.hoveredHex = key;
+    const { px, py } = screenPos(e);
+    const { q, r } = pixelToHex(px, py);
+    ui.hoveredHex = hexKey(q, r);
 
-    if (_mouseDown) {
-        if (e.buttons === 2 || (editor.activo && editor.herramienta === 'mover')) {
-            // Pan con clic derecho
-            camara.x += e.movementX;
-            camara.y += e.movementY;
-        } else if (editor.activo && ui.modoPintar) {
-            aplicarHerramienta(q, r, key);
+    if (!_mouseDown) return;
+
+    if (e.buttons === 2) {
+        camara.x += e.movementX; camara.y += e.movementY;
+        return;
+    }
+
+    if (editor.activo) {
+        if (editor.herramienta === 'seleccionar' && _drag.activo) {
+            _drag.x2 = px; _drag.y2 = py;
+        } else if (ui.modoPintar) {
+            aplicarHerramienta(q, r, hexKey(q, r));
         }
     }
 }
@@ -370,17 +515,22 @@ function onMouseMove(e) {
 function onMouseDown(e) {
     _mouseDown = true;
     _lastX = e.clientX; _lastY = e.clientY;
+    if (e.button === 2) return;
 
-    if (e.button === 2) return; // clic derecho = pan
-
-    const { q, r } = getHexAtEvent(e);
+    const { px, py } = screenPos(e);
+    const { q, r } = pixelToHex(px, py);
     const key = hexKey(q, r);
 
     if (editor.activo) {
-        ui.modoPintar = true;
-        aplicarHerramienta(q, r, key);
+        if (editor.herramienta === 'seleccionar') {
+            _drag.activo = true;
+            _drag.x1 = _drag.x2 = px;
+            _drag.y1 = _drag.y2 = py;
+        } else {
+            ui.modoPintar = true;
+            aplicarHerramienta(q, r, key);
+        }
     } else {
-        // Vista jugador: seleccionar hex para info
         ui.selectedHex = key;
         window.dispatchEvent(new CustomEvent('hexSeleccionado', { detail: { q, r, key } }));
     }
@@ -388,14 +538,56 @@ function onMouseDown(e) {
 
 function onMouseUp(e) {
     _mouseDown = false;
+
+    if (editor.activo && editor.herramienta === 'seleccionar' && _drag.activo) {
+        _confirmarArrastre(e.shiftKey);
+    }
+
+    _drag.activo = false;
     ui.modoPintar = false;
+}
+
+function _confirmarArrastre(mantenerSeleccion) {
+    const { x1, y1, x2, y2 } = _drag;
+    const xMin = Math.min(x1,x2), xMax = Math.max(x1,x2);
+    const yMin = Math.min(y1,y2), yMax = Math.max(y1,y2);
+
+    // Clic simple (sin arrastre)
+    if (xMax - xMin < 5 && yMax - yMin < 5) {
+        const { q, r } = pixelToHex(x1, y1);
+        const key = hexKey(q, r);
+        if (!mantenerSeleccion) editor.seleccion.clear();
+        if (editor.seleccion.has(key)) editor.seleccion.delete(key);
+        else editor.seleccion.add(key);
+        window.dispatchEvent(new CustomEvent('seleccionCambiada', { detail: { key, q, r } }));
+        return;
+    }
+
+    // Con shift: añadir a la selección existente; sin shift: reemplazar
+    if (!mantenerSeleccion) editor.seleccion.clear();
+
+    const margen = HEX_SIZE * camara.zoom;
+    const cs = [
+        pixelToHex(xMin-margen, yMin-margen), pixelToHex(xMax+margen, yMin-margen),
+        pixelToHex(xMin-margen, yMax+margen), pixelToHex(xMax+margen, yMax+margen)
+    ];
+    const qMin = Math.min(...cs.map(c=>c.q))-1, qMax = Math.max(...cs.map(c=>c.q))+1;
+    const rMin = Math.min(...cs.map(c=>c.r))-1, rMax = Math.max(...cs.map(c=>c.r))+1;
+
+    for (let q = qMin; q <= qMax; q++)
+        for (let r = rMin; r <= rMax; r++) {
+            const { x, y } = hexToPixel(q, r);
+            if (x >= xMin && x <= xMax && y >= yMin && y <= yMax)
+                editor.seleccion.add(hexKey(q, r));
+        }
+
+    window.dispatchEvent(new Event('seleccionActualizada'));
 }
 
 function onWheel(e) {
     e.preventDefault();
     const rect = canvas.getBoundingClientRect();
-    const mx = e.clientX - rect.left;
-    const my = e.clientY - rect.top;
+    const mx = e.clientX - rect.left, my = e.clientY - rect.top;
     const delta = e.deltaY > 0 ? 0.88 : 1.12;
     const newZoom = Math.max(0.2, Math.min(camara.maxZoom || 3, camara.zoom * delta));
     camara.x = mx - (mx - camara.x) * (newZoom / camara.zoom);
@@ -406,17 +598,15 @@ function onWheel(e) {
 function onTouchStart(e) {
     e.preventDefault();
     if (e.touches.length === 2) {
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
-        _pinchStart = Math.hypot(dx, dy);
+        _pinchStart = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
     } else if (e.touches.length === 1) {
-        _lastX = e.touches[0].clientX;
-        _lastY = e.touches[0].clientY;
+        _lastX = e.touches[0].clientX; _lastY = e.touches[0].clientY;
         _mouseDown = true;
         const rect = canvas.getBoundingClientRect();
-        const px = e.touches[0].clientX - rect.left;
-        const py = e.touches[0].clientY - rect.top;
-        const { q, r } = pixelToHex(px, py);
+        const { q, r } = pixelToHex(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
         const key = hexKey(q, r);
         if (editor.activo) { ui.modoPintar = true; aplicarHerramienta(q, r, key); }
         else { ui.selectedHex = key; window.dispatchEvent(new CustomEvent('hexSeleccionado', { detail: { q, r, key } })); }
@@ -426,16 +616,16 @@ function onTouchStart(e) {
 function onTouchMove(e) {
     e.preventDefault();
     if (e.touches.length === 2) {
-        const dx = e.touches[0].clientX - e.touches[1].clientX;
-        const dy = e.touches[0].clientY - e.touches[1].clientY;
-        const dist = Math.hypot(dx, dy);
+        const dist = Math.hypot(
+            e.touches[0].clientX - e.touches[1].clientX,
+            e.touches[0].clientY - e.touches[1].clientY
+        );
         if (_pinchStart > 0) {
-            const f = dist / _pinchStart;
             const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
             const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
             const rect = canvas.getBoundingClientRect();
             const px = mx - rect.left, py = my - rect.top;
-            const newZoom = Math.max(0.2, Math.min(3, camara.zoom * f));
+            const newZoom = Math.max(0.2, Math.min(3, camara.zoom * dist / _pinchStart));
             camara.x = px - (px - camara.x) * (newZoom / camara.zoom);
             camara.y = py - (py - camara.y) * (newZoom / camara.zoom);
             camara.zoom = newZoom;
@@ -446,79 +636,65 @@ function onTouchMove(e) {
         const dy = e.touches[0].clientY - _lastY;
         if (!editor.activo || editor.herramienta === 'mover') {
             camara.x += dx; camara.y += dy;
-        } else if (ui.modoPintar) {
+        } else if (ui.modoPintar && editor.herramienta !== 'seleccionar') {
             const rect = canvas.getBoundingClientRect();
-            const px = e.touches[0].clientX - rect.left;
-            const py = e.touches[0].clientY - rect.top;
-            const { q, r } = pixelToHex(px, py);
+            const { q, r } = pixelToHex(e.touches[0].clientX - rect.left, e.touches[0].clientY - rect.top);
             aplicarHerramienta(q, r, hexKey(q, r));
         }
         _lastX = e.touches[0].clientX; _lastY = e.touches[0].clientY;
     }
 }
 
-function onTouchEnd(e) { _mouseDown = false; ui.modoPintar = false; _pinchStart = 0; }
+function onTouchEnd() { _mouseDown = false; ui.modoPintar = false; _pinchStart = 0; }
 
-// ── Aplicar herramienta del editor ───────────────────────────
+// ── Aplicar herramienta ───────────────────────────────────────
 import { crearHexData } from './region-state.js';
 
 export function aplicarHerramienta(q, r, key) {
-    const hexes = editor.brushSize > 1
-        ? hexesEnRadio(q, r, editor.brushSize - 1)
-        : [{ q, r }];
-
-    hexes.forEach(h => {
-        const k = hexKey(h.q, h.r);
-        accionEnHex(h.q, h.r, k);
-    });
-
+    const hexes = editor.brushSize > 1 ? hexesEnRadio(q, r, editor.brushSize - 1) : [{ q, r }];
+    hexes.forEach(h => _accionHex(h.q, h.r, hexKey(h.q, h.r)));
     window.dispatchEvent(new Event('mapaModificado'));
 }
 
-function accionEnHex(q, r, key) {
-    const herr  = editor.herramienta;
-    const capa  = editor.capaActual;
+function _accionHex(q, r, key) {
+    const herr = editor.herramienta;
+    const capa = editor.capaActual;
 
     if (herr === 'pintar') {
         if (!editor.propSeleccionado) return;
         if (!mapaActual.hexes[key]) mapaActual.hexes[key] = crearHexData();
-        const hex = mapaActual.hexes[key];
         const pid = editor.propSeleccionado.id;
-        if (!hex[capa].includes(pid)) hex[capa].push(pid);
+        const arr = mapaActual.hexes[key][capa];
+        if (!arr.includes(pid)) arr.push(pid);
+
+    } else if (herr === 'colorear') {
+        if (!mapaActual.hexes[key]) mapaActual.hexes[key] = crearHexData();
+        mapaActual.hexes[key].color = editor.colorActual;
 
     } else if (herr === 'borrar') {
         if (!mapaActual.hexes[key]) return;
         const hex = mapaActual.hexes[key];
         if (editor.propSeleccionado) {
-            // Borrar solo este prop de la capa
             const pid = editor.propSeleccionado.id;
             hex[capa] = hex[capa].filter(p => p !== pid);
         } else {
-            // Borrar toda la capa
             hex[capa] = [];
+            hex.color = null;
         }
 
-    } else if (herr === 'seleccionar') {
-        if (editor.seleccion.has(key)) editor.seleccion.delete(key);
-        else editor.seleccion.add(key);
-        window.dispatchEvent(new CustomEvent('seleccionCambiada', { detail: { key, q, r } }));
-
     } else if (herr === 'region') {
-        // Toggle hex en región activa
         const rid = ui.selectedRegion;
         if (!rid || !mapaActual.regiones[rid]) return;
         if (!mapaActual.hexes[key]) mapaActual.hexes[key] = crearHexData();
         const hex = mapaActual.hexes[key];
         const reg = mapaActual.regiones[rid];
-
         if (hex.region === rid) {
             hex.region = null;
-            reg.hexes  = reg.hexes.filter(h => h !== key);
+            reg.hexes = reg.hexes.filter(h => h !== key);
         } else {
-            if (hex.region && mapaActual.regiones[hex.region]) {
+            if (hex.region && mapaActual.regiones[hex.region])
                 mapaActual.regiones[hex.region].hexes =
                     mapaActual.regiones[hex.region].hexes.filter(h => h !== key);
-            }
             hex.region = rid;
             if (!reg.hexes.includes(key)) reg.hexes.push(key);
         }
