@@ -86,10 +86,8 @@ function htmlPropsPanel() {
 function htmlRegionesPanel() {
     const regs = Object.values(mapaActual.regiones);
 
-    // 🌟 NUEVO: RASTREADOR AVANZADO DE ENTIDADES PARA LISTA DE REGIONES
     const entidadesPorRegion = {};
     
-    // Rastrea NPCs de Sistema
     Object.values(npcsMapaLocal || {}).forEach(n => {
         const h = mapaActual.hexes[n.hex_pos];
         if (h && h.region) {
@@ -98,7 +96,6 @@ function htmlRegionesPanel() {
         }
     });
 
-    // Rastrea Props de la BD y Props Manuales con tipo 'entidad'
     Object.values(mapaActual.hexes || {}).forEach(hex => {
         if (hex.region && hex.mid) {
             hex.mid.forEach(pid => {
@@ -150,10 +147,12 @@ function htmlDetalleRegion(reg) {
     let misionesList = '<div style="font-size:0.8em; color:#888; font-style:italic;">No hay misiones activas.</div>';
     if (misionesActivas && misionesActivas.length > 0) {
         misionesList = misionesActivas.map(m => {
-            const checked = (reg.misiones || []).includes(m.id) ? 'checked' : '';
+            // SOLUCIÓN MISIONES: Buscar por m.titulo en vez de m.id
+            const tituloEscapado = m.titulo.replace(/'/g, "\\'"); // Escapar comillas para el onclick
+            const checked = (reg.misiones || []).includes(m.titulo) ? 'checked' : '';
             return `
             <label style="display:flex; align-items:center; gap:6px; font-size:0.8em; cursor:pointer; margin-bottom:4px; flex-direction:row; color:var(--text);">
-                <input type="checkbox" ${checked} onchange="window.toggleMisionRegion('${reg.id}', '${m.id}', this.checked)">
+                <input type="checkbox" ${checked} onchange="window.toggleMisionRegion('${reg.id}', '${tituloEscapado}', this.checked)">
                 <span class="mision-estado m-${m.estado}" style="font-size:0.65em; padding:1px 4px; border-radius:3px;">${m.estado===1?'Pendiente':'En curso'}</span>
                 ${m.titulo}
             </label>`;
@@ -288,32 +287,56 @@ export function renderInfoHexPanel(q, r, key) {
     if (!hex) { el.innerHTML = ''; return; }
 
     const reg = hex.region ? mapaActual.regiones[hex.region] : null;
-    
-    // 🌟 RASTREADOR AVANZADO DE ENTIDADES PARA TOOLTIP
-    const entidadesAqui = Object.values(npcsMapaLocal || {}).filter(n => n.hex_pos === key).map(n => ({nombre: n.nombre, img: n.icono_url, desc: n.descripcion}));
-    
-    if (hex.mid) {
-        hex.mid.forEach(pid => {
-            let basePid = typeof pid === 'string' ? pid.split(':')[0] : pid;
-            const p = props[basePid];
-            if (p && (basePid.startsWith('pj_') || basePid.startsWith('npc_') || p.tipo === 'entidad')) {
-                if (!entidadesAqui.some(e => e.nombre === p.nombre)) {
-                    entidadesAqui.push({nombre: p.nombre, img: p.imagen, desc: p.tipo === 'entidad' ? 'Personaje' : 'Jugador DB'});
-                }
+    let entidadesAqui = [];
+
+    // SOLUCIÓN: Escaneo universal si tocamos una región
+    if (reg) {
+        (reg.hexes || []).forEach(hKey => {
+            const h = mapaActual.hexes[hKey];
+            Object.values(npcsMapaLocal).filter(n => n.hex_pos === hKey).forEach(n => {
+                if (!entidadesAqui.some(e => e.nombre === n.nombre)) entidadesAqui.push({nombre: n.nombre, img: n.icono_url, desc: n.descripcion});
+            });
+            if (h && h.mid) {
+                h.mid.forEach(pid => {
+                    let basePid = typeof pid === 'string' ? pid.split(':')[0] : pid;
+                    const p = props[basePid];
+                    if (p && (basePid.startsWith('pj_') || basePid.startsWith('npc_') || p.tipo === 'entidad')) {
+                        if (!entidadesAqui.some(e => e.nombre === p.nombre)) {
+                            entidadesAqui.push({nombre: p.nombre, img: p.imagen, desc: p.tipo === 'entidad' ? 'Personaje Local' : 'Jugador DB'});
+                        }
+                    }
+                });
             }
         });
+    } else {
+        // Escaneo aislado para un hexágono suelto
+        Object.values(npcsMapaLocal).filter(n => n.hex_pos === key).forEach(n => {
+            entidadesAqui.push({nombre: n.nombre, img: n.icono_url, desc: n.descripcion});
+        });
+        if (hex.mid) {
+            hex.mid.forEach(pid => {
+                let basePid = typeof pid === 'string' ? pid.split(':')[0] : pid;
+                const p = props[basePid];
+                if (p && (basePid.startsWith('pj_') || basePid.startsWith('npc_') || p.tipo === 'entidad')) {
+                    if (!entidadesAqui.some(e => e.nombre === p.nombre)) {
+                        entidadesAqui.push({nombre: p.nombre, img: p.imagen, desc: p.tipo === 'entidad' ? 'Personaje Local' : 'Jugador DB'});
+                    }
+                }
+            });
+        }
     }
+    
+    // SOLUCIÓN MISIONES: Relacionar usando .titulo (mid es ahora el título de la misión)
+    const misionesHtml = reg ? (reg.misiones || []).map(mid => {
+        const m = misionesActivas.find(x => x.titulo === mid);
+        return m ? `<div style="font-size:0.82em; color:var(--text); margin-bottom:3px;"><span class="mision-estado m-${m.estado}" style="font-size:0.65em; padding:1px 4px; border-radius:3px;">${m.estado===1?'Pendiente':'En curso'}</span> ${m.titulo}</div>` : '';
+    }).join('') : '';
 
     const npcsHtml = entidadesAqui.map(n => `
         <div style="display:flex; align-items:center; gap:6px; font-size:0.8em; margin-top:4px;">
             <img src="${n.img || NO_IMG}" onerror="this.src='${NO_IMG}'" style="width:28px; height:28px; border-radius:50%; object-fit:cover; border:1px solid #555;">
             <div><div style="font-weight:bold; color:var(--text);">${n.nombre}</div> <div style="color:var(--text-dim); font-size:0.9em;">${n.desc||''}</div></div>
         </div>`).join('');
-
-    const misionesHtml = reg ? (reg.misiones || []).map(mid => {
-        const m = misionesActivas.find(x => x.id === mid);
-        return m ? `<div style="font-size:0.82em; color:var(--text); margin-bottom:3px;"><span class="mision-estado m-${m.estado}" style="font-size:0.65em; padding:1px 4px; border-radius:3px;">${m.estado===1?'Pendiente':'En curso'}</span> ${m.titulo || 'Misión'}</div>` : '';
-    }).join('') : '';
 
     el.innerHTML = `
     <div style="padding:10px;">
