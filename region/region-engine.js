@@ -3,8 +3,7 @@
 // ============================================================
 
 import {
-    camara, editor, ui, mapaActual, crearHexData, HEX_SIZE,
-    OVER_OFFSET_X, OVER_OFFSET_Y
+    camara, editor, ui, mapaActual, crearHexData, HEX_SIZE, OVER_OFFSET_X, OVER_OFFSET_Y
 } from './region-state.js';
 import { inicializarRender, dibujarEscena } from './region-render.js';
 import { pixelToHex3D, hexKey, hexesEnRadio } from './region-utils.js';
@@ -16,11 +15,9 @@ let _lastX = 0, _lastY = 0, _pinchStart = 0;
 export function inicializarEngine(canvasEl) {
     canvas = canvasEl;
     const ctx = canvas.getContext('2d');
-    
     inicializarRender(ctx);
     redimensionar();
     window.addEventListener('resize', redimensionar);
-    
     registrarEventos();
     iniciarLoop();
 }
@@ -51,18 +48,15 @@ function registrarEventos() {
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 }
 
-// NUEVO: Ajusta el clic si estamos en la capa OVER flotante
 function getHexFromScreenPos(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
     let px = clientX - rect.left;
     let py = clientY - rect.top;
 
-    // Compensar la posición visual del ratón si el plano Over está activo
     if (editor.activo && editor.capaActual === 'over') {
         px -= OVER_OFFSET_X * camara.zoom;
         py -= OVER_OFFSET_Y * camara.zoom;
     }
-
     return pixelToHex3D(px, py);
 }
 
@@ -72,7 +66,7 @@ function onMouseMove(e) {
 
     if (!_mouseDown) return;
 
-    if (e.buttons === 2 || !editor.activo || editor.herramienta === 'mover' || editor.herramienta === 'entrar') {
+    if (e.buttons === 2 || !editor.activo || editor.herramienta === 'mover' || editor.herramienta === 'ingresar') {
         camara.x += e.movementX; 
         camara.y += e.movementY;
     } else if (editor.activo && ui.modoPintar) {
@@ -89,14 +83,12 @@ function onMouseDown(e) {
 
     if (e.button === 0) { 
         if (editor.activo) {
-            if (editor.herramienta === 'entrar') {
+            // LÓGICA DE INGRESAR
+            if (editor.herramienta === 'ingresar') {
                 const hex = mapaActual.hexes[key];
-                if (hex && hex.region && mapaActual.regiones[hex.region]?.tieneInterior) {
+                if (hex && hex.region) {
                     window.abrirInterior(hex.region);
-                } else if (mapaActual.esInterior) {
-                    window.volverMapaPadre();
                 } else {
-                    // Si no hay puerta, mostramos info
                     editor.selectedHexKey = key;
                     window.dispatchEvent(new CustomEvent('hexSeleccionado', { detail: { q, r, key } }));
                 }
@@ -142,8 +134,7 @@ function onTouchStart(e) {
         const { q, r } = getHexFromScreenPos(e.touches[0].clientX, e.touches[0].clientY);
         const key = hexKey(q, r);
         if (editor.activo) { 
-            if (editor.herramienta === 'entrar' || editor.herramienta === 'mover') {
-                // Herramientas que no pintan
+            if (editor.herramienta === 'ingresar' || editor.herramienta === 'mover') {
                 editor.selectedHexKey = key; window.dispatchEvent(new CustomEvent('hexSeleccionado', { detail: { q, r, key } }));
             } else {
                 ui.modoPintar = true; aplicarHerramienta(q, r, key); 
@@ -170,7 +161,7 @@ function onTouchMove(e) {
     } else if (e.touches.length === 1 && _mouseDown) {
         const dx = e.touches[0].clientX - _lastX;
         const dy = e.touches[0].clientY - _lastY;
-        if (!editor.activo || editor.herramienta === 'mover' || editor.herramienta === 'entrar') {
+        if (!editor.activo || editor.herramienta === 'mover' || editor.herramienta === 'ingresar') {
             camara.x += dx; camara.y += dy;
         } else if (ui.modoPintar) {
             const { q, r } = getHexFromScreenPos(e.touches[0].clientX, e.touches[0].clientY);
@@ -184,10 +175,7 @@ function onTouchEnd() { _mouseDown = false; ui.modoPintar = false; _pinchStart =
 
 export function aplicarHerramienta(q, r, key) {
     const hexes = editor.brushSize > 1 ? hexesEnRadio(q, r, editor.brushSize - 1) : [{ q, r }];
-    hexes.forEach(h => {
-        const k = hexKey(h.q, h.r);
-        _accionHex(h.q, h.r, k);
-    });
+    hexes.forEach(h => { _accionHex(h.q, h.r, hexKey(h.q, h.r)); });
     window.dispatchEvent(new Event('mapaModificado'));
 }
 
@@ -201,7 +189,6 @@ function _accionHex(q, r, key) {
         const hex = mapaActual.hexes[key];
         const pid = editor.selectedPropId;
 
-        // PINCEL DE REGIÓN
         if (pid === 'prop_region') {
             const rid = ui.selectedRegion;
             if (!rid) return;
@@ -214,11 +201,10 @@ function _accionHex(q, r, key) {
                     mapaActual.regiones[rid].hexes.push(key);
                 }
             }
-            return; // Termina aquí si es pintar región
+            return; 
         }
 
         const opac = (editor.opacidadPincel ?? 1.0).toFixed(2);
-        
         if (pid === 'prop_pintar') {
             const colorEntry = `COLOR:${editor.colorActual}:${opac}`;
             let arr = hex[capa];
@@ -241,7 +227,6 @@ function _accionHex(q, r, key) {
         const hex = mapaActual.hexes[key];
         const pid = editor.selectedPropId;
 
-        // BORRAR CON PINCEL DE REGIÓN
         if (pid === 'prop_region') {
             if (hex.region) {
                 if (mapaActual.regiones[hex.region]) {
@@ -255,13 +240,11 @@ function _accionHex(q, r, key) {
         if (pid === 'prop_pintar') {
             hex[capa] = hex[capa].filter(e => !(typeof e === 'string' && e.startsWith('COLOR:')));
         } else if (pid) {
-            // Borrar SOLO el prop que tengo seleccionado actualmente
             hex[capa] = hex[capa].filter(e => {
                 const eId = typeof e === 'string' ? (e.startsWith('COLOR:') ? e : e.split(':')[0]) : e;
                 return eId !== pid;
             });
         } else {
-            // Si no hay prop activo, borramos toda la capa
             hex[capa] = [];
         }
     }
