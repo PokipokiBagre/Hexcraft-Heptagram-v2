@@ -11,7 +11,7 @@ import { setBackground } from './region-render.js';
 import {
     htmlFormProp, htmlFormNPC, abrirModalUI, cerrarModalUI, mostrarToastUI
 } from './region-ui-elements.js';
-import { hexKey, normKey } from './region-utils.js'; // <-- ¡IMPORTACIÓN CORREGIDA!
+import { hexKey, normKey } from './region-utils.js'; 
 
 const NO_IMG = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 
@@ -45,7 +45,7 @@ function htmlPropsPanel() {
         return `
         <div class="prop-card ${selClase}" onclick="window.seleccionarPropUI('${p.id}')">
             ${icono} <div class="prop-card-nombre">${p.nombre}</div>
-            ${editor.activo && !esPincel && !p.id.startsWith('pj_') ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarPropUI('${p.id}')">✕</button>` : ''}
+            ${editor.activo && !esPincel && !p.id.startsWith('pj_') && !p.id.startsWith('npc_') ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarPropUI('${p.id}')">✕</button>` : ''}
         </div>`;
     }).join('');
 
@@ -102,11 +102,15 @@ function htmlRegionesPanel() {
 }
 
 function htmlNPCsPanel() {
+    // BOTÓN ELIMINAR ARREGLADO CON POSITION ABSOLUTE
     const listNPCsMap = Object.values(npcsMapaLocal).map(n => `
-        <div class="npc-card" onclick="window.seleccionarNPCUI('${n.id}')">
+        <div class="npc-card" style="position:relative; cursor:pointer;" onclick="window.seleccionarNPCUI('${n.id}')">
             <img src="${n.icono_url || NO_IMG}" onerror="this.src='${NO_IMG}'" class="npc-thumb">
-            <div><div class="npc-nombre">${n.nombre}</div> <div class="npc-meta">${n.hex_pos||'No pos'}</div></div>
-            ${editor.activo ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarNPCUI('${n.id}')">✕</button>` : ''}
+            <div>
+                <div class="npc-nombre">${n.nombre}</div>
+                <div class="npc-meta">${n.tipo} · ${n.hex_pos||'No pos'}</div>
+            </div>
+            ${editor.activo ? `<button class="prop-card-del" style="position:absolute; top:4px; right:4px; z-index:10; background:#4a0000; color:#fff;" onclick="event.stopPropagation(); window.eliminarNPCUI('${n.id}')">✕</button>` : ''}
         </div>`).join('') || '<p class="sin-resultado">No hay NPCs de región.</p>';
 
     const listJugadoresDB = personajesDB.map(p => {
@@ -218,14 +222,6 @@ export function renderInfoHexPanel(q, r, key) {
         ${misionesHtml ? `<div class="detalle-fila"><b>Misiones:</b><br>${misionesHtml}</div>` : ''}
         ${npcsHtml ? `<div class="detalle-fila"><b>Presentes:</b>${npcsHtml}</div>` : ''}
 
-        ${editor.activo ? `
-        <div class="divider"></div>
-        <div class="brush-row" style="margin-top:5px;">
-            <span style="color:#aaa; font-size:0.75em;">Elevación (3D):</span>
-            <input type="number" value="${hex.elevation || 0}" style="width:50px; background:#000; border:1px solid #444; color:#fff;"
-                onchange="window.actualizarElevacionUI('${key}', this.value)">
-        </div>
-        ` : ''}
     </div>`;
 }
 
