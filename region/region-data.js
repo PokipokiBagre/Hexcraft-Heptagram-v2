@@ -5,84 +5,55 @@
 import { supabase } from '../hex-auth.js';
 import { db }       from '../hex-db.js';
 import {
-    BUCKET, STORAGE_URL,
-    mapaActual, props, npcsMapaLocal,
-    personajesDB, misionesActivas
+    BUCKET, STORAGE_URL, mapaActual, props, npcsMapaLocal, personajesDB, misionesActivas
 } from './region-state.js';
 import { normKey } from './region-utils.js';
 
 export async function cargarTodo(mapaId = 'mundo') {
     try {
-        const [
-            mapaRes, propsRes, npcsRes,
-            personajesArr, misionesArr
-        ] = await Promise.all([
+        const [ mapaRes, propsRes, npcsRes, personajesArr, misionesArr ] = await Promise.all([
             supabase.from('region_mapas').select('*').eq('id', mapaId).single(),
             supabase.from('region_props').select('*').order('nombre'),
             supabase.from('region_npcs').select('*'),
-            db.personajes.getAll(),
-            db.misiones.getAll()
+            db.personajes.getAll(), db.misiones.getAll()
         ]);
 
-        // 1. Props y Pincel Universal
         for (const k in props) delete props[k];
         
-        props['prop_pintar'] = {
-            id: 'prop_pintar',
-            nombre: '🖌️ PINCEL DE COLOR',
-            tipo: 'terreno', 
-            imagen: null
-        };
+        // Pincel de Color
+        props['prop_pintar'] = { id: 'prop_pintar', nombre: '🖌️ PINCEL DE COLOR', tipo: 'terreno', imagen: null };
+        // Pincel de Región (Nuevo prop inyectado)
+        props['prop_region'] = { id: 'prop_region', nombre: '🗺️ PINCEL DE REGIÓN', tipo: 'terreno', imagen: null };
 
         propsRes.data?.forEach(p => {
             props[p.id] = { id:p.id, nombre:p.nombre, tipo:p.tipo, imagen:p.imagen_url };
         });
 
-        // 2. Personajes DB (Props de entidad)
         personajesDB.length = 0;
         personajesArr.forEach(p => {
             const pid = `pj_${normKey(p.nombre)}`;
-            props[pid] = {
-                id: pid, nombre: p.nombre, tipo: 'entidad',
-                imagen: `${STORAGE_URL}/imgpersonajes/${normKey(p.icono_override || p.nombre)}icon.png`
-            };
+            props[pid] = { id: pid, nombre: p.nombre, tipo: 'entidad', imagen: `${STORAGE_URL}/imgpersonajes/${normKey(p.icono_override || p.nombre)}icon.png` };
             personajesDB.push({ ...p, icon: p.icono_override || p.nombre });
         });
 
-        // 3. Misiones Activas
         misionesActivas.length = 0;
-        misionesArr.forEach(m => {
-            if (m.estado === 1 || m.estado === 2) misionesActivas.push(m);
-        });
+        misionesArr.forEach(m => { if (m.estado === 1 || m.estado === 2) misionesActivas.push(m); });
 
-        // 4. Mapa
         if (mapaRes.data) {
             Object.assign(mapaActual, mapaRes.data);
             mapaActual.hexes = mapaActual.datos_hexes || {};
             mapaActual.regiones = mapaActual.datos_regiones || {};
         }
 
-        // 5. NPCs del Mapa (Locales)
         for (const k in npcsMapaLocal) delete npcsMapaLocal[k];
         npcsRes.data?.forEach(n => {
             if (n.mapa_id === mapaId) {
                 npcsMapaLocal[n.id] = { ...n };
-                
-                // INYECTAR NPC LOCAL COMO PROP PARA PODER PINTARLO
-                props[n.id] = {
-                    id: n.id,
-                    nombre: n.nombre,
-                    tipo: 'entidad',
-                    imagen: n.icono_url || ''
-                };
+                props[n.id] = { id: n.id, nombre: n.nombre, tipo: 'entidad', imagen: n.icono_url || '' };
             }
         });
-
         return true;
-    } catch (e) {
-        console.error("Error cargarTodo:", e);
-        return false;
-    }
+    } catch (e) { return false; }
 }
 
 export async function guardarMapa() {
@@ -94,8 +65,7 @@ export async function guardarMapa() {
             updated_at: new Date().toISOString()
         };
         const { error } = await supabase.from('region_mapas').upsert(payload, { onConflict: 'id' });
-        if (error) throw error;
-        return true;
+        if (error) throw error; return true;
     } catch (e) { return false; }
 }
 
@@ -104,16 +74,14 @@ export async function guardarProp(propData) {
         const { error } = await supabase.from('region_props').upsert({
             id: propData.id, nombre: propData.nombre, tipo: propData.tipo, imagen_url: propData.imagen || ''
         }, { onConflict: 'id' });
-        if (error) throw error;
-        return true;
+        if (error) throw error; return true;
     } catch (e) { return false; }
 }
 
 export async function eliminarProp(propId) {
     try {
         const { error } = await supabase.from('region_props').delete().eq('id', propId);
-        if (error) throw error;
-        return true;
+        if (error) throw error; return true;
     } catch (e) { return false; }
 }
 
@@ -124,23 +92,20 @@ export async function guardarNPC(npcData) {
             hex_pos: npcData.hex_pos, capa: npcData.capa || 'mid', descripcion: npcData.descripcion,
             stats: npcData.stats, mapa_id: mapaActual.id
         }, { onConflict: 'id' });
-        if (error) throw error;
-        return true;
+        if (error) throw error; return true;
     } catch (e) { return false; }
 }
 
 export async function eliminarNPC(npcId) {
     try {
         const { error } = await supabase.from('region_npcs').delete().eq('id', npcId);
-        if (error) throw error;
-        return true;
+        if (error) throw error; return true;
     } catch (e) { return false; }
 }
 
 export async function subirImagenStorage(file, carpeta, keyNorm) {
     const ruta = `${carpeta}/${keyNorm}.png`;
-    const { error } = await supabase.storage.from(BUCKET)
-        .upload(ruta, file, { upsert: true, contentType: 'image/png' });
+    const { error } = await supabase.storage.from(BUCKET).upload(ruta, file, { upsert: true, contentType: 'image/png' });
     if (error) throw new Error(error.message);
     return `${STORAGE_URL}/${ruta}?v=${Date.now()}`;
 }
@@ -148,7 +113,6 @@ export async function subirImagenStorage(file, carpeta, keyNorm) {
 export async function listarImagenesBackground() {
     try {
         const { data } = await supabase.storage.from(BUCKET).list('imginterfaz', { limit: 100 });
-        return (data || []).filter(f => f.name.startsWith('region_bg_'))
-            .map(f => `${STORAGE_URL}/imginterfaz/${f.name}`);
+        return (data || []).filter(f => f.name.startsWith('region_bg_')).map(f => `${STORAGE_URL}/imginterfaz/${f.name}`);
     } catch (e) { return []; }
 }
