@@ -9,13 +9,9 @@ import {
     STORAGE_URL, camara, crearRegion, crearHexData
 } from './region-state.js';
 import { cargarTodo, guardarMapa, guardarProp, eliminarProp, guardarNPC, eliminarNPC, subirImagenProp, normKey } from './region-data.js';
-import { inicializarEngine, centrarCamara, setBackground, hexKey, pixelToHex, aplicarHerramienta } from './region-engine.js';
-import {
-    renderPanel, renderInfoHex, abrirModal, cerrarModal,
-    htmlFormProp, htmlFormNPC, cargarListaBG
-} from './region-ui.js';
+import { inicializarEngine, centrarCamara, setBackground, hexKey, pixelToHex, aplicarHerramienta, aplicarRuidoVisible } from './region-engine.js';
+import { renderPanel, renderInfoHex, abrirModal, cerrarModal, htmlFormProp, htmlFormNPC, cargarListaBG } from './region-ui.js';
 import { supabase } from '../hex-auth.js';
-import { aplicarRuidoVisible } from './region-engine.js';
 
 let cambiosPendientes = false;
 let mapaIdActual = 'mundo';
@@ -72,7 +68,8 @@ window.cambiarPanelUI = (panel) => {
     if (panel === 'imagenes') cargarListaBG();
 };
 
-window.setBusquedaUI = (v) => { ui.busqueda   = v; renderPanel(); };
+window.setBusquedaUI = (v) => { ui.busqueda = v; renderPanel(); };
+window.setFiltroImagenUI = (v) => { ui.filtroImgs = v; renderPanel(); };
 window.setBrushSize  = (n) => { editor.brushSize = n; renderPanel(); };
 window.setCapaActual = (c) => { editor.capaActual = c; renderPanel(); };
 
@@ -92,28 +89,25 @@ window.abrirMenuOP = async () => {
     }
 };
 
-window.setFiltroImagen = (v) => { ui.filtroImagen = v; renderPanel(); };
-
 window.seleccionarProp = (id) => {
     editor.propSeleccionado = props[id] || null;
-    // Solo cambia a 'agregar' si la herramienta actual no tiene sentido mantener (mover, seleccionar)
-    // NUNCA cambia si estás en borrar o region — esas herramientas no dependen del prop activo
-    const herrSinProp = ['borrar', 'region', 'seleccionar', 'mover'];
-    if (!herrSinProp.includes(editor.herramienta)) {
-        editor.herramienta = 'agregar';
-        document.querySelectorAll('.tool-btn').forEach(b => {
-            b.classList.toggle('activo', b.dataset.tool === 'agregar');
-        });
-    }
+    // Siempre fuerza a cambiar a la herramienta de agregar al elegir un prop, esto arregla el problema de "se queda en borrar"
+    editor.herramienta = 'agregar';
+    document.querySelectorAll('.tool-btn').forEach(b => {
+        b.classList.toggle('activo', b.dataset.tool === 'agregar');
+    });
     renderPanel();
 };
 
 window.abrirCrearProp = () => abrirModal(htmlFormProp(), '➕ Nuevo Prop');
 
 window.guardarPropUI = async () => {
+    const idExistente = document.getElementById('fp-id')?.value; // Captura ID si es edit
     const nombre = document.getElementById('fp-nombre')?.value?.trim();
     if (!nombre) return mostrarToast('El nombre es obligatorio', 'error');
-    const id     = `prop_${normKey(nombre)}`;  // ID estable basado en nombre
+    
+    // Si ya existe, se mantiene el ID original para no crear duplicados
+    const id     = idExistente || `prop_${normKey(nombre)}_${Date.now()}`;  
     const tipo   = document.getElementById('fp-tipo').value;
     const imagen = document.getElementById('fp-imagen').value.trim();
 
@@ -126,9 +120,7 @@ window.guardarPropUI = async () => {
 
 window.eliminarPropUI = async (id) => {
     if (!confirm(`¿Eliminar el prop "${props[id]?.nombre}"?`)) return;
-    // Si era el prop activo, deseleccionar
     if (editor.propSeleccionado?.id === id) editor.propSeleccionado = null;
-    // Limpiar referencias en todos los hexes del mapa
     Object.values(mapaActual.hexes).forEach(hex => {
         if (!hex) return;
         ['back','mid','over'].forEach(capa => {
@@ -141,7 +133,7 @@ window.eliminarPropUI = async (id) => {
     renderPanel();
 };
 
-// Subida de imagen para prop desde el panel Imágenes
+// Subida de imagen para prop
 window.dropPropImagen = async (e) => {
     e.preventDefault();
     document.getElementById('drop-prop-zone').classList.remove('drag-sobre');
@@ -155,19 +147,21 @@ window.subirPropImagen = async (e) => {
 };
 
 async function _subirPropFile(file) {
+    const idInput = document.getElementById('up-prop-id')?.value;
     const nombreInput = document.getElementById('up-prop-nombre')?.value?.trim();
     if (!nombreInput) return mostrarToast('Escribe el nombre del prop antes de subir', 'error');
+    
     const tipo = document.getElementById('up-prop-tipo')?.value || 'terreno';
     const key  = normKey(nombreInput);
-    const id   = `prop_${key}`;  // ID estable — no timestamp, para evitar duplicados
+    
+    // Mantiene ID original o genera uno nuevo
+    const id = idInput || `prop_${key}_${Date.now()}`;
 
     setProgresoProp(0, 'Iniciando...', true);
     try {
-        // Carpeta basada en tipo
         const carpeta = `imgregion`;
         const url = await subirImagenProp(file, carpeta, key, (pct, msg) => setProgresoProp(pct, msg, true));
 
-        // Si ya existe un prop con ese ID, actualizar en lugar de crear nuevo
         const existente = props[id];
         const propData = {
             id,
@@ -249,13 +243,6 @@ window.actualizarRegion = (id, campo, valor) => {
     window.dispatchEvent(new Event('mapaModificado'));
 };
 
-window.actualizarRegionMisiones = (id, selectEl) => {
-    const reg = mapaActual.regiones[id];
-    if (!reg) return;
-    reg.misiones = Array.from(selectEl.selectedOptions).map(o => o.value);
-    window.dispatchEvent(new Event('mapaModificado'));
-};
-
 window.toggleMisionRegion = (regionId, misionId, activa) => {
     const reg = mapaActual.regiones[regionId];
     if (!reg) return;
@@ -269,7 +256,7 @@ window.toggleMisionRegion = (regionId, misionId, activa) => {
 };
 
 window.eliminarRegionUI = (id) => {
-    if (!confirm('¿Eliminar esta región?')) return;
+    if (!confirm('¿Eliminar esta región completamente?')) return;
     const reg = mapaActual.regiones[id];
     if (reg) {
         reg.hexes.forEach(key => {
@@ -277,7 +264,7 @@ window.eliminarRegionUI = (id) => {
         });
     }
     delete mapaActual.regiones[id];
-    if (ui.selectedRegion === id) ui.selectedRegion = null;
+    ui.selectedRegion = null;
     window.dispatchEvent(new Event('mapaModificado'));
     renderPanel();
 };
@@ -303,7 +290,6 @@ window.abrirInterior = async (regionId) => {
     mostrarToast('Cargando interior...', 'info');
     const ok = await cargarTodo(interiorId);
     if (!ok) {
-        // Interior nuevo — inicializarlo con tamaño por defecto
         mapaActual.id   = interiorId;
         mapaActual.nombre = `Interior de ${reg.nombre}`;
         mapaActual.ancho = 12;
@@ -330,15 +316,11 @@ window.volverMapaPadre = async () => {
 };
 
 window.entrarInterior = (regionId) => {
-    if (!editor.activo) {
-        window.abrirInterior(regionId);
-    }
+    if (!editor.activo) window.abrirInterior(regionId);
 };
 
 // ── NPCs ──────────────────────────────────────────────────────
-window.abrirCrearNPC = () => {
-    abrirModal(htmlFormNPC(), '➕ Nuevo NPC');
-};
+window.abrirCrearNPC = () => abrirModal(htmlFormNPC(), '➕ Nuevo NPC');
 
 window.seleccionarNPCUI = (id) => {
     if (!editor.activo) return;
@@ -400,7 +382,7 @@ window.deseleccionarRegion = () => {
     renderPanel();
 };
 
-// ── Subida de imagen para NPC desde el panel Imágenes ─────────
+// Subida de imagen para NPC en panel Imágenes
 window.subirNPCImagen = async (e) => {
     const file = e.target.files[0];
     if (file) await _subirNPCFile(file);
@@ -415,7 +397,7 @@ window.dropNPCImagen = async (e) => {
 
 async function _subirNPCFile(file) {
     const npcId = document.getElementById('up-npc-id')?.value?.trim();
-    if (!npcId) return mostrarToast('Selecciona un NPC primero', 'error');
+    if (!npcId) return mostrarToast('Selecciona un NPC primero en la lista desplegable', 'error');
     const npc = npcsMapaLocal[npcId];
     if (!npc) return mostrarToast('NPC no encontrado', 'error');
 
@@ -440,12 +422,6 @@ async function _subirNPCFile(file) {
         mostrarToast('Error: ' + err.message, 'error');
     }
 }
-
-// Pre-rellenar selector de NPC en la pestaña imágenes
-window.setNPCParaSubida = (npcId) => {
-    const sel = document.getElementById('up-npc-id');
-    if (sel) sel.value = npcId;
-};
 
 function actualizarBreadcrumb() {
     const el = document.getElementById('breadcrumb');
@@ -474,7 +450,6 @@ document.addEventListener('keydown', (e) => {
     if (!editor.activo) return;
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
 
-    // ACTUALIZADO: 'a' o 'p' para agregar
     const tools = { 'a': 'agregar', 'p': 'agregar', 'b': 'borrar', 's': 'seleccionar', 'r': 'region', 'm': 'mover' };
     if (tools[e.key.toLowerCase()]) window.setHerramienta(tools[e.key.toLowerCase()]);
 
@@ -497,11 +472,9 @@ window.aplicarRuido = () => {
 window.abrirSubidaProp = (propId) => {
     const p = props[propId];
     if (!p) return;
-    // Cambiar a pestaña imágenes si no estamos en ella
     if (ui.panelActual !== 'imagenes') {
         ui.panelActual = 'imagenes';
         renderPanel();
-        // Esperar a que el DOM se actualice antes de rellenar
         setTimeout(() => _rellenarFormSubida(p), 50);
     } else {
         _rellenarFormSubida(p);
@@ -510,8 +483,10 @@ window.abrirSubidaProp = (propId) => {
 };
 
 function _rellenarFormSubida(p) {
+    const idHidden = document.getElementById('up-prop-id');
     const nombre = document.getElementById('up-prop-nombre');
     const tipo   = document.getElementById('up-prop-tipo');
+    if (idHidden) idHidden.value = p.id;
     if (nombre) nombre.value = p.nombre;
     if (tipo)   tipo.value   = p.tipo;
     document.getElementById('drop-prop-zone')?.scrollIntoView({ behavior: 'smooth' });
