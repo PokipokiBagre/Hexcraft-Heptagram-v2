@@ -11,6 +11,8 @@ import { pixelToHex3D, hexKey, hexesEnRadio } from './region-utils.js';
 let canvas, rafId;
 let _mouseDown = false;
 let _lastX = 0, _lastY = 0, _pinchStart = 0;
+let _lastClickTime = 0;
+let _lastTouchTime = 0;
 
 export function inicializarEngine(canvasEl) {
     canvas = canvasEl;
@@ -82,6 +84,16 @@ function onMouseDown(e) {
     const key = hexKey(q, r);
 
     if (e.button === 0) { 
+        // 🌟 DOBLE CLICK PARA ENTRAR
+        const now = Date.now();
+        const isDblClick = (now - _lastClickTime < 300);
+        _lastClickTime = now;
+
+        if (isDblClick) {
+            const hex = mapaActual.hexes[key];
+            if (hex && hex.region) { window.abrirInterior(hex.region); return; }
+        }
+
         if (editor.activo) {
             if (editor.herramienta === 'ingresar') {
                 const hex = mapaActual.hexes[key];
@@ -130,8 +142,20 @@ function onTouchStart(e) {
     } else if (e.touches.length === 1) {
         _lastX = e.touches[0].clientX; _lastY = e.touches[0].clientY;
         _mouseDown = true;
+        
+        const now = Date.now();
+        const isDblTouch = (now - _lastTouchTime < 300);
+        _lastTouchTime = now;
+
         const { q, r } = getHexFromScreenPos(e.touches[0].clientX, e.touches[0].clientY);
         const key = hexKey(q, r);
+
+        // 🌟 DOBLE TAP PARA ENTRAR
+        if (isDblTouch) {
+            const hex = mapaActual.hexes[key];
+            if (hex && hex.region) { window.abrirInterior(hex.region); return; }
+        }
+
         if (editor.activo) { 
             if (editor.herramienta === 'ingresar' || editor.herramienta === 'mover') {
                 editor.selectedHexKey = key; window.dispatchEvent(new CustomEvent('hexSeleccionado', { detail: { q, r, key } }));
@@ -226,7 +250,6 @@ function _accionHex(q, r, key) {
         const hex = mapaActual.hexes[key];
         const pid = editor.selectedPropId;
 
-        // 🌟 BORRADO DE REGIÓN
         if (pid === 'prop_region') {
             if (hex.region) {
                 if (mapaActual.regiones[hex.region]) {
@@ -237,8 +260,16 @@ function _accionHex(q, r, key) {
             return;
         }
 
-        // 🌟 BORRADO UNIVERSAL DE LA CAPA ACTUAL
-        hex[capa] = [];
+        if (pid === 'prop_pintar') {
+            hex[capa] = hex[capa].filter(e => !(typeof e === 'string' && e.startsWith('COLOR:')));
+        } else if (pid) {
+            hex[capa] = hex[capa].filter(e => {
+                const eId = typeof e === 'string' ? (e.startsWith('COLOR:') ? e : e.split(':')[0]) : e;
+                return eId !== pid;
+            });
+        } else {
+            hex[capa] = [];
+        }
     }
 }
 
