@@ -247,6 +247,7 @@ window.subirPropImagenUI = async (e) => {
     }
 };
 
+// NPCs
 window.abrirCrearNPCUI = () => abrirModalUI(htmlFormNPC(), '➕ Nuevo NPC');
 window.seleccionarNPCUI = (id) => {
     if (!editor.activo) return;
@@ -282,6 +283,7 @@ window.eliminarNPCUI = async (id) => {
     window.dispatchEvent(new Event('mapaModificado'));
 };
 
+// Regiones
 window.crearRegionUI = () => {
     const id = `reg_${Date.now()}`;
     mapaActual.regiones[id] = crearRegion(id);
@@ -306,6 +308,7 @@ window.actualizarRegion = (id, campo, valor) => {
     if (reg) { reg[campo] = valor; window.dispatchEvent(new Event('mapaModificado')); }
 };
 
+// NAVEGACIÓN SUBMUNDOS
 window.abrirInterior = async (regionId) => {
     const reg = mapaActual.regiones[regionId];
     if (!reg) return;
