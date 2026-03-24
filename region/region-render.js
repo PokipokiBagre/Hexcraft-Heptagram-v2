@@ -36,7 +36,7 @@ export function dibujarEscena() {
             case 'hexVolume': dibujarHexVolume3D(item.q, item.r, item.hex, item.projPos); break;
             case 'hexTop':    dibujarHexTop3D(item.q, item.r, item.hex, item.projPos); break;
             case 'itemMid':   dibujarBillboardItem(item.q, item.r, item.propId, item.projPos, 'mid'); break;
-            case 'hexOver':   dibujarHexOver3D(item.q, item.r, item.propId, item.hex, item.projPos); break; // Nuevo Over
+            case 'hexOver':   dibujarHexOver3D(item.q, item.r, item.propId, item.hex, item.projPos); break; // Nuevo OVER
             case 'itemNPC':   dibujarNPC(item.q, item.r, item.npc, item.projPos); break;
             case 'gridOverlay': dibujarGridAndOverlay(item.q, item.r, item.hex, item.projPos); break;
         }
@@ -66,10 +66,10 @@ function getDrawingList(W, H) {
 
         const posTop = hexToPixel3D(q, r, hex.elevation);
 
-        // Mid = Billboard cuadrado centrado
+        // MID se inyecta como 'itemMid'
         hex.mid?.forEach(pid => list.push({ type: 'itemMid', q, r, propId: pid, projPos: posTop, depth: depth + 2 }));
         
-        // Over = Hexágono flotante
+        // OVER se inyecta como 'hexOver' para tratarlo como techo flotante
         hex.over?.forEach(pid => list.push({ type: 'hexOver', q, r, propId: pid, hex, projPos: posTop, depth: depth + 3 }));
         
         Object.values(npcsMapaLocal).forEach(npc => {
@@ -146,7 +146,7 @@ function dibujarHexTop3D(q, r, hex, basePos) {
     });
 }
 
-// Mid: ahora está más centrado hacia abajo (offsetY reducido)
+// ── MID CENTRADO ──
 function dibujarBillboardItem(q, r, propId, projPos, capa) {
     if (typeof propId === 'string' && propId.startsWith('COLOR:')) {
         const parts = propId.split(':');
@@ -167,15 +167,15 @@ function dibujarBillboardItem(q, r, propId, projPos, capa) {
     if (!img?.complete) return;
 
     const size = HEX_SIZE * 1.5 * camara.zoom; 
-    // Ajuste de altura para que el Mid quede centrado en el Hexágono (menos flotante)
-    const verticalOffset = size * 0.2; 
+    const verticalOffset = size * 0.2; // Reducido para que esté más al nivel del suelo
 
+    // Centrado perfecto en su X
     context.drawImage(img, projPos.x - size/2, projPos.y - size * 0.8 - verticalOffset, size, size);
 }
 
-// Over: Nuevo renderizado. Es un hexágono clipeado igual que Back, pero elevado proyectando sombra.
+// ── OVER FLOTANTE ──
 function dibujarHexOver3D(q, r, propId, hex, basePos) {
-    if (typeof propId === 'string' && propId.startsWith('COLOR:')) return; // Simplificación para color en over
+    if (typeof propId === 'string' && propId.startsWith('COLOR:')) return; 
     
     const p = props[propId];
     if (!p || !p.imagen) return;
@@ -185,12 +185,12 @@ function dibujarHexOver3D(q, r, propId, hex, basePos) {
     const size2d = HEX_SIZE * 2.2 * camara.zoom;
     const squash = camara.PITCH_SCALE;
     
-    // Elevación flotante 1 nivel más arriba
+    // Elevación simulada: Se calcula como si el Hex tuviera 1.2 elevación extra
     const floatElevation = (hex.elevation || 0) + 1.2;
     const overPos = hexToPixel3D(q, r, floatElevation);
     const vertsOver = isometricHexVertices(overPos.x, overPos.y, 0);
 
-    // 1. Sombra en la base
+    // 1. Sombra bajo el objeto flotante (en el suelo base)
     const baseVerts = isometricHexVertices(basePos.x, basePos.y, 0);
     context.save();
     context.globalAlpha = 0.3;
@@ -199,14 +199,23 @@ function dibujarHexOver3D(q, r, propId, hex, basePos) {
     context.fill();
     context.restore();
 
-    // 2. Relleno texturizado (clipeado) en la altura Over
+    // 2. Imagen Texturizada Clipeada en la altura overPos
     context.save();
     trazarHexPath(vertsOver);
     context.clip();
     context.drawImage(img, overPos.x - size2d / 2, overPos.y - size2d * squash / 2, size2d, size2d * squash);
     context.restore();
 
-    // 3. Borde 3D flotante (efecto volumen)
+    // 3. Relieve 3D de iluminación sobre la textura
+    trazarHexPath(vertsOver);
+    const grad = context.createLinearGradient(overPos.x, overPos.y - HEX_SIZE*camara.zoom, overPos.x, overPos.y + HEX_SIZE*camara.zoom);
+    grad.addColorStop(0,    'rgba(255,255,255,0.15)');
+    grad.addColorStop(0.45, 'rgba(0,0,0,0)');
+    grad.addColorStop(1,    'rgba(0,0,0,0.5)');
+    context.fillStyle = grad;
+    context.fill();
+
+    // 4. Borde para simular que la capa flotante tiene "grosor" (canto oscuro)
     const size = HEX_SIZE * camara.zoom;
     context.save();
     context.beginPath();
