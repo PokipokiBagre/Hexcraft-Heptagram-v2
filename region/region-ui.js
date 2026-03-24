@@ -116,6 +116,22 @@ function htmlRegionesPanel() {
 function htmlDetalleRegion(reg) {
     if (!editor.activo) return ''; 
 
+    let misionesList = '<div style="font-size:0.8em; color:#888; font-style:italic;">No hay misiones activas.</div>';
+    if (misionesActivas && misionesActivas.length > 0) {
+        misionesList = misionesActivas.map(m => {
+            const checked = (reg.misiones || []).includes(m.id) ? 'checked' : '';
+            return `
+            <label style="display:flex; align-items:center; gap:6px; font-size:0.8em; cursor:pointer; margin-bottom:4px; flex-direction:row; color:var(--text);">
+                <input type="checkbox" ${checked} onchange="window.toggleMisionRegion('${reg.id}', '${m.id}', this.checked)">
+                <span class="mision-estado m-${m.estado}" style="font-size:0.65em; padding:1px 4px; border-radius:3px;">${m.estado===1?'Pendiente':'En curso'}</span>
+                ${m.titulo}
+            </label>`;
+        }).join('');
+    }
+
+    // El botón se iluminará solo si la herramienta actual es 'agregar' y el prop es 'prop_region'
+    const btnActivoClass = editor.selectedPropId === 'prop_region' && editor.herramienta === 'agregar' ? 'activo' : '';
+
     return `
     <div class="region-detalle edit">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
@@ -137,8 +153,15 @@ function htmlDetalleRegion(reg) {
             <label style="font-size:0.78em; color:#aaa; flex:1; min-width:120px; display:flex; align-items:center; gap:6px;">Opacidad <input type="range" min="0.05" max="0.75" step="0.05" value="${reg.opacidad||0.3}" oninput="window.actualizarRegion('${reg.id}','opacidad',parseFloat(this.value))" style="flex:1; accent-color:var(--cyan);"></label>
         </div>
 
+        <div style="margin-top:10px; padding-top:10px; border-top:1px solid #333;">
+            <div class="detalle-titulo" style="color:var(--gold); margin-bottom:5px;">⚔️ Misiones en la Región</div>
+            <div style="max-height:110px; overflow-y:auto; background:#050010; padding:8px 5px; border-radius:4px; border:1px solid #222;">
+                ${misionesList}
+            </div>
+        </div>
+
         <div style="display:flex; gap:6px; margin-top:12px; flex-wrap:wrap;">
-            <button class="btn-accion ${editor.selectedPropId === 'prop_region' ? 'activo' : ''}" style="flex:1; background:#004a00; border-color:#00ff00;" onclick="window.activarPincelRegion('${reg.id}')">
+            <button class="btn-accion ${btnActivoClass}" style="flex:1; background:#004a00; border-color:#00ff00; color:#fff;" onclick="window.activarPincelRegion('${reg.id}')">
                 🖌️ Pincel de Región
             </button>
         </div>
@@ -240,34 +263,47 @@ export function renderInfoHexPanel(q, r, key) {
     const reg = hex.region && mapaActual.regiones ? mapaActual.regiones[hex.region] : null;
     const npcsAqui = Object.values(npcsMapaLocal || {}).filter(n => n.hex_pos === key);
     
+    // Si el Hex está en una región, mostramos sus misiones
     const misionesHtml = reg ? (reg.misiones || []).map(mid => {
         const m = misionesActivas.find(x => x.id === mid);
-        return m ? `<span class="tag-mision">${m.titulo || 'Misión'}</span>` : '';
+        return m ? `<div style="font-size:0.82em; color:var(--text); margin-bottom:3px;"><span class="mision-estado m-${m.estado}" style="font-size:0.65em; padding:1px 4px; border-radius:3px;">${m.estado===1?'Pendiente':'En curso'}</span> ${m.titulo || 'Misión'}</div>` : '';
     }).join('') : '';
 
     const npcsHtml = npcsAqui.map(n => `
         <div style="display:flex; align-items:center; gap:6px; font-size:0.8em; margin-top:4px;">
             <img src="${n.icono_url || NO_IMG}" onerror="this.src='${NO_IMG}'" style="width:28px; height:28px; border-radius:50%; object-fit:cover; border:1px solid #555;">
-            <div><div style="font-weight:bold;">${n.nombre || 'NPC'}</div> ${n.descripcion||''}</div>
+            <div><div style="font-weight:bold; color:var(--text);">${n.nombre || 'NPC'}</div> <div style="color:var(--text-dim); font-size:0.9em;">${n.descripcion||''}</div></div>
         </div>`).join('');
 
     el.innerHTML = `
-    <div style="padding:10px;">
+    <div style="padding:12px;">
         <div style="display:flex; justify-content:space-between; align-items:start; margin-bottom:8px;">
-            <div class="info-hex-titulo">${reg ? (reg.nombre || 'Región') : `Hex (${q},${r})`}</div>
-            <button onclick="document.getElementById('panel-info-hex').innerHTML=''" style="background:none; border:none; color:#666; font-size:1em;">✕</button>
+            <div class="info-hex-titulo" style="font-family:'Cinzel', serif; font-size:1em; font-weight:bold; color:var(--gold);">${reg ? (reg.nombre || 'Región') : `Hex (${q},${r})`}</div>
+            <button onclick="document.getElementById('panel-info-hex').innerHTML=''" style="background:none; border:none; color:#666; font-size:1.1em; cursor:pointer;">✕</button>
         </div>
-        ${reg ? `<div class="detalle-fila">Control: ${reg.controlador || '—'}</div><div class="detalle-fila">Accesible: ${reg.accesible?'Sí':'No'}</div>` : ''}
-        <div class="divider"></div>
-        ${misionesHtml ? `<div class="detalle-fila"><b>Misiones:</b><br>${misionesHtml}</div>` : ''}
-        ${npcsHtml ? `<div class="detalle-fila"><b>Presentes:</b>${npcsHtml}</div>` : ''}
+        ${reg ? `<div class="detalle-fila" style="color:var(--text-dim);">Control: <span style="color:var(--text);">${reg.controlador || '—'}</span></div>` : ''}
+        
+        ${misionesHtml ? `
+            <div style="margin-top:10px; padding-top:10px; border-top:1px solid #333;">
+                <div style="font-size:0.8em; font-weight:bold; color:#88ccdd; margin-bottom:4px; text-transform:uppercase;">⚔️ Misiones de la Región:</div>
+                ${misionesHtml}
+            </div>
+        ` : ''}
+
+        ${npcsHtml ? `
+            <div style="margin-top:10px; padding-top:10px; border-top:1px solid #333;">
+                <div style="font-size:0.8em; font-weight:bold; color:#00ff88; margin-bottom:4px; text-transform:uppercase;">👤 Presentes aquí:</div>
+                ${npcsHtml}
+            </div>
+        ` : ''}
 
         ${editor.activo ? `
-        <div class="divider"></div>
-        <div class="brush-row" style="margin-top:5px;">
-            <span style="color:#aaa; font-size:0.75em;">Elevación (3D):</span>
-            <input type="number" value="${hex.elevation || 0}" style="width:50px; background:#000; border:1px solid #444; color:#fff;"
-                onchange="window.actualizarElevacionUI('${key}', this.value)">
+        <div style="margin-top:10px; padding-top:10px; border-top:1px solid #333;">
+            <div class="brush-row" style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:#aaa; font-size:0.75em;">Elevación (3D):</span>
+                <input type="number" value="${hex.elevation || 0}" style="width:60px; background:#000; border:1px solid #444; color:#fff; padding:3px; border-radius:3px;"
+                    onchange="window.actualizarElevacionUI('${key}', this.value)">
+            </div>
         </div>
         ` : ''}
     </div>`;
