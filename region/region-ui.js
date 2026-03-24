@@ -200,7 +200,7 @@ export function renderInfoHexPanel(q, r, key) {
 
     const npcsHtml = npcsAqui.map(n => `
         <div style="display:flex; align-items:center; gap:6px; font-size:0.8em; margin-top:4px;">
-            <img src="${n.icono_url || NO_IMG}" style="width:28px; height:28px; border-radius:50%; object-fit:cover; border:1px solid #555;">
+            <img src="${n.icono_url || NO_IMG}" onerror="this.src='${NO_IMG}'" style="width:28px; height:28px; border-radius:50%; object-fit:cover; border:1px solid #555;">
             <div><div style="font-weight:bold;">${n.nombre}</div> ${n.descripcion||''}</div>
         </div>`).join('');
 
