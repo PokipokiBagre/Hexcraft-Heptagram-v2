@@ -18,7 +18,14 @@ export async function cargarDatos(barra) {
         if (barra) barra.style.width = '60%';
 
         // ── JUGADORES ──────────────────────────────────────────
-        estadoMapa.jugadores = personajesArr.map(p => p.nombre);
+        estadoMapa.jugadores = personajesArr
+            .filter(p => p.is_player)
+            .map(p => p.nombre);
+
+        // ── NPC TIPO JUGADOR ───────────────────────────────────
+        estadoMapa.npcJugadores = personajesArr
+            .filter(p => !p.is_player && p.npc_tipo === 'jugador')
+            .map(p => p.nombre);
 
         // ── COLORES DE AFINIDAD ────────────────────────────────
         window.mapaColores = {};
@@ -42,6 +49,9 @@ export async function cargarDatos(barra) {
                 estadoMapa.inventario[pj].add(item.Hechizo.trim().toLowerCase());
             });
         }
+
+        // ── TAMBIÉN CARGAR INVENTARIO NPC JUGADORES ────────────
+        // (los NPC tipo jugador usan el mismo inventario, ya está en el mismo dataset)
 
         // ── NODOS ──────────────────────────────────────────────
         estadoMapa.nodos = [];
