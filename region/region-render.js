@@ -36,7 +36,7 @@ export function dibujarEscena() {
             case 'hexVolume': dibujarHexVolume3D(item.q, item.r, item.hex, item.projPos); break;
             case 'hexTop':    dibujarHexTop3D(item.q, item.r, item.hex, item.projPos); break;
             case 'itemMid':   dibujarBillboardItem(item.q, item.r, item.propId, item.projPos, 'mid'); break;
-            case 'hexOver':   dibujarHexOver3D(item.q, item.r, item.propId, item.hex, item.projPos); break; // Nuevo OVER
+            case 'hexOver':   dibujarHexOver3D(item.q, item.r, item.propId, item.hex, item.projPos); break; 
             case 'itemNPC':   dibujarNPC(item.q, item.r, item.npc, item.projPos); break;
             case 'gridOverlay': dibujarGridAndOverlay(item.q, item.r, item.hex, item.projPos); break;
         }
@@ -66,10 +66,7 @@ function getDrawingList(W, H) {
 
         const posTop = hexToPixel3D(q, r, hex.elevation);
 
-        // MID se inyecta como 'itemMid'
         hex.mid?.forEach(pid => list.push({ type: 'itemMid', q, r, propId: pid, projPos: posTop, depth: depth + 2 }));
-        
-        // OVER se inyecta como 'hexOver' para tratarlo como techo flotante
         hex.over?.forEach(pid => list.push({ type: 'hexOver', q, r, propId: pid, hex, projPos: posTop, depth: depth + 3 }));
         
         Object.values(npcsMapaLocal).forEach(npc => {
@@ -114,110 +111,140 @@ function dibujarHexTop3D(q, r, hex, basePos) {
     if (reg) {
         context.fillStyle = reg.color; context.globalAlpha = reg.opacidad; context.fill(); context.globalAlpha = 1;
     } else if (hex.color) {
-        context.fillStyle = hex.color; context.globalAlpha = hex.opacidad ?? 0.7; context.fill(); context.globalAlpha = 1;
+        context.fillStyle = hex.color; context.globalAlpha = hex.opacidad ?? 1.0; context.fill(); context.globalAlpha = 1;
     } else {
         context.fillStyle = '#07000f'; context.fill();
     }
 
     const backItems = hex.back || [];
-    const size2d = HEX_SIZE * 2.2 * camara.zoom;
-    const squash = camara.PITCH_SCALE;
+    
+    // ANCHURA MAXIMA calculada para la proyección isométrica (2.732 base matemática). 
+    // Usamos 2.8 para cubrir perfectamente la forma y evitar huecos en los bordes.
+    const size = HEX_SIZE * camara.zoom;
+    const drawW = size * 2.8; 
+    const drawH = drawW * camara.PITCH_SCALE;
 
     backItems.forEach(pid => {
         if (typeof pid === 'string' && pid.startsWith('COLOR:')) {
             const parts = pid.split(':');
             context.save();
             trazarHexPath(verts);
-            context.fillStyle = parts[parts.length-2]; context.globalAlpha = parseFloat(parts[parts.length-1]); context.fill();
+            context.fillStyle = parts[1]; context.globalAlpha = parseFloat(parts[2]) || 1.0; context.fill();
             context.restore();
             return;
         }
 
-        const p = props[pid];
+        // Extracción de ID base y opacidad
+        let basePid = pid; let opac = 1.0;
+        if (typeof pid === 'string' && pid.includes(':')) {
+            const parts = pid.split(':');
+            basePid = parts[0]; opac = parseFloat(parts[1]) || 1.0;
+        }
+
+        const p = props[basePid];
         if (!p || !p.imagen) return;
         const img = getCachedImage(p.imagen);
         if (!img?.complete) return;
 
         context.save();
+        context.globalAlpha = opac; // Opacidad asignada
         trazarHexPath(verts);
         context.clip();
-        context.drawImage(img, topPos.x - size2d / 2, topPos.y - size2d * squash / 2, size2d, size2d * squash);
+        
+        // Dibujado ampliado para cubrir huecos
+        context.drawImage(img, topPos.x - drawW / 2, topPos.y - drawH / 2, drawW, drawH);
         context.restore();
     });
 }
 
-// ── MID CENTRADO ──
 function dibujarBillboardItem(q, r, propId, projPos, capa) {
     if (typeof propId === 'string' && propId.startsWith('COLOR:')) {
         const parts = propId.split(':');
         const size = HEX_SIZE * 0.8 * camara.zoom;
         context.save();
-        context.globalAlpha = parseFloat(parts[parts.length-1]);
+        context.globalAlpha = parseFloat(parts[2]) || 1.0;
         context.beginPath();
         context.arc(projPos.x, projPos.y - size/2, size/2, 0, Math.PI*2);
-        context.fillStyle = parts[parts.length-2]; context.fill();
+        context.fillStyle = parts[1]; context.fill();
         context.restore();
         return;
     }
     
-    const p = props[propId];
+    let basePid = propId; let opac = 1.0;
+    if (typeof propId === 'string' && propId.includes(':')) {
+        const parts = propId.split(':');
+        basePid = parts[0]; opac = parseFloat(parts[1]) || 1.0;
+    }
+
+    const p = props[basePid];
     if (!p) return;
 
     const img = getCachedImage(p.imagen || NO_IMG);
     if (!img?.complete) return;
 
     const size = HEX_SIZE * 1.5 * camara.zoom; 
-    const verticalOffset = size * 0.2; // Reducido para que esté más al nivel del suelo
+    const verticalOffset = size * 0.2; 
 
-    // Centrado perfecto en su X
+    context.save();
+    context.globalAlpha = opac;
     context.drawImage(img, projPos.x - size/2, projPos.y - size * 0.8 - verticalOffset, size, size);
+    context.restore();
 }
 
-// ── OVER FLOTANTE ──
 function dibujarHexOver3D(q, r, propId, hex, basePos) {
     if (typeof propId === 'string' && propId.startsWith('COLOR:')) return; 
     
-    const p = props[propId];
+    let basePid = propId; let opac = 1.0;
+    if (typeof propId === 'string' && propId.includes(':')) {
+        const parts = propId.split(':');
+        basePid = parts[0]; opac = parseFloat(parts[1]) || 1.0;
+    }
+
+    const p = props[basePid];
     if (!p || !p.imagen) return;
     const img = getCachedImage(p.imagen);
     if (!img?.complete) return;
 
-    const size2d = HEX_SIZE * 2.2 * camara.zoom;
-    const squash = camara.PITCH_SCALE;
+    const size = HEX_SIZE * camara.zoom;
+    const drawW = size * 2.8;
+    const drawH = drawW * camara.PITCH_SCALE;
     
-    // Elevación simulada: Se calcula como si el Hex tuviera 1.2 elevación extra
-    const floatElevation = (hex.elevation || 0) + 1.2;
-    const overPos = hexToPixel3D(q, r, floatElevation);
+    // Elevación visual brutal (2 pisos exactos hacia arriba en Y)
+    const overPos = { x: basePos.x, y: basePos.y - (size * 2.0) };
     const vertsOver = isometricHexVertices(overPos.x, overPos.y, 0);
 
-    // 1. Sombra bajo el objeto flotante (en el suelo base)
+    // 1. Sombra vinculada a la opacidad
     const baseVerts = isometricHexVertices(basePos.x, basePos.y, 0);
     context.save();
-    context.globalAlpha = 0.3;
+    context.globalAlpha = 0.35 * opac; 
     trazarHexPath(baseVerts);
     context.fillStyle = '#000';
     context.fill();
     context.restore();
 
-    // 2. Imagen Texturizada Clipeada en la altura overPos
+    // 2. Relleno texturizado (clipeado) en la altura Over
     context.save();
+    context.globalAlpha = opac;
     trazarHexPath(vertsOver);
     context.clip();
-    context.drawImage(img, overPos.x - size2d / 2, overPos.y - size2d * squash / 2, size2d, size2d * squash);
+    context.drawImage(img, overPos.x - drawW / 2, overPos.y - drawH / 2, drawW, drawH);
     context.restore();
 
-    // 3. Relieve 3D de iluminación sobre la textura
+    // 3. Relieve 3D con opacidad
+    context.save();
+    context.globalAlpha = opac;
     trazarHexPath(vertsOver);
-    const grad = context.createLinearGradient(overPos.x, overPos.y - HEX_SIZE*camara.zoom, overPos.x, overPos.y + HEX_SIZE*camara.zoom);
+    const grad = context.createLinearGradient(overPos.x, overPos.y - size, overPos.x, overPos.y + size);
     grad.addColorStop(0,    'rgba(255,255,255,0.15)');
     grad.addColorStop(0.45, 'rgba(0,0,0,0)');
     grad.addColorStop(1,    'rgba(0,0,0,0.5)');
     context.fillStyle = grad;
     context.fill();
+    context.restore();
 
-    // 4. Borde para simular que la capa flotante tiene "grosor" (canto oscuro)
-    const size = HEX_SIZE * camara.zoom;
+    // 4. Borde del grosor
     context.save();
+    context.globalAlpha = opac;
     context.beginPath();
     context.moveTo(vertsOver[2].x, vertsOver[2].y);
     context.lineTo(vertsOver[3].x, vertsOver[3].y);
