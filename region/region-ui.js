@@ -7,8 +7,11 @@ import {
     personajesDB, misionesActivas, PROP_TIPOS, CAPAS,
     STORAGE_URL
 } from './region-state.js';
-import { abrirModalUI, cerrarModalUI, mostrarToastUI } from './region-ui-elements.js';
-import { normKey } from './region-utils.js'; 
+import { setBackground } from './region-render.js';
+import {
+    htmlFormProp, abrirModalUI, cerrarModalUI, mostrarToastUI
+} from './region-ui-elements.js';
+import { hexKey, normKey } from './region-utils.js'; 
 
 const NO_IMG = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 
@@ -30,7 +33,7 @@ export function renderPanel() {
 function htmlPropsPanel() {
     const busq = (ui.busqueda || '').toLowerCase();
     
-    // Filtramos para que no salga el prop interno de región
+    // Todos los props, incluyendo el de región universal
     const lista = Object.values(props).filter(p => {
         if (p.id === 'prop_region') return false;
         if (busq && !p.nombre.toLowerCase().includes(busq)) return false;
@@ -39,12 +42,15 @@ function htmlPropsPanel() {
 
     const grid = lista.map(p => {
         const selClase = editor.selectedPropId === p.id ? 'prop-card-sel' : '';
-        const esPincel = p.id === 'prop_pintar';
-        const icono = esPincel ? `🖌️` : `<img src="${p.imagen || NO_IMG}" onerror="this.src='${NO_IMG}'">`;
+        let iconoHtml;
+        if (p.id === 'prop_pintar') iconoHtml = `🖌️`;
+        else if (p.id === 'prop_region') iconoHtml = `🗺️`;
+        else iconoHtml = `<img src="${p.imagen || NO_IMG}" onerror="this.src='${NO_IMG}'">`;
+
         return `
         <div class="prop-card ${selClase}" onclick="window.seleccionarPropUI('${p.id}')">
-            ${icono} <div class="prop-card-nombre">${p.nombre}</div>
-            ${editor.activo && !esPincel && !p.id.startsWith('pj_') && !p.id.startsWith('npc_') ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarPropUI('${p.id}')">✕</button>` : ''}
+            ${iconoHtml} <div class="prop-card-nombre">${p.nombre}</div>
+            ${editor.activo && p.id !== 'prop_pintar' && p.id !== 'prop_region' && !p.id.startsWith('pj_') && !p.id.startsWith('npc_') ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarPropUI('${p.id}')">✕</button>` : ''}
         </div>`;
     }).join('');
 
@@ -254,28 +260,9 @@ export function renderInfoHexPanel(q, r, key) {
     </div>`;
 }
 
-// ESTA ES LA FUNCIÓN QUE FALTABA IMPORTAR EN EL MAIN
-export function htmlFormNPC(npcData = null) {
-    const n = npcData || { id: '', nombre: '', tipo: 'sistema', icono_url: '', hex_pos: '', capa: 'mid', descripcion: '' };
-    return `
-    <div style="display:flex; flex-direction:column; gap:10px;">
-        <input type="hidden" id="fn-id" value="${n.id}">
-        <label>Nombre
-            <input type="text" id="fn-nombre" value="${n.nombre}" class="form-input" placeholder="Nombre del NPC">
-        </label>
-        <label>Icono URL
-            <input type="text" id="fn-icono" value="${n.icono_url || ''}" class="form-input" placeholder="https://...">
-        </label>
-        <label>Descripción
-            <textarea id="fn-desc" class="form-input" rows="3">${n.descripcion || ''}</textarea>
-        </label>
-        <button class="btn-accion" style="background:var(--gold); color:#000;" onclick="window.guardarNPCUI()">💾 Guardar NPC</button>
-        ${n.id ? `<button type="button" class="btn-accion" style="background:#4a0000; color:#fff; margin-top:5px;" onclick="window.eliminarNPCUI('${n.id}'); window.cerrarModalRegion();">🗑️ Eliminar NPC Permanentemente</button>` : ''}
-    </div>`;
-}
-
 function actualizarTabsBotones() {
     document.querySelectorAll('.tab-panel-btn').forEach(b => {
         b.classList.toggle('activo', b.dataset.panel === ui.panelActual);
     });
 }
+export async function cargarListaBG_UI(fonds) { /* ... */ }
