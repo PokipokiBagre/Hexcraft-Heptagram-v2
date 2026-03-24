@@ -117,9 +117,6 @@ function dibujarHexTop3D(q, r, hex, basePos) {
     }
 
     const backItems = hex.back || [];
-    
-    // ANCHURA MAXIMA calculada para la proyección isométrica (2.732 base matemática). 
-    // Usamos 2.8 para cubrir perfectamente la forma y evitar huecos en los bordes.
     const size = HEX_SIZE * camara.zoom;
     const drawW = size * 2.8; 
     const drawH = drawW * camara.PITCH_SCALE;
@@ -134,7 +131,6 @@ function dibujarHexTop3D(q, r, hex, basePos) {
             return;
         }
 
-        // Extracción de ID base y opacidad
         let basePid = pid; let opac = 1.0;
         if (typeof pid === 'string' && pid.includes(':')) {
             const parts = pid.split(':');
@@ -147,11 +143,9 @@ function dibujarHexTop3D(q, r, hex, basePos) {
         if (!img?.complete) return;
 
         context.save();
-        context.globalAlpha = opac; // Opacidad asignada
+        context.globalAlpha = opac;
         trazarHexPath(verts);
         context.clip();
-        
-        // Dibujado ampliado para cubrir huecos
         context.drawImage(img, topPos.x - drawW / 2, topPos.y - drawH / 2, drawW, drawH);
         context.restore();
     });
@@ -191,9 +185,58 @@ function dibujarBillboardItem(q, r, propId, projPos, capa) {
     context.restore();
 }
 
+// ── OVER AHORA SOPORTA COLOR DEL PINCEL ──
 function dibujarHexOver3D(q, r, propId, hex, basePos) {
-    if (typeof propId === 'string' && propId.startsWith('COLOR:')) return; 
+    const size = HEX_SIZE * camara.zoom;
+    const floatElevation = (hex.elevation || 0) + 1.2;
+    const overPos = hexToPixel3D(q, r, floatElevation);
+    const vertsOver = isometricHexVertices(overPos.x, overPos.y, 0);
+    const baseVerts = isometricHexVertices(basePos.x, basePos.y, 0);
+
+    // DIBUJAR PINCEL EN CAPA OVER
+    if (typeof propId === 'string' && propId.startsWith('COLOR:')) {
+        const parts = propId.split(':');
+        const color = parts[1];
+        const opac  = parseFloat(parts[2]) || 1.0;
+
+        // 1. Sombra
+        context.save();
+        context.globalAlpha = 0.35 * opac; 
+        trazarHexPath(baseVerts);
+        context.fillStyle = '#000';
+        context.fill();
+        context.restore();
+
+        // 2. Color superior
+        context.save();
+        context.globalAlpha = opac;
+        trazarHexPath(vertsOver);
+        context.fillStyle = color;
+        context.fill();
+        
+        // 3. Relieve 3D
+        const grad = context.createLinearGradient(overPos.x, overPos.y - size, overPos.x, overPos.y + size);
+        grad.addColorStop(0,    'rgba(255,255,255,0.15)');
+        grad.addColorStop(0.45, 'rgba(0,0,0,0)');
+        grad.addColorStop(1,    'rgba(0,0,0,0.5)');
+        context.fillStyle = grad;
+        context.fill();
+
+        // 4. Borde del grosor
+        context.beginPath();
+        context.moveTo(vertsOver[2].x, vertsOver[2].y);
+        context.lineTo(vertsOver[3].x, vertsOver[3].y);
+        context.lineTo(vertsOver[4].x, vertsOver[4].y);
+        context.lineTo(vertsOver[4].x, vertsOver[4].y + size * 0.15);
+        context.lineTo(vertsOver[2].x, vertsOver[2].y + size * 0.15);
+        context.closePath();
+        context.fillStyle = 'rgba(0,0,0,0.4)';
+        context.fill();
+        context.restore();
+        return; 
+    }
     
+    // DIBUJAR PROP CON IMAGEN EN CAPA OVER
     let basePid = propId; let opac = 1.0;
     if (typeof propId === 'string' && propId.includes(':')) {
         const parts = propId.split(':');
@@ -205,16 +248,9 @@ function dibujarHexOver3D(q, r, propId, hex, basePos) {
     const img = getCachedImage(p.imagen);
     if (!img?.complete) return;
 
-    const size = HEX_SIZE * camara.zoom;
     const drawW = size * 2.8;
     const drawH = drawW * camara.PITCH_SCALE;
     
-    // Elevación visual brutal (2 pisos exactos hacia arriba en Y)
-    const overPos = { x: basePos.x, y: basePos.y - (size * 2.0) };
-    const vertsOver = isometricHexVertices(overPos.x, overPos.y, 0);
-
-    // 1. Sombra vinculada a la opacidad
-    const baseVerts = isometricHexVertices(basePos.x, basePos.y, 0);
     context.save();
     context.globalAlpha = 0.35 * opac; 
     trazarHexPath(baseVerts);
@@ -222,7 +258,6 @@ function dibujarHexOver3D(q, r, propId, hex, basePos) {
     context.fill();
     context.restore();
 
-    // 2. Relleno texturizado (clipeado) en la altura Over
     context.save();
     context.globalAlpha = opac;
     trazarHexPath(vertsOver);
@@ -230,7 +265,6 @@ function dibujarHexOver3D(q, r, propId, hex, basePos) {
     context.drawImage(img, overPos.x - drawW / 2, overPos.y - drawH / 2, drawW, drawH);
     context.restore();
 
-    // 3. Relieve 3D con opacidad
     context.save();
     context.globalAlpha = opac;
     trazarHexPath(vertsOver);
@@ -242,7 +276,6 @@ function dibujarHexOver3D(q, r, propId, hex, basePos) {
     context.fill();
     context.restore();
 
-    // 4. Borde del grosor
     context.save();
     context.globalAlpha = opac;
     context.beginPath();
