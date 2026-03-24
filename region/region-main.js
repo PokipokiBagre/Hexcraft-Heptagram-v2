@@ -15,6 +15,7 @@ import {
     htmlFormProp, htmlFormNPC, cargarListaBG
 } from './region-ui.js';
 import { supabase } from '../hex-auth.js';
+import { aplicarRuidoVisible } from './region-engine.js';
 
 // ── Estado de cambios pendientes ─────────────────────────────
 let cambiosPendientes = false;
@@ -423,3 +424,35 @@ document.addEventListener('keydown', (e) => {
     const n = parseInt(e.key);
     if (n >= 1 && n <= 4) { editor.brushSize = n; renderPanel(); }
 });
+
+window.setColorActual = (color) => {
+    editor.colorActual = color;
+    renderPanel();
+};
+
+window.setOpacidadPincel = (val) => {
+    editor.opacidadPincel = val;
+};
+
+window.aplicarRuido = () => {
+    const color = editor.colorActual || '#4488cc';
+    aplicarRuidoVisible(color, editor.opacidadPincel ?? 0.7, 0.35);
+    mostrarToast('≋ Ruido aplicado', 'info');
+};
+
+// Abrir subida de imagen para un prop específico desde la tab Imgs
+window.abrirSubidaProp = (propId) => {
+    const p = props[propId];
+    if (!p) return;
+    // Rellenar el formulario de subida con los datos del prop
+    const nombre = document.getElementById('up-prop-nombre');
+    const tipo   = document.getElementById('up-prop-tipo');
+    const capa   = document.getElementById('up-prop-capa');
+    if (nombre) nombre.value = p.nombre;
+    if (tipo)   tipo.value   = p.tipo;
+    if (capa)   capa.value   = p.capa;
+    // Scroll up al formulario
+    document.getElementById('drop-prop-zone')?.scrollIntoView({ behavior: 'smooth' });
+    mostrarToast(`Sube imagen para: ${p.nombre}`, 'info');
+};
+
