@@ -31,13 +31,12 @@ export const editor = {
     propSeleccionado: null,  // { id, tipo, nombre, imagen }
     seleccion: new Set(),    // Set de "q,r" keys seleccionados
     modoRegion: false,
-    brushSize: 1,            // 1 = un hex, 2 = radio 1 (+6), 3 = radio 2, etc.
-    colorActual: '#4488cc',  // Color para la herramienta colorear (prop falso)
+    brushSize: 1,            // 1 = un hex, 2 = radio 1 (+6), etc.
+    colorActual: '#4488cc',  // Color para la herramienta colorear
     opacidadPincel: 0.7,     // Opacidad al colorear
 };
 
 // ── Mapa principal ───────────────────────────────────────────
-// hexes[q][r] = { back:[...propIds], mid:[...], over:[...], region: regionId|null }
 export let mapaActual = {
     id:     'mundo',
     nombre: 'Mundo',
@@ -45,7 +44,7 @@ export let mapaActual = {
     alto:   30,
     hexes:  {},            // "q,r" → HexData
     regiones: {},          // regionId → RegionData
-    interiors: {},         // regionId → MapaInterior
+    interiors: {},         
     esInterior: false,
     parentId: null,
     parentHex: null
@@ -58,7 +57,7 @@ export let props = {};
 export let npcsMapaLocal = {};
 
 // ── Datos de personajes y misiones (leídos de DB) ────────────
-export let personajesDB   = [];   // todos los jugadores + npcs
+export let personajesDB   = [];   
 export let misionesActivas = [];  
 
 // ── UI state ─────────────────────────────────────────────────
@@ -66,22 +65,23 @@ export const ui = {
     panelActual:  'props',    
     filtroTipo:   'todos',
     busqueda:     '',
+    filtroImgs:   'todos',    // 'todos' | 'con' | 'sin'
     hoveredHex:   null,       
     selectedHex:  null,       
     selectedRegion: null,     
-    modoAgregar:  false,      // Mouse down agregando
+    modoAgregar:  false,      
 };
 
 // ── Estructura de un HexData ─────────────────────────────────
 export function crearHexData() {
     return {
-        back:       [],   // array de propIds o colores "COLOR:#hex:opac"
+        back:       [],   
         mid:        [],
         over:       [],
         region:     null, 
         misiones:   [],   
         npcs:       [],   
-        color:      null  // color base legado
+        color:      null  
     };
 }
 
