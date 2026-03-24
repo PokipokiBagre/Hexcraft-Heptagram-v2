@@ -34,18 +34,18 @@
     </div>
 </nav>
 
-<div class="panel-lateral">
-    <div class="panel-tabs solo-op" style="display:none;">
+<div id="panel-lateral">
+    <div class="tabs-panel solo-op" style="display:none;">
         <button class="tab-panel-btn activo" data-panel="props"    onclick="window.cambiarPanelUI('props')">🧱 Props</button>
         <button class="tab-panel-btn"        data-panel="regiones" onclick="window.cambiarPanelUI('regiones')">🗺️ Regiones</button>
         <button class="tab-panel-btn"        data-panel="npcs"     onclick="window.cambiarPanelUI('npcs')">👤 NPCs</button>
         <button class="tab-panel-btn"        data-panel="misiones" onclick="window.cambiarPanelUI('misiones')">⚔️ Misiones</button>
     </div>
     <div id="panel-info-hex"></div>
-    <div class="panel-scroll" id="panel-contenido"></div>
+    <div id="panel-contenido"></div>
 </div>
 
-<div class="bottom-tools solo-op" style="display:none;">
+<div id="barra-herramientas" class="solo-op" style="display:none;">
     <button class="tool-btn activo" data-tool="agregar" onclick="window.setHerramienta('agregar')" title="Agregar (A)"><span class="icon">➕</span>Agregar</button>
     <button class="tool-btn"        data-tool="borrar"  onclick="window.setHerramienta('borrar')"  title="Borrar (B)"><span class="icon">🧹</span>Borrar</button>
     
@@ -64,7 +64,7 @@
     <div class="modal-box">
         <div class="modal-header-reg">
             <span id="modal-titulo">Modal</span>
-            <button class="btn-cerrar-modal" onclick="window.cerrarModalRegion()">✕</button>
+            <button class="modal-close" onclick="window.cerrarModalRegion()">✕</button>
         </div>
         <div id="modal-cuerpo" style="padding:15px;"></div>
     </div>
