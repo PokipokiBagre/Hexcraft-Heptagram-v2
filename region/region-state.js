@@ -26,12 +26,14 @@ export const camara = {
 // ── Estado del editor ────────────────────────────────────────
 export const editor = {
     activo: false,           // Solo OP
-    herramienta: 'pintar',   // 'pintar'|'borrar'|'seleccionar'|'region'|'interior'
+    herramienta: 'pintar',   // 'pintar'|'borrar'|'seleccionar'|'region'|'colorear'|'interior'
     capaActual: 'background',
     propSeleccionado: null,  // { id, tipo, nombre, imagen, capa }
     seleccion: new Set(),    // Set de "q,r" keys seleccionados
     modoRegion: false,
     brushSize: 1,            // 1 = un hex, 2 = radio 1 (+6), 3 = radio 2, etc.
+    colorActual: '#4488cc',  // Color para la herramienta colorear
+    opacidadPincel: 0.7,     // Opacidad al colorear
 };
 
 // ── Mapa principal ───────────────────────────────────────────
@@ -81,7 +83,8 @@ export function crearHexData() {
         over:       [],
         region:     null, // regionId
         misiones:   [],   // misionIds activas
-        npcs:       []    // npcIds presentes
+        npcs:       [],   // npcIds presentes
+        color:      null  // color pintado con herramienta colorear (css string)
     };
 }
 
