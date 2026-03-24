@@ -127,64 +127,54 @@ export function dibujar() {
     const rMin = Math.min(...corners.map(c => c.r)) - 1;
     const rMax = Math.max(...corners.map(c => c.r)) + 1;
 
-    // ── CAPA 0: Base del hexágono (región + color pincel) ──────
-    // Sin offset — es el "suelo"
-    for (let q = qMin; q <= qMax; q++)
-        for (let r = rMin; r <= rMax; r++) {
+    // ══════════════════════════════════════════════════════════
+    // ALGORITMO DEL PINTOR — renderizar fila por fila (r ascendente)
+    // para que hexes más "al frente" (r alto) pinten sobre los de atrás.
+    // Dentro de cada hex: base → back → mid → over (capas acumuladas).
+    // Esto da la ilusión 3D isométrica correcta.
+    // ══════════════════════════════════════════════════════════
+    for (let r = rMin; r <= rMax; r++) {
+        for (let q = qMin; q <= qMax; q++) {
             const key = hexKey(q, r);
             const { x: cx, y: cy } = hexToPixel(q, r);
-            dibujarHexBase(cx, cy, mapaActual.hexes[key]);
-        }
+            const hex = mapaActual.hexes[key];
 
-    // ── CAPA 1: BACK — textura de terreno, recortada al hex ───
-    // Visualmente es el "suelo" del hex, con ligera profundidad (lado sur visible)
-    for (let q = qMin; q <= qMax; q++)
-        for (let r = rMin; r <= rMax; r++) {
-            const hex = mapaActual.hexes[hexKey(q, r)];
-            if (!hex?.back?.length) continue;
-            const { x: cx, y: cy } = hexToPixel(q, r);
-            dibujarCapaBack(hex.back, cx, cy);
-        }
+            // CAPA BASE: fondo de región / color del suelo
+            dibujarHexBase(cx, cy, hex);
 
-    // ── CAPA 2: MID — objetos/estructuras sobre el suelo ─────
-    // Offset vertical negativo = flotan SOBRE el hex como si estuvieran de pie
-    for (let q = qMin; q <= qMax; q++)
-        for (let r = rMin; r <= rMax; r++) {
-            const hex = mapaActual.hexes[hexKey(q, r)];
-            if (!hex?.mid?.length) continue;
-            const { x: cx, y: cy } = hexToPixel(q, r);
-            dibujarCapaMid(hex.mid, cx, cy);
-        }
+            // CAPA BACK: textura de terreno pegada al suelo (clipeada al hex)
+            if (hex?.back?.length) dibujarCapaBack(hex.back, cx, cy);
 
-    // ── CAPA 3: OVER — criaturas gigantes / nubes ─────────────
-    // Mayor offset vertical + sombra proyectada debajo
-    for (let q = qMin; q <= qMax; q++)
-        for (let r = rMin; r <= rMax; r++) {
-            const hex = mapaActual.hexes[hexKey(q, r)];
-            if (!hex?.over?.length) continue;
-            const { x: cx, y: cy } = hexToPixel(q, r);
-            dibujarCapaOver(hex.over, cx, cy);
-        }
+            // CAPA MID: objetos/estructuras de pie (offset vertical moderado)
+            if (hex?.mid?.length) dibujarCapaMid(hex.mid, cx, cy);
 
-    // ── NPCs locales ──────────────────────────────────────────
-    Object.values(npcsMapaLocal).forEach(npc => {
-        if (!npc.hex) return;
-        const [nq, nr] = npc.hex.split(',').map(Number);
+            // CAPA OVER: criaturas gigantes / elementos aéreos (gran offset)
+            if (hex?.over?.length) dibujarCapaOver(hex.over, cx, cy);
+        }
+    }
+
+    // ── NPCs locales (encima de todas las capas de su hex) ────
+    // Ordenar por r para que los NPCs de fila mayor pinten encima
+    const npcsSorted = Object.values(npcsMapaLocal)
+        .filter(n => n.hex)
+        .map(n => { const [nq, nr] = n.hex.split(',').map(Number); return { n, nq, nr }; })
+        .sort((a, b) => a.nr - b.nr || a.nq - b.nq);
+    npcsSorted.forEach(({ n, nq, nr }) => {
         const { x: cx, y: cy } = hexToPixel(nq, nr);
-        dibujarNPC(npc, cx, cy);
+        dibujarNPC(n, cx, cy);
     });
 
-    // ── Overlays (hover, selección, region) ───────────────────
-    for (let q = qMin; q <= qMax; q++)
-        for (let r = rMin; r <= rMax; r++) {
+    // ── Overlays (hover, selección, region) — pasan encima ───
+    for (let r = rMin; r <= rMax; r++)
+        for (let q = qMin; q <= qMax; q++) {
             const key = hexKey(q, r);
             const { x: cx, y: cy } = hexToPixel(q, r);
             dibujarOverlay(q, r, cx, cy, key);
         }
 
     // ── Grid ──────────────────────────────────────────────────
-    for (let q = qMin; q <= qMax; q++)
-        for (let r = rMin; r <= rMax; r++) {
+    for (let r = rMin; r <= rMax; r++)
+        for (let q = qMin; q <= qMax; q++) {
             const { x: cx, y: cy } = hexToPixel(q, r);
             trazarHexPath(cx, cy);
             ctx.strokeStyle = 'rgba(100, 70, 160, 0.22)';
@@ -225,39 +215,95 @@ function dibujarHexBase(cx, cy, hex) {
 }
 
 // ── CAPA BACK: textura de terreno clipeada al hex ─────────────
-// "El suelo" — ocupa toda la superficie del hexágono
+// "El suelo" — ocupa toda la superficie del hexágono.
+// También maneja entradas "COLOR:#hex:opac" del pincel de color.
 function dibujarCapaBack(propIds, cx, cy) {
     const size = HEX_SIZE * camara.zoom;
     propIds.forEach(pid => {
+        // ── Entrada de color del pincel ───────────────────────
+        if (typeof pid === 'string' && pid.startsWith('COLOR:')) {
+            const parts = pid.split(':');
+            const color = parts[1];
+            const opac  = parseFloat(parts[2]) || 0.7;
+            ctx.save();
+            trazarHexPath(cx, cy);
+            ctx.fillStyle = color;
+            ctx.globalAlpha = opac;
+            ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.restore();
+            return;
+        }
+
         const p = props[pid];
         if (!p || !p.imagen) return;
         const img = getCachedImage(p.imagen);
         if (!img?.complete) return;
 
         ctx.save();
-        trazarHexPath(cx, cy);     // Recortar al hex para que el terreno no se salga
+        trazarHexPath(cx, cy);
         ctx.clip();
         const w = size * 2.2, h = w * 0.92;
         ctx.drawImage(img, cx - w / 2, cy - h / 2, w, h);
         ctx.restore();
 
-        // Borde lateral "3D": sombra en la parte sur del hex para dar profundidad
+        // Gradiente de profundidad: iluminación arriba, sombra abajo (efecto suelo 3D)
         trazarHexPath(cx, cy);
         const grad = ctx.createLinearGradient(cx, cy - size, cx, cy + size);
-        grad.addColorStop(0,   'rgba(255,255,255,0.04)');
-        grad.addColorStop(0.5, 'rgba(0,0,0,0)');
-        grad.addColorStop(1,   'rgba(0,0,0,0.35)');
+        grad.addColorStop(0,    'rgba(255,255,255,0.06)');
+        grad.addColorStop(0.45, 'rgba(0,0,0,0)');
+        grad.addColorStop(1,    'rgba(0,0,0,0.45)');
         ctx.fillStyle = grad;
         ctx.fill();
+
+        // Lado sur visible: borde inferior 3D que simula el "canto" del hex
+        ctx.save();
+        const verts = hexVertices(cx, cy);
+        // En un flat-top hex, los vértices inferiores son índices 2, 3, 4
+        ctx.beginPath();
+        ctx.moveTo(verts[2].x, verts[2].y);
+        ctx.lineTo(verts[3].x, verts[3].y);
+        ctx.lineTo(verts[4].x, verts[4].y);
+        ctx.lineTo(verts[4].x, verts[4].y + size * 0.13);
+        ctx.lineTo(verts[2].x, verts[2].y + size * 0.13);
+        ctx.closePath();
+        ctx.fillStyle = 'rgba(0,0,0,0.28)';
+        ctx.fill();
+        ctx.restore();
     });
 }
 
 // ── CAPA MID: entidades/estructuras que "están de pie" ────────
-// Offset negativo en Y = flotan sobre el suelo (ilusión de altura)
+// Offset negativo en Y = flotan sobre el suelo (ilusión de altura).
+// También maneja entradas "COLOR:#hex:opac" del pincel.
 function dibujarCapaMid(propIds, cx, cy) {
     const size    = HEX_SIZE * camara.zoom;
-    const offsetY = size * 0.22;   // Cuánto "flota" sobre el suelo
-    const limit   = propIds.length;
+    const offsetY = size * 0.30;   // Flota claramente sobre el suelo
+
+    // Separar entradas de color de las de prop
+    const colorEntries = propIds.filter(pid => typeof pid === 'string' && pid.startsWith('COLOR:'));
+    const propEntries  = propIds.filter(pid => !(typeof pid === 'string' && pid.startsWith('COLOR:')));
+
+    // Dibujar colores primero (antes de los props)
+    colorEntries.forEach(pid => {
+        const parts = pid.split(':');
+        const color = parts[1];
+        const opac  = parseFloat(parts[2]) || 0.7;
+        // El color mid se dibuja como un elipse / anillo centrado y elevado
+        ctx.save();
+        ctx.globalAlpha = opac;
+        const midGrad = ctx.createRadialGradient(cx, cy - offsetY, 0, cx, cy - offsetY * 0.5, size);
+        midGrad.addColorStop(0,   color);
+        midGrad.addColorStop(0.7, color + 'aa');
+        midGrad.addColorStop(1,   color + '00');
+        trazarHexPath(cx, cy - offsetY * 0.3);
+        ctx.fillStyle = midGrad;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+    });
+
+    const limit = propEntries.length;
     if (limit === 0) return;
 
     let itemSize, radioCirculo;
@@ -269,21 +315,21 @@ function dibujarCapaMid(propIds, cx, cy) {
     }
 
     for (let i = 0; i < limit; i++) {
-        const p = props[propIds[i]];
+        const p = props[propEntries[i]];
         if (!p) continue;
 
         let sx = cx, sy = cy - offsetY;
         if (limit > 1) {
             const ang = (2 * Math.PI / limit) * i - Math.PI / 2;
             sx = cx + radioCirculo * Math.cos(ang);
-            sy = (cy - offsetY) + radioCirculo * Math.sin(ang) * 0.7; // Perspectiva leve
+            sy = (cy - offsetY) + radioCirculo * Math.sin(ang) * 0.7;
         }
 
-        // Sombra proyectada en el suelo
+        // Sombra proyectada en el suelo (bajo el objeto)
         ctx.save();
-        ctx.globalAlpha = 0.28;
+        ctx.globalAlpha = 0.3;
         ctx.beginPath();
-        ctx.ellipse(sx, sy + itemSize * 0.48 + offsetY * 0.6, itemSize * 0.38, itemSize * 0.12, 0, 0, Math.PI * 2);
+        ctx.ellipse(sx, sy + itemSize * 0.5 + offsetY * 0.7, itemSize * 0.4, itemSize * 0.13, 0, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(0,0,0,1)';
         ctx.fill();
         ctx.restore();
@@ -294,6 +340,10 @@ function dibujarCapaMid(propIds, cx, cy) {
         if (p.imagen) {
             const img = getCachedImage(p.imagen);
             if (img?.complete) ctx.drawImage(img, sx - itemSize / 2, sy - itemSize / 2, itemSize, itemSize);
+        } else {
+            // Sin imagen: cuadrado de color con inicial
+            ctx.fillStyle = '#334';
+            ctx.fillRect(sx - itemSize / 2, sy - itemSize / 2, itemSize, itemSize);
         }
         bordeDecorativo(p.tipo, sx, sy, itemSize);
         ctx.restore();
@@ -301,17 +351,38 @@ function dibujarCapaMid(propIds, cx, cy) {
 }
 
 // ── CAPA OVER: criaturas gigantes / elementos en altura ───────
-// Mayor offset + escala aumentada + sombra difusa grande
+// Mayor offset + escala aumentada + sombra difusa grande.
+// También maneja entradas "COLOR:#hex:opac" del pincel.
 function dibujarCapaOver(propIds, cx, cy) {
     const size    = HEX_SIZE * camara.zoom;
-    const offsetY = size * 0.55;   // Flotan bastante más alto
-    const limit   = propIds.length;
+    const offsetY = size * 0.70;
+
+    propIds.filter(pid => typeof pid === 'string' && pid.startsWith('COLOR:')).forEach(pid => {
+        const parts = pid.split(':');
+        const color = parts[1];
+        const opac  = parseFloat(parts[2]) || 0.7;
+        ctx.save();
+        ctx.globalAlpha = opac;
+        const grad = ctx.createRadialGradient(cx, cy - offsetY, 0, cx, cy - offsetY * 0.5, size * 1.2);
+        grad.addColorStop(0,   color);
+        grad.addColorStop(0.5, color + '88');
+        grad.addColorStop(1,   color + '00');
+        ctx.beginPath();
+        ctx.ellipse(cx, cy - offsetY * 0.4, size * 1.2, size * 0.8, 0, 0, Math.PI * 2);
+        ctx.fillStyle = grad;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.restore();
+    });
+
+    const propEntries = propIds.filter(pid => !(typeof pid === 'string' && pid.startsWith('COLOR:')));
+    const limit = propEntries.length;
     if (limit === 0) return;
 
-    const itemSize = limit === 1 ? size * 1.7 : size * 0.9;
+    const itemSize = limit === 1 ? size * 1.85 : size * 0.95;
 
     for (let i = 0; i < limit; i++) {
-        const p = props[propIds[i]];
+        const p = props[propEntries[i]];
         if (!p) continue;
 
         let sx = cx, sy = cy - offsetY;
@@ -321,26 +392,27 @@ function dibujarCapaOver(propIds, cx, cy) {
             sy = (cy - offsetY) + size * 0.25 * Math.sin(ang);
         }
 
-        // Sombra difusa grande en el suelo (ilusión de vuelo)
         ctx.save();
-        ctx.globalAlpha = 0.22;
+        ctx.globalAlpha = 0.25;
         const sgRad = itemSize * 0.55;
-        const sgX = sx, sgY = sy + itemSize * 0.52 + offsetY * 0.85;
+        const sgX = sx, sgY = sy + itemSize * 0.52 + offsetY * 0.9;
         const shadowGrad = ctx.createRadialGradient(sgX, sgY, 0, sgX, sgY, sgRad);
-        shadowGrad.addColorStop(0, 'rgba(0,0,0,0.7)');
+        shadowGrad.addColorStop(0, 'rgba(0,0,0,0.8)');
         shadowGrad.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.beginPath();
-        ctx.ellipse(sgX, sgY, sgRad, sgRad * 0.3, 0, 0, Math.PI * 2);
+        ctx.ellipse(sgX, sgY, sgRad, sgRad * 0.28, 0, 0, Math.PI * 2);
         ctx.fillStyle = shadowGrad;
         ctx.fill();
         ctx.restore();
 
-        // Prop
         ctx.save();
         clipPorTipo(p.tipo, sx, sy, itemSize);
         if (p.imagen) {
             const img = getCachedImage(p.imagen);
             if (img?.complete) ctx.drawImage(img, sx - itemSize / 2, sy - itemSize / 2, itemSize, itemSize);
+        } else {
+            ctx.fillStyle = '#223';
+            ctx.fillRect(sx - itemSize / 2, sy - itemSize / 2, itemSize, itemSize);
         }
         bordeDecorativo(p.tipo, sx, sy, itemSize);
         ctx.restore();
@@ -691,7 +763,7 @@ export function aplicarHerramienta(q, r, key) {
 }
 
 function _accionHex(q, r, key) {
-    const herr = editor.herramienta; // Ahora es 'agregar' en vez de pintar
+    const herr = editor.herramienta;
     const capa = editor.capaActual;
 
     if (herr === 'agregar') {
@@ -700,12 +772,21 @@ function _accionHex(q, r, key) {
         
         const pid = editor.propSeleccionado.id;
         
-        // Si es el pincel falso, aplicamos color de fondo, no agregamos un prop físico
         if (pid === 'prop_pintar') {
-            mapaActual.hexes[key].color = editor.colorActual;
-            mapaActual.hexes[key].opacidad = editor.opacidadPincel ?? 0.7;
+            // El pincel de color guarda una entrada especial "COLOR:#hex:opac" en la capa activa
+            // (en vez de en hex.color que siempre queda debajo del terreno back)
+            const colorEntry = `COLOR:${editor.colorActual}:${(editor.opacidadPincel ?? 0.7).toFixed(2)}`;
+            const arr = mapaActual.hexes[key][capa];
+            // Reemplazar cualquier entrada COLOR existente en esta capa
+            const idx = arr.findIndex(e => typeof e === 'string' && e.startsWith('COLOR:'));
+            if (idx >= 0) arr[idx] = colorEntry;
+            else arr.push(colorEntry);
+            // Mantener retrocompatibilidad: back también setea hex.color para los hex viejos
+            if (capa === 'back') {
+                mapaActual.hexes[key].color = editor.colorActual;
+                mapaActual.hexes[key].opacidad = editor.opacidadPincel ?? 0.7;
+            }
         } else {
-            // Agregamos el prop real a la capa seleccionada
             const arr = mapaActual.hexes[key][capa];
             if (!arr.includes(pid)) arr.push(pid);
         }
@@ -716,11 +797,13 @@ function _accionHex(q, r, key) {
         const pid = editor.propSeleccionado?.id;
 
         if (pid === 'prop_pintar') {
-            // Borrar solo el color pintado
-            hex.color = null;
+            // Borrar colores pintados: limpia entradas COLOR de la capa actual
+            hex[capa] = hex[capa].filter(e => !(typeof e === 'string' && e.startsWith('COLOR:')));
+            if (capa === 'back') { hex.color = null; hex.opacidad = null; }
         } else {
-            // Borrar TODA la capa actual — no filtrar por prop específico
+            // Borrar TODA la capa actual (incluye colores y props)
             hex[capa] = [];
+            if (capa === 'back') { hex.color = null; hex.opacidad = null; }
         }
 
     } else if (herr === 'region') {
