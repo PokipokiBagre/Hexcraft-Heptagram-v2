@@ -1,5 +1,5 @@
 // ============================================================
-// region-main.js — Orquestador principal del mapa regional (Isométrico 3D)
+// region-main.js — Orquestador principal del mapa regional
 // ============================================================
 
 import { hexAuth, supabase } from '../hex-auth.js';
@@ -124,8 +124,7 @@ window.guardarMapaUI = async () => {
 // ── Props ───────────────────────────────────────────────────
 window.seleccionarPropUI = (id) => {
     editor.selectedPropId = id;
-    editor.herramienta = 'agregar';
-    document.querySelectorAll('.tool-btn').forEach(b => b.classList.toggle('activo', b.dataset.tool === 'agregar'));
+    // Ya NO forzamos cambiar a 'agregar'. La herramienta se mantiene.
     renderPanel();
 };
 
@@ -239,8 +238,9 @@ window.guardarNPCUI = async () => {
     else mostrarToastUI('Error guardando NPC', 'error');
 };
 
+// Se llama también desde el nuevo botón rojo de eliminar dentro del modal
 window.eliminarNPCUI = async (id) => {
-    if (!confirm(`¿Eliminar ${npcsMapaLocal[id]?.nombre}?`)) return;
+    if (!confirm(`¿Eliminar al NPC "${npcsMapaLocal[id]?.nombre}"?`)) return;
     delete npcsMapaLocal[id];
     await eliminarNPC(id);
     renderPanel();
@@ -289,17 +289,57 @@ window.toggleMisionRegion = (regionId, misionId, activa) => {
     window.dispatchEvent(new Event('mapaModificado'));
 };
 
-window.activarHerramientaRegion = (id) => {
+// PINCEL DE REGIÓN (Nuevo Comportamiento)
+window.activarPincelRegion = (id) => {
     ui.selectedRegion = id;
-    window.setHerramienta('region');
-    mostrarToastUI('🖊️ Haz clic/arrastra en hexes para añadir a la región', 'info');
+    editor.selectedPropId = 'prop_region';
+    window.setHerramienta('agregar'); // Activamos Agregar automáticamente por comodidad
+    renderPanel();
+    mostrarToastUI('🖌️ Pincel de región activado. Pinta en el mapa.', 'info');
 };
 
-window.abrirInterior = async (regionId) => { /* Lógica de interior igual */ };
-window.entrarInterior = (regionId) => { if (!editor.activo) window.abrirInterior(regionId); };
-window.volverMapaPadre = async () => { /* Lógica de padre igual */ };
+window.abrirInterior = async (regionId) => {
+    const reg = mapaActual.regiones[regionId];
+    if (!reg) return;
 
-// ── Elevación 3D (Exclusivo del nuevo motor) ────────────────
+    const interiorId = reg.interiorId || `interior_${regionId}`;
+    reg.tieneInterior = true;
+    reg.interiorId    = interiorId;
+
+    historialMapas.push({ id: mapaIdActual, nombre: mapaActual.nombre });
+    mapaIdActual = interiorId;
+
+    mostrarToastUI('Cargando interior...', 'info');
+    const ok = await cargarTodo(interiorId);
+    if (!ok) {
+        mapaActual.id   = interiorId;
+        mapaActual.nombre = `Interior de ${reg.nombre}`;
+        mapaActual.ancho = 12;
+        mapaActual.alto  = 10;
+        mapaActual.esInterior = true;
+        mapaActual.parentId   = historialMapas[historialMapas.length-1].id;
+        for (const k in mapaActual.hexes) delete mapaActual.hexes[k];
+        for (const k in mapaActual.regiones) delete mapaActual.regiones[k];
+    }
+
+    centrarCamara();
+    actualizarBreadcrumb();
+    renderPanel();
+};
+
+window.volverMapaPadre = async () => {
+    if (historialMapas.length === 0) return;
+    const prev = historialMapas.pop();
+    mapaIdActual = prev.id;
+    await cargarTodo(mapaIdActual);
+    centrarCamara();
+    actualizarBreadcrumb();
+    renderPanel();
+};
+
+window.entrarInterior = (regionId) => { window.abrirInterior(regionId); };
+
+// ── Elevación 3D ────────────────────────────────────────────
 window.actualizarElevacionUI = (key, val) => {
     if (mapaActual.hexes[key]) {
         mapaActual.hexes[key].elevation = parseInt(val) || 0;
@@ -349,12 +389,12 @@ function actualizarBreadcrumb() {
     if (btnVolver) btnVolver.style.display = historialMapas.length > 0 ? '' : 'none';
 }
 
-// Teclado
+// Teclado (Actualizado sin Select y añadiendo 'E' para entrar)
 document.addEventListener('keydown', (e) => {
     if (!editor.activo) return;
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
 
-    const tools = { 'a': 'agregar', 'p': 'agregar', 'b': 'borrar', 's': 'seleccionar', 'r': 'region', 'm': 'mover' };
+    const tools = { 'a': 'agregar', 'b': 'borrar', 'e': 'entrar', 'm': 'mover' };
     if (tools[e.key.toLowerCase()]) window.setHerramienta(tools[e.key.toLowerCase()]);
 
     if (e.key === 's' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); window.guardarMapaUI(); }
