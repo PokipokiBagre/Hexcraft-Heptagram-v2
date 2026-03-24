@@ -15,29 +15,23 @@ export function renderPanel() {
     const contenido = document.getElementById('panel-contenido');
     if (!contenido) return;
 
-    try {
-        switch (ui.panelActual) {
-            case 'props':    contenido.innerHTML = htmlPropsPanel(); break;
-            case 'regiones': contenido.innerHTML = htmlRegionesPanel(); break;
-            case 'npcs':     contenido.innerHTML = htmlNPCsPanel(); break;
-            case 'misiones': contenido.innerHTML = htmlMisionesPanel(); break;
-            case 'imagenes': contenido.innerHTML = htmlImagenesPanel(); break;
-        }
-        actualizarTabsBotones();
-    } catch (e) {
-        console.error("Error crítico renderizando el panel:", e);
-        contenido.innerHTML = `<p style="color:red; padding:10px;">Error al cargar datos del panel.</p>`;
+    switch (ui.panelActual) {
+        case 'props':    contenido.innerHTML = htmlPropsPanel(); break;
+        case 'regiones': contenido.innerHTML = htmlRegionesPanel(); break;
+        case 'npcs':     contenido.innerHTML = htmlNPCsPanel(); break;
+        case 'misiones': contenido.innerHTML = htmlMisionesPanel(); break;
+        case 'imagenes': contenido.innerHTML = htmlImagenesPanel(); break;
     }
+
+    actualizarTabsBotones();
 }
 
 function htmlPropsPanel() {
     const busq = (ui.busqueda || '').toLowerCase();
     
-    const lista = Object.values(props || {}).filter(p => {
-        if (!p) return false;
+    const lista = Object.values(props).filter(p => {
         if (p.id === 'prop_region') return false;
-        const nombreStr = (p.nombre || '').toLowerCase();
-        if (busq && !nombreStr.includes(busq)) return false;
+        if (busq && !p.nombre.toLowerCase().includes(busq)) return false;
         return true;
     });
 
@@ -48,11 +42,9 @@ function htmlPropsPanel() {
         else if (p.id === 'prop_region') iconoHtml = `🗺️`;
         else iconoHtml = `<img src="${p.imagen || NO_IMG}" onerror="this.src='${NO_IMG}'">`;
 
-        const nombreMostrado = p.nombre || 'Sin nombre';
-
         return `
         <div class="prop-card ${selClase}" onclick="window.seleccionarPropUI('${p.id}')">
-            ${iconoHtml} <div class="prop-card-nombre">${nombreMostrado}</div>
+            ${iconoHtml} <div class="prop-card-nombre">${p.nombre}</div>
             ${editor.activo && p.id !== 'prop_pintar' && p.id !== 'prop_region' && !p.id.startsWith('pj_') && !p.id.startsWith('npc_') ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarPropUI('${p.id}')">✕</button>` : ''}
         </div>`;
     }).join('');
@@ -93,15 +85,53 @@ function htmlPropsPanel() {
 
 function htmlRegionesPanel() {
     const regs = Object.values(mapaActual.regiones || {});
-    const lista = regs.map(reg => `
+
+    // 🌟 RASTREADOR DE ENTIDADES POR REGIÓN (Para vista de Jugadores)
+    const entidadesPorRegion = {};
+    
+    Object.values(npcsMapaLocal || {}).forEach(n => {
+        const h = mapaActual.hexes[n.hex_pos];
+        if (h && h.region) {
+            if (!entidadesPorRegion[h.region]) entidadesPorRegion[h.region] = [];
+            entidadesPorRegion[h.region].push({ nombre: n.nombre, img: n.icono_url });
+        }
+    });
+
+    Object.values(mapaActual.hexes || {}).forEach(hex => {
+        if (hex.region && hex.mid) {
+            hex.mid.forEach(pid => {
+                let basePid = typeof pid === 'string' ? pid.split(':')[0] : pid;
+                if (basePid.startsWith('pj_') || basePid.startsWith('npc_')) {
+                    const p = props[basePid];
+                    if (p && !entidadesPorRegion[hex.region]?.some(e => e.nombre === p.nombre)) {
+                        if (!entidadesPorRegion[hex.region]) entidadesPorRegion[hex.region] = [];
+                        entidadesPorRegion[hex.region].push({ nombre: p.nombre, img: p.imagen });
+                    }
+                }
+            });
+        }
+    });
+
+    const lista = regs.map(reg => {
+        // Renderizamos las miniaturas de los personajes adentro
+        const avataresHtml = (entidadesPorRegion[reg.id] || []).map(e => `
+            <div style="display:inline-flex; align-items:center; gap:4px; margin-top:4px; margin-right:6px; background:rgba(0,0,0,0.5); padding:2px 6px; border-radius:12px; font-size:0.75em; border:1px solid #444;">
+                <img src="${e.img || NO_IMG}" style="width:16px; height:16px; border-radius:50%; object-fit:cover;">
+                ${e.nombre}
+            </div>
+        `).join('');
+
+        return `
         <div class="region-card ${ui.selectedRegion === reg.id ? 'region-card-sel' : ''}" onclick="window.seleccionarRegionUI('${reg.id}')">
             <div class="region-color-dot" style="background:${reg.color || '#334'}"></div>
             <div class="region-info">
                 <div class="region-nombre">${reg.nombre || 'Región'} 🏠</div>
                 <div class="region-meta">${(reg.hexes || []).length} hexes</div>
+                ${avataresHtml ? `<div style="margin-top:4px;">${avataresHtml}</div>` : ''}
             </div>
             ${editor.activo ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarRegionUI('${reg.id}')">✕</button>` : ''}
-        </div>`).join('');
+        </div>`;
+    }).join('');
 
     const regSel = ui.selectedRegion && mapaActual.regiones ? mapaActual.regiones[ui.selectedRegion] : null;
     const detalleHtml = regSel ? htmlDetalleRegion(regSel) : '';
@@ -129,7 +159,6 @@ function htmlDetalleRegion(reg) {
         }).join('');
     }
 
-    // El botón se iluminará solo si la herramienta actual es 'agregar' y el prop es 'prop_region'
     const btnActivoClass = editor.selectedPropId === 'prop_region' && editor.herramienta === 'agregar' ? 'activo' : '';
 
     return `
@@ -263,7 +292,6 @@ export function renderInfoHexPanel(q, r, key) {
     const reg = hex.region && mapaActual.regiones ? mapaActual.regiones[hex.region] : null;
     const npcsAqui = Object.values(npcsMapaLocal || {}).filter(n => n.hex_pos === key);
     
-    // Si el Hex está en una región, mostramos sus misiones
     const misionesHtml = reg ? (reg.misiones || []).map(mid => {
         const m = misionesActivas.find(x => x.id === mid);
         return m ? `<div style="font-size:0.82em; color:var(--text); margin-bottom:3px;"><span class="mision-estado m-${m.estado}" style="font-size:0.65em; padding:1px 4px; border-radius:3px;">${m.estado===1?'Pendiente':'En curso'}</span> ${m.titulo || 'Misión'}</div>` : '';
