@@ -397,51 +397,6 @@ export function renderInfoHex(q, r, key) {
         </div>`;
 }
 
-// ── Modales ───────────────────────────────────────────────────
-export function abrirModal(contenidoHtml, titulo = '') {
-    document.getElementById('modal-titulo').innerText = titulo;
-    document.getElementById('modal-cuerpo').innerHTML = contenidoHtml;
-    document.getElementById('modal-region').classList.remove('oculto');
-}
-
-export function cerrarModal() {
-    document.getElementById('modal-region').classList.add('oculto');
-}
-
-export function htmlFormProp(propData = null) {
-    const p = propData || { nombre:'', tipo:'terreno', capa:'background', ancho:1, alto:1, forma:'hex', imagen:'' };
-    return `
-    <div style="display:flex; flex-direction:column; gap:10px;">
-        <label>Nombre
-            <input type="text" id="fp-nombre" value="${p.nombre}" class="form-input">
-        </label>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-            <label>Tipo
-                <select id="fp-tipo" class="form-input">
-                    ${PROP_TIPOS.map(t => `<option value="${t}" ${p.tipo===t?'selected':''}>${t}</option>`).join('')}
-                </select>
-            </label>
-            <label>Capa
-                <select id="fp-capa" class="form-input">
-                    ${CAPAS.map(c => `<option value="${c}" ${p.capa===c?'selected':''}>${c}</option>`).join('')}
-                </select>
-            </label>
-        </div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-            <label>Ancho (hexes)
-                <input type="number" id="fp-ancho" value="${p.ancho||1}" min="1" max="5" class="form-input">
-            </label>
-            <label>Alto (hexes)
-                <input type="number" id="fp-alto" value="${p.alto||1}" min="1" max="5" class="form-input">
-            </label>
-        </div>
-        <label>Imagen URL (o sube una imagen)
-            <input type="text" id="fp-imagen" value="${p.imagen||''}" placeholder="https://... o sube en la pestaña Imágenes" class="form-input">
-        </label>
-        <button class="btn-accion" style="background:var(--gold); color:#000;" onclick="window.guardarPropUI()">💾 Guardar Prop</button>
-    </div>`;
-}
-
 export function htmlFormNPC(npcData = null) {
     const n = npcData || { nombre:'', tipo:'sistema', icono:'', hex:'', capa:'mid', desc:'', stats:{} };
     const hexOpts = Object.keys(mapaActual.hexes).slice(0, 200);
