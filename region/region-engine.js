@@ -1,5 +1,5 @@
 // ============================================================
-// region-engine.js — Loop de Renderizado y Eventos de Entrada (8 archivos)
+// region-engine.js — Loop de Renderizado y Eventos de Entrada
 // ============================================================
 
 import {
@@ -170,15 +170,24 @@ function _accionHex(q, r, key) {
         const hex = mapaActual.hexes[key];
         
         const pid = editor.selectedPropId;
+        const opac = (editor.opacidadPincel ?? 1.0).toFixed(2); // Guardamos la opacidad actual
         
         if (pid === 'prop_pintar') {
-            const colorEntry = `COLOR:${editor.colorActual}:${editor.opacidadPincel.toFixed(2)}`;
+            const colorEntry = `COLOR:${editor.colorActual}:${opac}`;
             const arr = hex[capa];
             const idx = arr.findIndex(e => typeof e === 'string' && e.startsWith('COLOR:'));
             if (idx >= 0) arr[idx] = colorEntry; else arr.push(colorEntry);
             if (capa === 'back') { hex.color = editor.colorActual; hex.opacidad = editor.opacidadPincel; }
         } else {
-            if (!hex[capa].includes(pid)) hex[capa].push(pid);
+            const propEntry = `${pid}:${opac}`;
+            let arr = hex[capa];
+            // Remover el mismo prop si ya existe para actualizar su opacidad
+            arr = arr.filter(e => {
+                const eId = typeof e === 'string' ? e.split(':')[0] : e;
+                return eId !== pid;
+            });
+            arr.push(propEntry);
+            hex[capa] = arr;
         }
 
     } else if (herr === 'borrar') {
@@ -186,7 +195,7 @@ function _accionHex(q, r, key) {
         const hex = mapaActual.hexes[key];
         const pid = editor.selectedPropId;
 
-        // La herramienta borrar vacía TODA la capa seleccionada, o borra el color si estás con el pincel
+        // La herramienta borrar vacía TODA la capa seleccionada
         if (pid === 'prop_pintar') {
             hex[capa] = hex[capa].filter(e => !(typeof e === 'string' && e.startsWith('COLOR:')));
             if (capa === 'back') { hex.color = null; hex.opacidad = null; }
