@@ -1,19 +1,17 @@
 // ============================================================
-// region-ui.js — Gestión de Paneles UI y Filtros (Isométrico 3D)
+// region-ui.js — Paneles de UI: props, regiones, NPCs, misiones, imágenes
 // ============================================================
 
 import {
     editor, ui, mapaActual, props, npcsMapaLocal,
     personajesDB, misionesActivas, PROP_TIPOS, CAPAS,
-    STORAGE_URL
+    STORAGE_URL, crearRegion, crearHexData
 } from './region-state.js';
-import { setBackground } from './region-render.js';
-import {
-    htmlFormProp, htmlFormNPC, abrirModalUI, cerrarModalUI, mostrarToastUI
-} from './region-ui-elements.js';
-import { hexKey, normKey } from './region-utils.js'; // <-- IMPORTACIÓN CORRECTA
+import { normKey, guardarProp, eliminarProp, guardarNPC, eliminarNPC, subirImagenProp, listarImagenesBackground } from './region-data.js';
+import { setBackground, aplicarHerramienta, hexKey } from './region-engine.js';
+import { supabase } from '../hex-auth.js';
 
-const NO_IMG = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
+const NO_IMG = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 
 export function renderPanel() {
     const contenido = document.getElementById('panel-contenido');
@@ -33,7 +31,6 @@ export function renderPanel() {
 function htmlPropsPanel() {
     const busq = (ui.busqueda || '').toLowerCase();
     
-    // Todos los props (incluyendo Pincel y personajes inyectados desde DB)
     const lista = Object.values(props).filter(p => {
         if (busq && !p.nombre.toLowerCase().includes(busq)) return false;
         return true;
@@ -42,7 +39,7 @@ function htmlPropsPanel() {
     const grid = lista.map(p => {
         const selClase = editor.selectedPropId === p.id ? 'prop-card-sel' : '';
         const esPincel = p.id === 'prop_pintar';
-        const icono = esPincel ? `🖌️` : `<img src="${p.imagen || NO_IMG}" onerror="this.src='${NO_IMG}'">`;
+        const icono = esPincel ? `🖌️` : `<img src="${p.imagen || NO_IMG()}" onerror="this.src='${NO_IMG()}'">`;
         return `
         <div class="prop-card ${selClase}" onclick="window.seleccionarPropUI('${p.id}')">
             ${icono} <div class="prop-card-nombre">${p.nombre}</div>
@@ -53,7 +50,7 @@ function htmlPropsPanel() {
     return `
     <div class="panel-seccion">
         <div class="panel-buscador-row">
-            <input type="text" placeholder="🔍 Buscar prop..." value="${ui.busqueda}" oninput="window.setBusquedaUI(this.value)">
+            <input type="text" placeholder="🔍 Buscar prop..." value="${ui.busqueda || ''}" oninput="window.setBusquedaUI(this.value)">
             ${editor.activo ? `<button class="btn-panel-add" onclick="window.abrirCrearPropUI()">＋</button>` : ''}
         </div>
 
@@ -65,6 +62,18 @@ function htmlPropsPanel() {
         <div class="brush-row" style="margin-bottom:12px;">
             <span style="color:#888; font-size:0.8em;">Brush:</span>
             ${[1,2,3,4].map(n => `<button class="filtro-pill ${editor.brushSize===n?'activo':''}" onclick="window.setBrushSizeUI(${n})">${n}</button>`).join('')}
+        </div>
+
+        <div style="background:rgba(0,0,0,0.6); border-left:3px solid var(--cyan); border-radius:4px; padding:10px; margin-bottom:15px;">
+            <div style="font-size:0.7em;color:#00ffff;font-family:sans-serif;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">
+                🎨 OPCIONES DE PINCEL Y PROPS (Opacidad)
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <input type="color" value="${editor.colorActual||'#4488cc'}" onchange="window.setColorActual(this.value)" style="width:38px;height:32px;border:1px solid #555;border-radius:4px;background:none;cursor:pointer;padding:2px;">
+                <span style="font-size:0.7em;color:#888;">Opacidad:</span>
+                <input type="range" min="0.1" max="1" step="0.05" value="${editor.opacidadPincel ?? 1.0}" oninput="window.setOpacidadPincel(parseFloat(this.value))" style="flex:1;min-width:60px;accent-color:#00ccff;">
+                <button onclick="window.aplicarRuido()" style="background:#0a2a3a;border:1px solid #335566;color:#88ccdd;padding:4px 8px;border-radius:3px;font-size:0.7em;cursor:pointer;">≋ Ruido</button>
+            </div>
         </div>
         ` : ''}
 
@@ -91,21 +100,19 @@ function htmlRegionesPanel() {
 }
 
 function htmlNPCsPanel() {
-    // NPCs locales de mapa
     const listNPCsMap = Object.values(npcsMapaLocal).map(n => `
         <div class="npc-card" onclick="window.seleccionarNPCUI('${n.id}')">
-            <img src="${n.icono_url || NO_IMG}" onerror="this.src='${NO_IMG}'" class="npc-thumb">
+            <img src="${n.icono_url || NO_IMG()}" onerror="this.src='${NO_IMG()}'" class="npc-thumb">
             <div><div class="npc-nombre">${n.nombre}</div> <div class="npc-meta">${n.hex_pos||'No pos'}</div></div>
             ${editor.activo ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarNPCUI('${n.id}')">✕</button>` : ''}
         </div>`).join('') || '<p class="sin-resultado">No hay NPCs de región.</p>';
 
-    // Jugadores de DB (PropGrid Entidades)
     const listJugadoresDB = personajesDB.map(p => {
         const pid = `pj_${normKey(p.nombre)}`;
         const sel = editor.selectedPropId === pid ? 'npc-card-sel' : '';
         return `
         <div class="npc-card ${sel}" onclick="window.seleccionarPropEntidadUI('${pid}')">
-            <img src="${STORAGE_URL}/imgpersonajes/${normKey(p.icon)}icon.png" onerror="this.src='${NO_IMG}'" class="npc-thumb">
+            <img src="${STORAGE_URL}/imgpersonajes/${normKey(p.icon)}icon.png" onerror="this.src='${NO_IMG()}'" class="npc-thumb">
             <div><div class="npc-nombre">${p.nombre}</div> <div class="npc-meta">Jugador DB</div></div>
         </div>`;
     }).join('');
@@ -127,7 +134,7 @@ function htmlImagenesPanel() {
 
     const grid = listaProps.map(p => `
         <div style="background:rgba(0,0,0,0.3); padding:5px; text-align:center; position:relative; border-radius:4px; border:1px solid #333;">
-            <img src="${p.imagen || NO_IMG}" onerror="this.src='${NO_IMG}'" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:3px;">
+            <img src="${p.imagen || NO_IMG()}" onerror="this.src='${NO_IMG()}'" style="width:100%; aspect-ratio:1; object-fit:cover; border-radius:3px;">
             <div style="font-size:0.65em; margin-top:3px; word-break:break-word;">${p.nombre}</div>
             ${editor.activo && p.id !== 'prop_pintar' ? `<button class="btn-accion-mini" onclick="window.abrirSubidaPropUI('${p.id}')" style="margin-top:4px; width:100%; font-size:0.7em; padding:2px;">📤 Subir</button>` : ''}
         </div>`).join('');
@@ -192,7 +199,7 @@ export function renderInfoHexPanel(q, r, key) {
 
     const npcsHtml = npcsAqui.map(n => `
         <div style="display:flex; align-items:center; gap:6px; font-size:0.8em; margin-top:4px;">
-            <img src="${n.icono_url || NO_IMG}" style="width:28px; height:28px; border-radius:50%; object-fit:cover; border:1px solid #555;">
+            <img src="${n.icono_url || NO_IMG()}" onerror="this.src='${NO_IMG()}'" style="width:28px; height:28px; border-radius:50%; object-fit:cover; border:1px solid #555;">
             <div><div style="font-weight:bold;">${n.nombre}</div> ${n.descripcion||''}</div>
         </div>`).join('');
 
