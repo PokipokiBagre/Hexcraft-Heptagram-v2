@@ -10,17 +10,14 @@
 </head>
 <body>
 
-<!-- ── Loader ── -->
 <div id="loader-mapa">
     <div class="loader-title">✦ CARGANDO MAPA REGIONAL ✦</div>
     <div class="loader-bar"><div class="loader-bar-fill"></div></div>
     <div style="color:var(--text-dim); font-size:0.8em; font-family:sans-serif;">Conectando al servidor...</div>
 </div>
 
-<!-- ── Canvas ── -->
 <canvas id="mapa-canvas"></canvas>
 
-<!-- ── Navbar ── -->
 <nav class="navbar">
     <div class="navbar-left">
         <button class="btn-nav" onclick="window.location.href='../index.html'">⬅ Volver</button>
@@ -37,7 +34,6 @@
     </div>
 </nav>
 
-<!-- ── Panel lateral ── -->
 <aside id="panel-lateral">
     <div class="tabs-panel">
         <button class="tab-panel-btn activo" data-panel="props"    onclick="window.cambiarPanelUI('props')">🧱 Props</button>
@@ -49,21 +45,18 @@
     <div id="panel-contenido"></div>
 </aside>
 
-<!-- ── Info hex seleccionado ── -->
 <div id="panel-info-hex"></div>
 
-<!-- ── Barra de herramientas (solo OP) ── -->
 <div id="barra-herramientas" class="solo-op" style="display:none;">
-    <button class="tool-btn activo" data-tool="pintar"     onclick="window.setHerramienta('pintar')"      title="Pintar (P)"><span class="icon">🖌️</span>Pintar</button>
-    <button class="tool-btn"        data-tool="borrar"     onclick="window.setHerramienta('borrar')"      title="Borrar (B)"><span class="icon">🧹</span>Borrar</button>
-    <button class="tool-btn"        data-tool="seleccionar" onclick="window.setHerramienta('seleccionar')" title="Seleccionar (S)"><span class="icon">🔲</span>Select</button>
-    <button class="tool-btn"        data-tool="region"     onclick="window.setHerramienta('region')"      title="Pintar Región (R)"><span class="icon">🗺️</span>Región</button>
-    <button class="tool-btn"        data-tool="mover"      onclick="window.setHerramienta('mover')"       title="Mover cámara (M)"><span class="icon">🤚</span>Mover</button>
+    <button class="tool-btn activo" data-tool="agregar"     onclick="window.setHerramienta('agregar')"      title="Agregar (A)"><span class="icon">➕</span>Agregar</button>
+    <button class="tool-btn"        data-tool="borrar"      onclick="window.setHerramienta('borrar')"       title="Borrar (B)"><span class="icon">🧹</span>Borrar</button>
+    <button class="tool-btn"        data-tool="seleccionar" onclick="window.setHerramienta('seleccionar')"  title="Seleccionar (S)"><span class="icon">🔲</span>Select</button>
+    <button class="tool-btn"        data-tool="region"      onclick="window.setHerramienta('region')"       title="Pintar Región (R)"><span class="icon">🗺️</span>Región</button>
+    <button class="tool-btn"        data-tool="mover"       onclick="window.setHerramienta('mover')"        title="Mover cámara (M)"><span class="icon">🤚</span>Mover</button>
     <div style="width:1px; background:var(--border); margin:0 4px;"></div>
     <button class="tool-btn" onclick="window.cambiarPanelUI('imagenes')" title="Gestionar imágenes"><span class="icon">🖼️</span>Imgs</button>
 </div>
 
-<!-- ── Modal ── -->
 <div id="modal-region" class="oculto">
     <div class="modal-box">
         <div class="modal-header-reg">
