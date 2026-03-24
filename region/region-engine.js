@@ -7,12 +7,11 @@ import {
     OVER_OFFSET_X, OVER_OFFSET_Y
 } from './region-state.js';
 import { inicializarRender, dibujarEscena } from './region-render.js';
-import { pixelToHex3D, hexKey, hexesEnRadio, hexToPixel3D } from './region-utils.js';
+import { pixelToHex3D, hexKey, hexesEnRadio } from './region-utils.js';
 
 let canvas, rafId;
 let _mouseDown = false;
 let _lastX = 0, _lastY = 0, _pinchStart = 0;
-const _drag = { activo: false, x1:0, y1:0, x2:0, y2:0 };
 
 export function inicializarEngine(canvasEl) {
     canvas = canvasEl;
@@ -52,7 +51,7 @@ function registrarEventos() {
     canvas.addEventListener('contextmenu', e => e.preventDefault());
 }
 
-// NUEVA FUNCIÓN: Ajusta el clic si estamos en la capa OVER flotante
+// NUEVO: Ajusta el clic si estamos en la capa OVER flotante
 function getHexFromScreenPos(clientX, clientY) {
     const rect = canvas.getBoundingClientRect();
     let px = clientX - rect.left;
@@ -73,7 +72,7 @@ function onMouseMove(e) {
 
     if (!_mouseDown) return;
 
-    if (e.buttons === 2 || !editor.activo || editor.herramienta === 'mover') {
+    if (e.buttons === 2 || !editor.activo || editor.herramienta === 'mover' || editor.herramienta === 'entrar') {
         camara.x += e.movementX; 
         camara.y += e.movementY;
     } else if (editor.activo && ui.modoPintar) {
@@ -90,11 +89,20 @@ function onMouseDown(e) {
 
     if (e.button === 0) { 
         if (editor.activo) {
-            if (editor.herramienta === 'seleccionar') {
-                const rect = canvas.getBoundingClientRect();
-                _drag.activo = true;
-                _drag.x1 = _drag.x2 = e.clientX - rect.left;
-                _drag.y1 = _drag.y2 = e.clientY - rect.top;
+            if (editor.herramienta === 'entrar') {
+                const hex = mapaActual.hexes[key];
+                if (hex && hex.region && mapaActual.regiones[hex.region]?.tieneInterior) {
+                    window.abrirInterior(hex.region);
+                } else if (mapaActual.esInterior) {
+                    window.volverMapaPadre();
+                } else {
+                    // Si no hay puerta, mostramos info
+                    editor.selectedHexKey = key;
+                    window.dispatchEvent(new CustomEvent('hexSeleccionado', { detail: { q, r, key } }));
+                }
+            } else if (editor.herramienta === 'mover') {
+                editor.selectedHexKey = key;
+                window.dispatchEvent(new CustomEvent('hexSeleccionado', { detail: { q, r, key } }));
             } else {
                 ui.modoPintar = true;
                 aplicarHerramienta(q, r, key);
@@ -108,60 +116,7 @@ function onMouseDown(e) {
 
 function onMouseUp(e) {
     _mouseDown = false;
-
-    if (editor.activo && editor.herramienta === 'seleccionar' && _drag.activo) {
-        _confirmarArrastre(e.shiftKey);
-    }
-
-    _drag.activo = false;
     ui.modoPintar = false;
-}
-
-function _confirmarArrastre(mantenerSeleccion) {
-    const { x1, y1, x2, y2 } = _drag;
-    const xMin = Math.min(x1,x2), xMax = Math.max(x1,x2);
-    const yMin = Math.min(y1,y2), yMax = Math.max(y1,y2);
-
-    if (xMax - xMin < 5 && yMax - yMin < 5) {
-        const { q, r } = getHexFromScreenPos(x1 + canvas.getBoundingClientRect().left, y1 + canvas.getBoundingClientRect().top);
-        const key = hexKey(q, r);
-        if (!mantenerSeleccion) editor.seleccion.clear();
-        if (editor.seleccion.has(key)) editor.seleccion.delete(key);
-        else editor.seleccion.add(key);
-        window.dispatchEvent(new CustomEvent('seleccionCambiada', { detail: { key, q, r } }));
-        return;
-    }
-
-    if (!mantenerSeleccion) editor.seleccion.clear();
-
-    const margen = HEX_SIZE * camara.zoom;
-    // Buscamos los límites del arrastre transformando píxeles a hexes
-    // (Utilizando el offset inverso temporalmente para el cálculo)
-    const pxMin = editor.capaActual === 'over' ? xMin - OVER_OFFSET_X * camara.zoom : xMin;
-    const pyMin = editor.capaActual === 'over' ? yMin - OVER_OFFSET_Y * camara.zoom : yMin;
-    const pxMax = editor.capaActual === 'over' ? xMax - OVER_OFFSET_X * camara.zoom : xMax;
-    const pyMax = editor.capaActual === 'over' ? yMax - OVER_OFFSET_Y * camara.zoom : yMax;
-
-    const cs = [
-        pixelToHex3D(pxMin-margen, pyMin-margen), pixelToHex3D(pxMax+margen, pyMin-margen),
-        pixelToHex3D(pxMin-margen, pyMax+margen), pixelToHex3D(pxMax+margen, pyMax+margen)
-    ];
-    const qMin = Math.min(...cs.map(c=>c.q))-1, qMax = Math.max(...cs.map(c=>c.q))+1;
-    const rMin = Math.min(...cs.map(c=>c.r))-1, rMax = Math.max(...cs.map(c=>c.r))+1;
-
-    for (let q = qMin; q <= qMax; q++) {
-        for (let r = rMin; r <= rMax; r++) {
-            let { x, y } = hexToPixel3D(q, r, 0);
-            if (editor.activo && editor.capaActual === 'over') {
-                x += OVER_OFFSET_X * camara.zoom;
-                y += OVER_OFFSET_Y * camara.zoom;
-            }
-            if (x >= xMin && x <= xMax && y >= yMin && y <= yMax) {
-                editor.seleccion.add(hexKey(q, r));
-            }
-        }
-    }
-    window.dispatchEvent(new Event('seleccionActualizada'));
 }
 
 function onWheel(e) {
@@ -186,7 +141,14 @@ function onTouchStart(e) {
         _mouseDown = true;
         const { q, r } = getHexFromScreenPos(e.touches[0].clientX, e.touches[0].clientY);
         const key = hexKey(q, r);
-        if (editor.activo) { ui.modoPintar = true; aplicarHerramienta(q, r, key); }
+        if (editor.activo) { 
+            if (editor.herramienta === 'entrar' || editor.herramienta === 'mover') {
+                // Herramientas que no pintan
+                editor.selectedHexKey = key; window.dispatchEvent(new CustomEvent('hexSeleccionado', { detail: { q, r, key } }));
+            } else {
+                ui.modoPintar = true; aplicarHerramienta(q, r, key); 
+            }
+        }
         else { editor.selectedHexKey = key; window.dispatchEvent(new CustomEvent('hexSeleccionado', { detail: { q, r, key } })); }
     }
 }
@@ -208,9 +170,9 @@ function onTouchMove(e) {
     } else if (e.touches.length === 1 && _mouseDown) {
         const dx = e.touches[0].clientX - _lastX;
         const dy = e.touches[0].clientY - _lastY;
-        if (!editor.activo || editor.herramienta === 'mover') {
+        if (!editor.activo || editor.herramienta === 'mover' || editor.herramienta === 'entrar') {
             camara.x += dx; camara.y += dy;
-        } else if (ui.modoPintar && editor.herramienta !== 'seleccionar') {
+        } else if (ui.modoPintar) {
             const { q, r } = getHexFromScreenPos(e.touches[0].clientX, e.touches[0].clientY);
             aplicarHerramienta(q, r, hexKey(q, r));
         }
@@ -237,21 +199,37 @@ function _accionHex(q, r, key) {
         if (!editor.selectedPropId) return;
         if (!mapaActual.hexes[key]) mapaActual.hexes[key] = crearHexData();
         const hex = mapaActual.hexes[key];
-        
         const pid = editor.selectedPropId;
+
+        // PINCEL DE REGIÓN
+        if (pid === 'prop_region') {
+            const rid = ui.selectedRegion;
+            if (!rid) return;
+            if (hex.region !== rid) {
+                if (hex.region && mapaActual.regiones[hex.region]) { 
+                    mapaActual.regiones[hex.region].hexes = mapaActual.regiones[hex.region].hexes.filter(k => k !== key);
+                }
+                hex.region = rid; 
+                if (mapaActual.regiones[rid] && !mapaActual.regiones[rid].hexes.includes(key)) {
+                    mapaActual.regiones[rid].hexes.push(key);
+                }
+            }
+            return; // Termina aquí si es pintar región
+        }
+
         const opac = (editor.opacidadPincel ?? 1.0).toFixed(2);
         
         if (pid === 'prop_pintar') {
             const colorEntry = `COLOR:${editor.colorActual}:${opac}`;
-            const arr = hex[capa];
-            const idx = arr.findIndex(e => typeof e === 'string' && e.startsWith('COLOR:'));
-            if (idx >= 0) arr[idx] = colorEntry; else arr.push(colorEntry);
-            if (capa === 'back') { hex.color = editor.colorActual; hex.opacidad = editor.opacidadPincel; }
+            let arr = hex[capa];
+            arr = arr.filter(e => !(typeof e === 'string' && e.startsWith('COLOR:')));
+            arr.push(colorEntry);
+            hex[capa] = arr;
         } else {
             const propEntry = `${pid}:${opac}`;
             let arr = hex[capa];
             arr = arr.filter(e => {
-                const eId = typeof e === 'string' ? e.split(':')[0] : e;
+                const eId = typeof e === 'string' ? (e.startsWith('COLOR:') ? e : e.split(':')[0]) : e;
                 return eId !== pid;
             });
             arr.push(propEntry);
@@ -263,40 +241,38 @@ function _accionHex(q, r, key) {
         const hex = mapaActual.hexes[key];
         const pid = editor.selectedPropId;
 
-        if (pid === 'prop_pintar') {
-            hex[capa] = hex[capa].filter(e => !(typeof e === 'string' && e.startsWith('COLOR:')));
-            if (capa === 'back') { hex.color = null; hex.opacidad = null; }
-        } else {
-            hex[capa] = [];
-            if (capa === 'back') { hex.color = null; hex.opacidad = null; }
+        // BORRAR CON PINCEL DE REGIÓN
+        if (pid === 'prop_region') {
+            if (hex.region) {
+                if (mapaActual.regiones[hex.region]) {
+                    mapaActual.regiones[hex.region].hexes = mapaActual.regiones[hex.region].hexes.filter(k => k !== key);
+                }
+                hex.region = null;
+            }
+            return;
         }
 
-    } else if (herr === 'region') {
-        const rid = ui.selectedRegion;
-        if (!rid) return;
-        if (!mapaActual.hexes[key]) mapaActual.hexes[key] = crearHexData();
-        const hex = mapaActual.hexes[key];
-        if (hex.region === rid) hex.region = null; 
-        else {
-            if (hex.region && mapaActual.regiones[hex.region]) { 
-                mapaActual.regiones[hex.region].hexes = mapaActual.regiones[hex.region].hexes.filter(k => k !== key);
-            }
-            hex.region = rid; 
-            if (!mapaActual.regiones[rid].hexes.includes(key)) {
-                mapaActual.regiones[rid].hexes.push(key);
-            }
+        if (pid === 'prop_pintar') {
+            hex[capa] = hex[capa].filter(e => !(typeof e === 'string' && e.startsWith('COLOR:')));
+        } else if (pid) {
+            // Borrar SOLO el prop que tengo seleccionado actualmente
+            hex[capa] = hex[capa].filter(e => {
+                const eId = typeof e === 'string' ? (e.startsWith('COLOR:') ? e : e.split(':')[0]) : e;
+                return eId !== pid;
+            });
+        } else {
+            // Si no hay prop activo, borramos toda la capa
+            hex[capa] = [];
         }
     }
 }
 
-// ── Generador de Ruido ───────────────────────────────────────
 export function aplicarRuidoVisible(color, opacidad, densidad = 0.4) {
     if (!canvas) return;
     const W = window.innerWidth * (window.devicePixelRatio || 1);
     const H = window.innerHeight * (window.devicePixelRatio || 1);
     const margen = HEX_SIZE * camara.zoom * 2;
     
-    // Proyección inversa para barrer la pantalla completa
     const cs = [
         pixelToHex3D(-margen, -margen),     pixelToHex3D(W+margen, -margen),
         pixelToHex3D(-margen, H+margen),    pixelToHex3D(W+margen, H+margen)
@@ -317,15 +293,10 @@ export function aplicarRuidoVisible(color, opacidad, densidad = 0.4) {
             const noisyColor = `#${toHex(clamp(h+v))}${toHex(clamp(s+v))}${toHex(clamp(l+v))}`;
             
             const colorEntry = `COLOR:${noisyColor}:${opacidad.toFixed(2)}`;
-            const arr = mapaActual.hexes[key][editor.capaActual];
-            const idx = arr.findIndex(e => typeof e === 'string' && e.startsWith('COLOR:'));
-            if (idx >= 0) arr[idx] = colorEntry;
-            else arr.push(colorEntry);
-
-            if (editor.capaActual === 'back') {
-                mapaActual.hexes[key].color = noisyColor;
-                mapaActual.hexes[key].opacidad = opacidad;
-            }
+            let arr = mapaActual.hexes[key][editor.capaActual];
+            arr = arr.filter(e => !(typeof e === 'string' && e.startsWith('COLOR:')));
+            arr.push(colorEntry);
+            mapaActual.hexes[key][editor.capaActual] = arr;
         }
     }
     window.dispatchEvent(new Event('mapaModificado'));
