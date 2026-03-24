@@ -15,6 +15,7 @@ import {
 import { inicializarEngine, aplicarRuidoVisible, centrarCamara } from './region-engine.js';
 import { setBackground } from './region-render.js';
 
+// IMPORTACIONES PERFECTAMENTE SINCRONIZADAS:
 import { renderPanel, renderInfoHexPanel, cargarListaBG_UI } from './region-ui.js';
 import { htmlFormProp, htmlFormNPC, abrirModalUI, cerrarModalUI, mostrarToastUI } from './region-ui-elements.js';
 import { normKey } from './region-utils.js';
@@ -353,8 +354,30 @@ window.actualizarElevacionUI = (key, val) => {
     }
 };
 
-window.dropBGImagen = async (e) => { /* ... */ };
-window.subirBGImagen = async (e) => { /* ... */ };
+window.dropBGImagen = async (e) => {
+    e.preventDefault();
+    document.getElementById('drop-bg-zone')?.classList.remove('drag-sobre');
+    const file = e.dataTransfer.files[0];
+    if (file) await _subirBGFile(file);
+};
+window.subirBGImagen = async (e) => {
+    const file = e.target.files[0];
+    if (file) await _subirBGFile(file);
+    e.target.value = '';
+};
+
+async function _subirBGFile(file) {
+    const key = `region_bg_${mapaIdActual}_${Date.now()}`;
+    try {
+        mostrarToastUI('Subiendo fondo...', 'info');
+        const url = await subirImagenStorage(file, 'imginterfaz', key);
+        mapaActual.bg_imagen = url;
+        setBackground(url);
+        window.dispatchEvent(new Event('mapaModificado'));
+        mostrarToastUI('Fondo actualizado ✅');
+    } catch (err) { mostrarToastUI('Error: ' + err.message, 'error'); }
+}
+
 window.aplicarFondUI = (url) => {
     mapaActual.bg_imagen = url;
     setBackground(url);
