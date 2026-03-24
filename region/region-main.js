@@ -126,7 +126,7 @@ window.setHerramienta = (h) => {
     document.querySelectorAll('.tool-btn').forEach(b => {
         b.classList.toggle('activo', b.dataset.tool === h);
     });
-    renderPanel(); // Refresca UI para que los botones reflejen el estado
+    renderPanel();
 };
 
 window.cerrarModalRegion = cerrarModalUI;
@@ -188,16 +188,14 @@ window.confirmarPincelRegion = () => {
     cerrarModalUI();
 };
 
-// 🌟 SOLUCIÓN: Fila global para activar pincel y asegurar que esté en "Agregar"
 window.activarPincelRegion = (id) => {
     ui.selectedRegion = id;
     editor.selectedPropId = 'prop_region';
-    window.setHerramienta('agregar'); // Fuerza volver a "Agregar" si estaba en borrar
+    window.setHerramienta('agregar');
     renderPanel();
     mostrarToastUI(`🖌️ Pincel activado para: ${mapaActual.regiones[id].nombre || 'Región'}`, 'info');
 };
 
-// 🌟 SOLUCIÓN: Asignar y desasignar misiones a la región
 window.toggleMisionRegion = (regionId, misionId, isChecked) => {
     const reg = mapaActual.regiones[regionId];
     if (!reg) return;
@@ -209,7 +207,7 @@ window.toggleMisionRegion = (regionId, misionId, isChecked) => {
         reg.misiones = reg.misiones.filter(id => id !== misionId);
     }
     window.dispatchEvent(new Event('mapaModificado'));
-    renderPanel(); // Refresca UI
+    renderPanel();
 };
 
 window.seleccionarPropUI = (id) => {
@@ -366,20 +364,22 @@ window.abrirInterior = async (regionId) => {
     const interiorId = reg.interiorId || `interior_${regionId}`;
     reg.interiorId = interiorId;
 
+    if (mapaIdActual === interiorId) return;
+
     historialMapas.push({ id: mapaIdActual, nombre: mapaActual.nombre });
     mapaIdActual = interiorId;
 
     mostrarToastUI('Cargando submundo...', 'info');
     const ok = await cargarTodo(interiorId);
+    
     if (!ok) {
+        // 🌟 CORRECCIÓN: El mapa es NUEVO, asignamos el nombre de la región limpiamente
         mapaActual.id   = interiorId;
-        mapaActual.nombre = `Interior de ${reg.nombre || 'Región'}`;
+        mapaActual.nombre = reg.nombre; 
         mapaActual.ancho = 12;
         mapaActual.alto  = 10;
         mapaActual.esInterior = true;
         mapaActual.parentId   = historialMapas[historialMapas.length-1].id;
-        for (const k in mapaActual.hexes) delete mapaActual.hexes[k];
-        for (const k in mapaActual.regiones) delete mapaActual.regiones[k];
     }
 
     centrarCamara();
@@ -392,6 +392,7 @@ window.volverMapaPadre = async () => {
     if (historialMapas.length === 0) return;
     const prev = historialMapas.pop();
     mapaIdActual = prev.id;
+    mostrarToastUI('Volviendo...', 'info');
     await cargarTodo(mapaIdActual);
     centrarCamara();
     actualizarBreadcrumb();
