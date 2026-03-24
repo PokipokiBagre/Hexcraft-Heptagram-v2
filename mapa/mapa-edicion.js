@@ -81,13 +81,24 @@ editor.setHerramienta = (herr) => {
     editor.herramienta = herr;
     const btnSelect = document.getElementById('tool-cursor');
     const btnFlecha = document.getElementById('tool-enlace');
+    const btnBorrarFlecha = document.getElementById('tool-eliminar-enlace');
     
-    if(herr === 'cursor') {
-        btnSelect.style.background = 'var(--cyan-magic)'; btnSelect.style.color = '#000'; btnSelect.style.boxShadow = '0 0 15px rgba(0,255,255,0.5)';
-        btnFlecha.style.background = '#111'; btnFlecha.style.color = 'var(--cyan-magic)'; btnFlecha.style.boxShadow = 'none';
-    } else {
-        btnFlecha.style.background = 'var(--cyan-magic)'; btnFlecha.style.color = '#000'; btnFlecha.style.boxShadow = '0 0 15px rgba(0,255,255,0.5)';
-        btnSelect.style.background = '#111'; btnSelect.style.color = 'var(--cyan-magic)'; btnSelect.style.boxShadow = 'none';
+    // Reset all
+    [btnSelect, btnFlecha, btnBorrarFlecha].forEach(btn => {
+        if (!btn) return;
+        btn.style.background = '#111';
+        btn.style.boxShadow = 'none';
+    });
+    if (btnSelect) { btnSelect.style.color = 'var(--cyan-magic)'; }
+    if (btnFlecha) { btnFlecha.style.color = 'var(--cyan-magic)'; }
+    if (btnBorrarFlecha) { btnBorrarFlecha.style.color = '#ff4444'; }
+
+    if (herr === 'cursor') {
+        if (btnSelect) { btnSelect.style.background = 'var(--cyan-magic)'; btnSelect.style.color = '#000'; btnSelect.style.boxShadow = '0 0 15px rgba(0,255,255,0.5)'; }
+    } else if (herr === 'enlace') {
+        if (btnFlecha) { btnFlecha.style.background = 'var(--cyan-magic)'; btnFlecha.style.color = '#000'; btnFlecha.style.boxShadow = '0 0 15px rgba(0,255,255,0.5)'; }
+    } else if (herr === 'eliminar-enlace') {
+        if (btnBorrarFlecha) { btnBorrarFlecha.style.background = '#ff4444'; btnBorrarFlecha.style.color = '#000'; btnBorrarFlecha.style.boxShadow = '0 0 15px rgba(255,68,68,0.5)'; }
     }
 };
 
@@ -140,7 +151,7 @@ editor.onMouseDown = (e, nodo, worldPos) => {
     editor.hasDragged = false; 
     editor.isShiftPressed = e.shiftKey; 
 
-    if (editor.herramienta === 'enlace') {
+    if (editor.herramienta === 'enlace' || editor.herramienta === 'eliminar-enlace') {
         if (nodo) {
             editor.tempLink = { source: nodo, startX: nodo.x, startY: nodo.y, endX: worldPos.x, endY: worldPos.y };
         }
@@ -196,17 +207,43 @@ editor.onMouseUp = (e, nodo) => {
     editor.isShiftPressed = e.shiftKey;
     
     if (editor.tempLink) {
-        if (nodo && nodo !== editor.tempLink.source) {
-            if (e.shiftKey && editor.seleccionMultiple.has(editor.tempLink.source) && editor.seleccionMultiple.size > 1) {
-                editor.seleccionMultiple.forEach(n => {
-                    if (n !== nodo) crearEnlace(n, nodo);
-                });
-            } else {
-                crearEnlace(editor.tempLink.source, nodo);
+        if (editor.herramienta === 'eliminar-enlace') {
+            // Eliminar enlace entre source y target
+            if (nodo && nodo !== editor.tempLink.source) {
+                const src = editor.tempLink.source;
+                const enlaceIdx = estadoMapa.enlaces.findIndex(en => en.source === src && en.target === nodo);
+                if (enlaceIdx > -1) {
+                    estadoMapa.enlaces.splice(enlaceIdx, 1);
+                    nodo.incomingSources = nodo.incomingSources.filter(s => s !== src);
+                    editor.cambiosPendientes.enlaces.push({ source: src.id, target: nodo.id, eliminado: true });
+                    actualizarColoresFlechas();
+                    activarBotonGuardar();
+                } else {
+                    // También intentar en sentido inverso (source <-> target)
+                    const enlaceIdxRev = estadoMapa.enlaces.findIndex(en => en.source === nodo && en.target === src);
+                    if (enlaceIdxRev > -1) {
+                        estadoMapa.enlaces.splice(enlaceIdxRev, 1);
+                        src.incomingSources = src.incomingSources.filter(s => s !== nodo);
+                        editor.cambiosPendientes.enlaces.push({ source: nodo.id, target: src.id, eliminado: true });
+                        actualizarColoresFlechas();
+                        activarBotonGuardar();
+                    }
+                }
             }
-            activarBotonGuardar(); // Al crear flecha, activa guardado
+            editor.tempLink = null;
+        } else {
+            if (nodo && nodo !== editor.tempLink.source) {
+                if (e.shiftKey && editor.seleccionMultiple.has(editor.tempLink.source) && editor.seleccionMultiple.size > 1) {
+                    editor.seleccionMultiple.forEach(n => {
+                        if (n !== nodo) crearEnlace(n, nodo);
+                    });
+                } else {
+                    crearEnlace(editor.tempLink.source, nodo);
+                }
+                activarBotonGuardar(); // Al crear flecha, activa guardado
+            }
+            editor.tempLink = null;
         }
-        editor.tempLink = null;
     } else if (editor.boxStart) {
         const minX = Math.min(editor.boxStart.x, editor.boxCurrent.x);
         const maxX = Math.max(editor.boxStart.x, editor.boxCurrent.x);
