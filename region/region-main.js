@@ -14,11 +14,9 @@ import {
 } from './region-data.js';
 import { inicializarEngine, aplicarRuidoVisible, centrarCamara } from './region-engine.js';
 import { setBackground } from './region-render.js';
-import { renderPanel, renderInfoHexPanel, cargarListaBG_UI } from './region-ui.js';
-import { 
-    htmlFormProp, htmlFormNPC, abrirModalUI, 
-    cerrarModalUI, mostrarToastUI 
-} from './region-ui-elements.js';
+// IMPORTACIONES 100% CORRECTAS:
+import { renderPanel, renderInfoHexPanel, htmlFormNPC } from './region-ui.js';
+import { htmlFormProp, abrirModalUI, cerrarModalUI, mostrarToastUI } from './region-ui-elements.js';
 import { normKey } from './region-utils.js';
 
 let cambiosPendientes = false;
@@ -173,10 +171,81 @@ window.seleccionarPropUI = (id) => {
 window.seleccionarPropEntidadUI = (id) => { window.seleccionarPropUI(id); };
 
 window.abrirCrearPropUI = () => abrirModalUI(htmlFormProp(), '➕ Nuevo Prop');
-window.guardarPropUI = async () => { /* ... */ };
-window.eliminarPropUI = async (id) => { /* ... */ };
-window.abrirSubidaPropUI = (propId) => { /* ... */ };
-window.subirPropImagenUI = async (e) => { /* ... */ };
+
+window.guardarPropUI = async () => {
+    const idExistente = document.getElementById('fp-id')?.value;
+    const nombre = document.getElementById('fp-nombre')?.value?.trim();
+    if (!nombre) return mostrarToastUI('El nombre es obligatorio', 'error');
+    
+    const id = idExistente || `prop_${normKey(nombre)}_${Date.now()}`;
+    const tipo = document.getElementById('fp-tipo').value;
+    const imagen = document.getElementById('fp-imagen').value.trim();
+
+    const propData = { id, nombre, tipo, imagen };
+    props[id] = propData;
+    const ok = await guardarProp(propData);
+    if (ok) { mostrarToastUI('Prop guardado ✅'); cerrarModalUI(); renderPanel(); }
+    else mostrarToastUI('Error guardando prop', 'error');
+};
+
+window.eliminarPropUI = async (id) => {
+    if (!confirm(`¿Eliminar el prop "${props[id]?.nombre}"?`)) return;
+    if (editor.selectedPropId === id) editor.selectedPropId = null;
+    
+    Object.values(mapaActual.hexes).forEach(hex => {
+        ['back','mid','over'].forEach(capa => {
+            if (Array.isArray(hex[capa])) hex[capa] = hex[capa].filter(pid => {
+                const basePid = typeof pid === 'string' ? pid.split(':')[0] : pid;
+                return basePid !== id;
+            });
+        });
+    });
+    delete props[id];
+    await eliminarProp(id);
+    renderPanel();
+    window.dispatchEvent(new Event('mapaModificado'));
+};
+
+window.abrirSubidaPropUI = (propId) => {
+    const p = props[propId];
+    if (!p) return;
+    const idHidden = document.getElementById('up-prop-id');
+    const nombre = document.getElementById('up-prop-nombre');
+    const tipo = document.getElementById('up-prop-tipo');
+    
+    if (idHidden) idHidden.value = p.id;
+    if (nombre) nombre.value = p.nombre;
+    if (tipo) tipo.value = p.tipo;
+    document.getElementById('upload-form')?.scrollIntoView({ behavior: 'smooth' });
+    mostrarToastUI(`Sube imagen para: ${p.nombre}`, 'info');
+};
+
+window.subirPropImagenUI = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    e.target.value = '';
+
+    const idInput = document.getElementById('up-prop-id')?.value;
+    const nombreInput = document.getElementById('up-prop-nombre')?.value?.trim();
+    if (!nombreInput) return mostrarToastUI('Escribe el nombre del prop antes de subir', 'error');
+    
+    const tipo = document.getElementById('up-prop-tipo')?.value || 'terreno';
+    const key = normKey(nombreInput);
+    const id = idInput || `prop_${key}_${Date.now()}`;
+
+    mostrarToastUI('Subiendo imagen de prop...', 'info');
+    try {
+        const url = await subirImagenStorage(file, 'imgregion', key);
+        const existente = props[id];
+        const propData = { id, nombre: existente ? existente.nombre : nombreInput, tipo: existente ? existente.tipo : tipo, imagen: url };
+        props[id] = propData;
+        await guardarProp(propData);
+        mostrarToastUI(`Prop actualizado ✅`);
+        renderPanel();
+    } catch (err) {
+        mostrarToastUI('Error: ' + err.message, 'error');
+    }
+};
 
 // NPCs
 window.abrirCrearNPCUI = () => abrirModalUI(htmlFormNPC(), '➕ Nuevo NPC');
@@ -185,13 +254,55 @@ window.seleccionarNPCUI = (id) => {
     const npc = npcsMapaLocal[id];
     if (npc) abrirModalUI(htmlFormNPC(npc), `✏️ ${npc.nombre}`);
 };
-window.guardarNPCUI = async () => { /* ... */ };
-window.eliminarNPCUI = async (id) => { /* ... */ };
+window.guardarNPCUI = async () => {
+    const idExistente = document.getElementById('fn-id')?.value;
+    const nombre = document.getElementById('fn-nombre')?.value?.trim();
+    if (!nombre) return mostrarToastUI('El nombre es obligatorio', 'error');
+    
+    const npcData = {
+        id: idExistente || `npc_${normKey(nombre)}_${Date.now()}`,
+        nombre,
+        tipo: document.getElementById('fn-tipo').value,
+        icono_url: document.getElementById('fn-icono').value.trim(),
+        hex_pos: document.getElementById('fn-hex').value.trim() || null,
+        capa: 'mid',
+        descripcion: document.getElementById('fn-desc').value.trim(),
+        stats: {}
+    };
+
+    npcsMapaLocal[npcData.id] = npcData;
+    const ok = await guardarNPC(npcData);
+    if (ok) { mostrarToastUI('NPC guardado ✅'); cerrarModalUI(); renderPanel(); window.dispatchEvent(new Event('mapaModificado')); }
+    else mostrarToastUI('Error guardando NPC', 'error');
+};
+window.eliminarNPCUI = async (id) => {
+    if (!confirm(`¿Eliminar al NPC "${npcsMapaLocal[id]?.nombre}"?`)) return;
+    delete npcsMapaLocal[id];
+    await eliminarNPC(id);
+    renderPanel();
+    window.dispatchEvent(new Event('mapaModificado'));
+};
 
 // Regiones
-window.crearRegionUI = () => { /* ... */ };
+window.crearRegionUI = () => {
+    const id = `reg_${Date.now()}`;
+    mapaActual.regiones[id] = crearRegion(id);
+    ui.selectedRegion = id;
+    renderPanel();
+    window.dispatchEvent(new Event('mapaModificado'));
+};
 window.seleccionarRegionUI = (id) => { ui.selectedRegion = ui.selectedRegion === id ? null : id; renderPanel(); };
-window.eliminarRegionUI = (id) => { /* ... */ };
+window.eliminarRegionUI = (id) => {
+    if (!confirm('¿Eliminar esta región completamente?')) return;
+    const reg = mapaActual.regiones[id];
+    if (reg) {
+        reg.hexes.forEach(key => { if (mapaActual.hexes[key]) mapaActual.hexes[key].region = null; });
+    }
+    delete mapaActual.regiones[id];
+    ui.selectedRegion = null;
+    renderPanel();
+    window.dispatchEvent(new Event('mapaModificado'));
+};
 window.actualizarRegion = (id, campo, valor) => {
     const reg = mapaActual.regiones[id];
     if (reg) { reg[campo] = valor; window.dispatchEvent(new Event('mapaModificado')); }
@@ -202,7 +313,6 @@ window.abrirInterior = async (regionId) => {
     const reg = mapaActual.regiones[regionId];
     if (!reg) return;
 
-    // Ya no hace falta chequear tieneInterior, asumimos que siempre tiene
     const interiorId = reg.interiorId || `interior_${regionId}`;
     reg.interiorId = interiorId;
 
@@ -225,7 +335,7 @@ window.abrirInterior = async (regionId) => {
     centrarCamara();
     actualizarBreadcrumb();
     renderPanel();
-    window.setHerramienta('mover'); // Cambia a mover automáticamente al entrar
+    window.setHerramienta('mover');
 };
 
 window.volverMapaPadre = async () => {
@@ -238,6 +348,8 @@ window.volverMapaPadre = async () => {
     renderPanel();
 };
 
+window.entrarInterior = (regionId) => { window.abrirInterior(regionId); };
+
 window.actualizarElevacionUI = (key, val) => {
     if (mapaActual.hexes[key]) {
         mapaActual.hexes[key].elevation = parseInt(val) || 0;
@@ -247,7 +359,12 @@ window.actualizarElevacionUI = (key, val) => {
 
 window.dropBGImagen = async (e) => { /* ... */ };
 window.subirBGImagen = async (e) => { /* ... */ };
-window.aplicarFondUI = (url) => { /* ... */ };
+window.aplicarFondUI = (url) => {
+    mapaActual.bg_imagen = url;
+    setBackground(url);
+    window.dispatchEvent(new Event('mapaModificado'));
+    mostrarToastUI('Fondo aplicado');
+};
 
 function actualizarBreadcrumb() {
     const el = document.getElementById('breadcrumb');
@@ -258,7 +375,6 @@ function actualizarBreadcrumb() {
     const btnVolver = document.getElementById('btn-volver-mapa');
     if (btnVolver) btnVolver.style.display = historialMapas.length > 0 ? '' : 'none';
 
-    // Mostrar/Ocultar botón de "Salir" en la barra de herramientas
     const btnSalir = document.getElementById('tool-salir');
     if (btnSalir) btnSalir.style.display = historialMapas.length > 0 ? 'inline-flex' : 'none';
 }
