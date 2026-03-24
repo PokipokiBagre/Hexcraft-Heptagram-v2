@@ -32,77 +32,96 @@ export function renderPanel() {
 
 // ── TAB: PROPS ───────────────────────────────────────────────
 function htmlProps() {
-    const filtroTipo = ui.filtroTipo || 'todos';
-    const filtroCapa = ui.filtroCapa || 'todos';
-    const busq       = (ui.busqueda  || '').toLowerCase();
+    const busq = (ui.busqueda || '').toLowerCase();
 
+    // Filtramos solo por búsqueda, mostramos TODOS los props y NPCs convertidos
     const lista = Object.values(props).filter(p => {
-        if (filtroTipo !== 'todos' && p.tipo !== filtroTipo) return false;
-        if (filtroCapa !== 'todos' && p.capa !== filtroCapa) return false;
         if (busq && !p.nombre.toLowerCase().includes(busq)) return false;
         return true;
     });
 
-    const capsElems = CAPAS.map(c =>
-        `<button class="filtro-pill ${filtroCapa === c ? 'activo' : ''}" onclick="window.setFiltroCapa('${c}')">${c}</button>`
-    ).join('');
-    const tipoElems = ['todos', ...PROP_TIPOS].map(t =>
-        `<button class="filtro-pill ${filtroTipo === t ? 'activo' : ''}" onclick="window.setFiltroTipo('${t}')">${t}</button>`
-    ).join('');
-
     const grid = lista.map(p => {
         const selClase = editor.propSeleccionado?.id === p.id ? 'prop-card-sel' : '';
+        const esPincel = p.id === 'prop_pintar';
+        const icono = esPincel ? `<div style="font-size: 2em; line-height: 1;">🖌️</div>` : `<img src="${p.imagen || NO_IMG()}" onerror="this.src='${NO_IMG()}'">`;
+        
         return `
-        <div class="prop-card ${selClase}" onclick="window.seleccionarProp('${p.id}')" title="${p.nombre} (${p.tipo} / ${p.capa})">
-            <img src="${p.imagen || NO_IMG()}" onerror="this.src='${NO_IMG()}'">
+        <div class="prop-card ${selClase}" onclick="window.seleccionarProp('${p.id}')" title="${p.nombre}">
+            ${icono}
             <div class="prop-card-nombre">${p.nombre}</div>
-            <div class="prop-card-meta">${p.tipo} · ${p.capa}</div>
-            ${editor.activo ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarPropUI('${p.id}')">✕</button>` : ''}
+            <div class="prop-card-meta">${p.tipo}</div>
+            ${editor.activo && !esPincel && !p.id.startsWith('pj_') ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarPropUI('${p.id}')">✕</button>` : ''}
         </div>`;
     }).join('') || '<p class="sin-resultado">Sin props. Crea uno con el botón +</p>';
 
     return `
     <div class="panel-seccion">
         <div class="panel-buscador-row">
-            <input type="text" placeholder="🔍 Buscar prop..." value="${ui.busqueda || ''}"
+            <input type="text" placeholder="🔍 Buscar prop o NPC..." value="${ui.busqueda || ''}"
                 oninput="window.setBusquedaUI(this.value)"
                 style="flex:1; background:#0a0018; border:1px solid #444; color:#fff; padding:6px 10px; border-radius:4px; font-size:0.82em;">
             ${editor.activo ? `<button class="btn-panel-add" onclick="window.abrirCrearProp()">＋ Nuevo</button>` : ''}
         </div>
-        <div class="filtros-pills">${capsElems}</div>
-        <div class="filtros-pills">${tipoElems}</div>
 
         ${editor.activo ? `
-        <div class="capa-selector">
-            <span style="color:#888; font-size:0.78em; font-family:sans-serif;">PINTAR EN:</span>
+        <div class="capa-selector" style="margin-bottom: 8px;">
+            <span style="color:#888; font-size:0.78em; font-family:sans-serif;">AGREGAR EN CAPA:</span>
             ${CAPAS.map(c => `<button class="filtro-pill capa-btn ${editor.capaActual === c ? 'activo' : ''}" onclick="window.setCapaActual('${c}')">${c}</button>`).join('')}
         </div>
-        <div class="brush-row">
-            <span style="color:#888; font-size:0.78em;">BRUSH:</span>
+        <div class="brush-row" style="margin-bottom: 12px;">
+            <span style="color:#888; font-size:0.78em;">TAMAÑO BRUSH:</span>
             ${[1,2,3,4].map(n => `<button class="filtro-pill ${editor.brushSize===n?'activo':''}" onclick="window.setBrushSize(${n})">${n}</button>`).join('')}
         </div>
-        <div style="background:rgba(0,0,0,0.4);border:1px solid #333;border-radius:6px;padding:8px;margin-top:4px;">
-            <div style="font-size:0.7em;color:#888;font-family:sans-serif;margin-bottom:6px;text-transform:uppercase;letter-spacing:.06em;">🎨 Color / Textura</div>
+        
+        <div style="background:rgba(0,0,0,0.6); border-left:3px solid var(--cyan); border-radius:4px; padding:10px; margin-bottom:15px;">
+            <div style="font-size:0.7em;color:#00ffff;font-family:sans-serif;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">
+                🎨 Opciones de Color (Solo activo con Pincel)
+            </div>
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-                <button class="filtro-pill ${editor.herramienta==='colorear'?'activo':''}" onclick="window.setHerramienta('colorear')" style="padding:4px 10px;">🎨 Colorear</button>
                 <input type="color" value="${editor.colorActual||'#4488cc'}"
                     onchange="window.setColorActual(this.value)"
-                    style="width:32px;height:26px;border:1px solid #555;border-radius:4px;background:none;cursor:pointer;padding:2px;">
-                <span style="font-size:0.7em;color:#888;">Opac:</span>
+                    style="width:38px;height:32px;border:1px solid #555;border-radius:4px;background:none;cursor:pointer;padding:2px;">
+                <span style="font-size:0.7em;color:#888;">Opacidad:</span>
                 <input type="range" min="0.1" max="1" step="0.05" value="${editor.opacidadPincel??0.7}"
                     oninput="window.setOpacidadPincel(parseFloat(this.value))"
                     style="flex:1;min-width:60px;accent-color:#00ccff;">
-            </div>
-            <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap;">
-                ${['#2a5f8a','#3a7a3a','#8a3a2a','#7a6a2a','#6a2a7a','#2a6a6a'].map(c=>
-                    `<div onclick="window.setColorActual('${c}')" title="${c}" style="width:22px;height:22px;background:${c};border-radius:3px;border:2px solid ${c===editor.colorActual?'#fff':'#333'};cursor:pointer;"></div>`
-                ).join('')}
-                <button onclick="window.aplicarRuido()" style="background:#0a2a3a;border:1px solid #335566;color:#88ccdd;padding:2px 7px;border-radius:3px;font-size:0.7em;cursor:pointer;" title="Ruido de color">≋ Ruido</button>
+                <button onclick="window.aplicarRuido()" style="background:#0a2a3a;border:1px solid #335566;color:#88ccdd;padding:4px 8px;border-radius:3px;font-size:0.7em;cursor:pointer;" title="Ruido de color">≋ Ruido</button>
             </div>
         </div>
         ` : ''}
 
-        <div class="props-grid">${grid}</div>
+        <div class="props-grid" style="grid-template-columns: repeat(5, 1fr); gap: 4px;">${grid}</div>
+    </div>`;
+}
+
+// ── Modales / Formularios ─────────────────────────────────────
+export function abrirModal(contenidoHtml, titulo = '') {
+    document.getElementById('modal-titulo').innerText = titulo;
+    document.getElementById('modal-cuerpo').innerHTML = contenidoHtml;
+    document.getElementById('modal-region').classList.remove('oculto');
+}
+
+export function cerrarModal() {
+    document.getElementById('modal-region').classList.add('oculto');
+}
+
+export function htmlFormProp(propData = null) {
+    const p = propData || { nombre:'', tipo:'terreno', imagen:'' };
+    // Eliminado el ancho, alto y capa del formulario
+    return `
+    <div style="display:flex; flex-direction:column; gap:10px;">
+        <label>Nombre
+            <input type="text" id="fp-nombre" value="${p.nombre}" class="form-input">
+        </label>
+        <label>Tipo (Categoría visual)
+            <select id="fp-tipo" class="form-input">
+                ${PROP_TIPOS.map(t => `<option value="${t}" ${p.tipo===t?'selected':''}>${t}</option>`).join('')}
+            </select>
+        </label>
+        <label>Imagen URL (o sube una imagen desde la pestaña Imgs)
+            <input type="text" id="fp-imagen" value="${p.imagen||''}" placeholder="https://..." class="form-input">
+        </label>
+        <button class="btn-accion" style="background:var(--gold); color:#000;" onclick="window.guardarPropUI()">💾 Guardar Prop</button>
     </div>`;
 }
 
