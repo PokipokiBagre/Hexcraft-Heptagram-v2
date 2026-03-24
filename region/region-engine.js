@@ -1,12 +1,5 @@
 // ============================================================
 // region-engine.js — Motor hexagonal
-// CAMBIOS v2:
-//   - Fix franja diagonal: rango visible usa las 4 esquinas
-//   - Selección por arrastre + shift para acumular
-//   - Herramienta "colorear" (color sólido por hex)
-//   - Formas por tipo: terreno=clip hex, elemento=círculo,
-//     objeto=cuadrado, estructura/entidad=imagen completa
-//   - Posicionamiento dinámico de hasta 7 items por capa
 // ============================================================
 
 import {
@@ -50,8 +43,7 @@ function hexRound(q, r) {
 export function hexKey(q, r) { return `${q},${r}`; }
 
 export function hexNeighbors(q, r) {
-    return [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]]
-        .map(([dq,dr]) => ({ q: q+dq, r: r+dr }));
+    return [[1,0],[1,-1],[0,-1],[-1,0],[-1,1],[0,1]].map(([dq,dr]) => ({ q: q+dq, r: r+dr }));
 }
 
 export function hexesEnRadio(q, r, radio) {
@@ -98,7 +90,6 @@ function redimensionar() {
     ctx.scale(dpr, dpr);
 }
 
-// ── Loop de render ───────────────────────────────────────────
 function iniciarLoop() {
     if (rafId) cancelAnimationFrame(rafId);
     const loop = () => { dibujar(); rafId = requestAnimationFrame(loop); };
@@ -112,7 +103,6 @@ export function dibujar() {
 
     ctx.clearRect(0, 0, W, H);
 
-    // Fondo
     if (bgImage && bgImage.complete) {
         ctx.globalAlpha = 0.18;
         const escala = Math.max(W / bgImage.naturalWidth, H / bgImage.naturalHeight);
@@ -124,10 +114,6 @@ export function dibujar() {
         ctx.fillRect(0, 0, W, H);
     }
 
-    // ── Rango visible: convertir las 4 esquinas de pantalla ───
-    // BUG FIX: las coords axiales son sesgadas, convertir solo
-    // 2 esquinas diagonales produce una franja en vez del área
-    // completa. Hay que calcular los extremos de las 4 esquinas.
     const margen = HEX_SIZE * camara.zoom * 2;
     const corners = [
         pixelToHex(-margen,    -margen),
@@ -140,7 +126,7 @@ export function dibujar() {
     const rMin = Math.min(...corners.map(c => c.r)) - 1;
     const rMax = Math.max(...corners.map(c => c.r)) + 1;
 
-    // Paso 1: base del hex (región + color pintado)
+    // 1. Base (Región y Color Pincel)
     for (let q = qMin; q <= qMax; q++)
         for (let r = rMin; r <= rMax; r++) {
             const key = hexKey(q, r);
@@ -148,16 +134,16 @@ export function dibujar() {
             dibujarHexBase(cx, cy, mapaActual.hexes[key]);
         }
 
-    // Paso 2: props background (terrain, clipped to hex shape)
+    // 2. Capa 'back' (Terrenos)
     for (let q = qMin; q <= qMax; q++)
         for (let r = rMin; r <= rMax; r++) {
             const hex = mapaActual.hexes[hexKey(q, r)];
-            if (!hex?.background?.length) continue;
+            if (!hex?.back?.length) continue;
             const { x: cx, y: cy } = hexToPixel(q, r);
-            dibujarBackgroundProps(hex.background, cx, cy);
+            dibujarBackgroundProps(hex.back, cx, cy);
         }
 
-    // Paso 3: props mid y over (entidades, slots dinámicos)
+    // 3. Capas 'mid' y 'over' (Entidades/Objetos sin superponerse)
     for (const capa of ['mid', 'over'])
         for (let q = qMin; q <= qMax; q++)
             for (let r = rMin; r <= rMax; r++) {
@@ -167,7 +153,7 @@ export function dibujar() {
                 dibujarEntidadProps(hex[capa], cx, cy);
             }
 
-    // Paso 4: NPCs
+    // (NPCs locales fijos)
     Object.values(npcsMapaLocal).forEach(npc => {
         if (!npc.hex) return;
         const [nq, nr] = npc.hex.split(',').map(Number);
@@ -175,40 +161,27 @@ export function dibujar() {
         dibujarNPC(npc, cx, cy);
     });
 
-    // Paso 5: overlays (hover, selección)
+    // 5. Overlays y Grid
     for (let q = qMin; q <= qMax; q++)
         for (let r = rMin; r <= rMax; r++) {
             const key = hexKey(q, r);
             const { x: cx, y: cy } = hexToPixel(q, r);
             dibujarOverlay(q, r, cx, cy, key);
-        }
-
-    // Paso 6: grid
-    for (let q = qMin; q <= qMax; q++)
-        for (let r = rMin; r <= rMax; r++) {
-            const { x: cx, y: cy } = hexToPixel(q, r);
+            
             trazarHexPath(cx, cy);
             ctx.strokeStyle = 'rgba(100, 70, 160, 0.25)';
             ctx.lineWidth = 0.8;
             ctx.stroke();
         }
 
-    // Paso 7: rectángulo de arrastre de selección
+    // Drag select
     if (_drag.activo) {
-        const xMin = Math.min(_drag.x1, _drag.x2);
-        const yMin = Math.min(_drag.y1, _drag.y2);
-        const w = Math.abs(_drag.x2 - _drag.x1);
-        const h = Math.abs(_drag.y2 - _drag.y1);
-        ctx.strokeStyle = 'rgba(100,200,255,0.9)';
-        ctx.lineWidth = 1.5;
-        ctx.setLineDash([4, 3]);
-        ctx.strokeRect(xMin, yMin, w, h);
-        ctx.fillStyle = 'rgba(100,200,255,0.07)';
-        ctx.fillRect(xMin, yMin, w, h);
-        ctx.setLineDash([]);
+        const xMin = Math.min(_drag.x1, _drag.x2), yMin = Math.min(_drag.y1, _drag.y2);
+        const w = Math.abs(_drag.x2 - _drag.x1), h = Math.abs(_drag.y2 - _drag.y1);
+        ctx.strokeStyle = 'rgba(100,200,255,0.9)'; ctx.lineWidth = 1.5; ctx.setLineDash([4, 3]);
+        ctx.strokeRect(xMin, yMin, w, h); ctx.setLineDash([]);
     }
 
-    // Paso 8: HUD
     if (editor.activo) dibujarHUDEditor(W, H);
 }
 
@@ -217,41 +190,28 @@ function dibujarHexBase(cx, cy, hex) {
     trazarHexPath(cx, cy);
     const reg = hex?.region ? mapaActual.regiones[hex.region] : null;
     if (reg) {
-        ctx.fillStyle = reg.color || '#334';
-        ctx.globalAlpha = reg.opacidad || 0.3;
-        ctx.fill();
-        ctx.globalAlpha = 1;
+        ctx.fillStyle = reg.color || '#334'; ctx.globalAlpha = reg.opacidad || 0.3;
+        ctx.fill(); ctx.globalAlpha = 1;
     } else {
         ctx.fillStyle = hex ? 'rgba(10,5,20,0.6)' : 'rgba(5,0,10,0.85)';
         ctx.fill();
     }
-    // Color pintado con herramienta colorear
+    // Color pintado por prop_pintar
     if (hex?.color) {
         trazarHexPath(cx, cy);
         ctx.fillStyle = hex.color;
-        ctx.globalAlpha = editor.opacidadPincel ?? 0.7;
+        ctx.globalAlpha = hex.opacidad || 0.7; // Podemos guardar opacidad individual por hex luego
         ctx.fill();
         ctx.globalAlpha = 1;
     }
 }
 
-// ── Props terreno — imagen clipeada al hex ───────────────────
+// ── Terreno (Back) ───────────────────────────────────────────
 function dibujarBackgroundProps(propIds, cx, cy) {
     const size = HEX_SIZE * camara.zoom;
     propIds.forEach(pid => {
         const p = props[pid];
-        if (!p) return;
-        // Sin imagen: pintar el color base del prop si lo tiene
-        if (!p.imagen) {
-            if (p.colorBase) {
-                trazarHexPath(cx, cy);
-                ctx.fillStyle = p.colorBase;
-                ctx.globalAlpha = 0.8;
-                ctx.fill();
-                ctx.globalAlpha = 1;
-            }
-            return;
-        }
+        if (!p || !p.imagen) return;
         const img = getCachedImage(p.imagen);
         if (!img?.complete) return;
         ctx.save();
@@ -263,52 +223,56 @@ function dibujarBackgroundProps(propIds, cx, cy) {
     });
 }
 
-// ── Props entidades — posicionamiento con slots ──────────────
+// ── Entidades (No Superpuestas Dinámico) ─────────────────────
 function dibujarEntidadProps(propIds, cx, cy) {
-    const size  = HEX_SIZE * camara.zoom;
-    const limit = Math.min(propIds.length, 7);
+    const limit = propIds.length;
+    if (limit === 0) return;
+    
+    const hexSize = HEX_SIZE * camara.zoom;
+    
+    // Calcular el tamaño disponible para que NADIE se toque
+    // Si hay 1, ocupa casi todo el centro. Si hay más, se distribuyen en un círculo interno.
+    let itemSize;
+    let radiusFromCenter;
+
+    if (limit === 1) {
+        itemSize = hexSize * 1.2; // Un solo ítem grande en el centro
+        radiusFromCenter = 0;
+    } else if (limit === 2) {
+        itemSize = hexSize * 0.7; // Dos ítems medianos
+        radiusFromCenter = hexSize * 0.45;
+    } else {
+        // Fórmula perimetral para evitar que choquen: 
+        // Se colocan en un círculo de radio (hexSize * 0.55).
+        // El perímetro disponible es 2*PI*R. Dividido entre los ítems da el espacio máximo.
+        radiusFromCenter = hexSize * 0.55; 
+        const maxDiameter = (2 * Math.PI * radiusFromCenter) / limit;
+        itemSize = Math.min(hexSize * 0.6, maxDiameter * 0.85); // 0.85 para dar margen/espaciado entre ellos
+    }
 
     for (let i = 0; i < limit; i++) {
         const p = props[propIds[i]];
         if (!p) continue;
 
-        const { sx, sy } = slotPos(i, limit, cx, cy, size);
-        const isize = slotSize(p.tipo, size, limit);
+        let sx = cx, sy = cy;
+        if (limit > 1) {
+            // Distribuir equitativamente en 360 grados
+            const angle = (2 * Math.PI / limit) * i - (Math.PI / 2);
+            sx = cx + radiusFromCenter * Math.cos(angle);
+            sy = cy + radiusFromCenter * Math.sin(angle);
+        }
 
         ctx.save();
-        clipPorTipo(p.tipo, sx, sy, isize);
+        clipPorTipo(p.tipo, sx, sy, itemSize);
 
         if (p.imagen) {
             const img = getCachedImage(p.imagen);
-            if (img?.complete) ctx.drawImage(img, sx - isize/2, sy - isize/2, isize, isize);
+            if (img?.complete) ctx.drawImage(img, sx - itemSize/2, sy - itemSize/2, itemSize, itemSize);
         }
 
-        bordeDecorativo(p.tipo, sx, sy, isize);
+        bordeDecorativo(p.tipo, sx, sy, itemSize);
         ctx.restore();
     }
-
-    if (propIds.length > 7) {
-        ctx.font = `bold ${Math.max(8, 9 * camara.zoom)}px sans-serif`;
-        ctx.fillStyle = '#ffcc00';
-        ctx.textAlign = 'center';
-        ctx.fillText(`+${propIds.length - 7}`, cx, cy - size * 0.85);
-    }
-}
-
-function slotPos(i, total, cx, cy, size) {
-    if (total === 1) return { sx: cx, sy: cy };
-    if (total === 7 && i === 0) return { sx: cx, sy: cy };
-
-    const ci    = total === 7 ? i - 1 : i;
-    const count = total === 7 ? 6 : total;
-    const radio = size * (total <= 3 ? 0.46 : 0.53);
-    const angle = (2 * Math.PI / count) * ci - Math.PI / 2;
-    return { sx: cx + radio * Math.cos(angle), sy: cy + radio * Math.sin(angle) };
-}
-
-function slotSize(tipo, hexSize, total) {
-    const factor = total === 1 ? 1.4 : total <= 3 ? 1.0 : total <= 6 ? 0.72 : 0.62;
-    return hexSize * factor;
 }
 
 function clipPorTipo(tipo, x, y, size) {
@@ -316,8 +280,8 @@ function clipPorTipo(tipo, x, y, size) {
     ctx.beginPath();
     if (tipo === 'elemento') {
         ctx.arc(x, y, r, 0, Math.PI * 2);
-    } else if (tipo === 'objeto') {
-        const rd = size * 0.12;
+    } else if (tipo === 'objeto' || tipo === 'entidad') {
+        const rd = size * 0.15;
         if (ctx.roundRect) ctx.roundRect(x - r, y - r, size, size, rd);
         else ctx.rect(x - r, y - r, size, size);
     } else {
@@ -340,7 +304,7 @@ function bordeDecorativo(tipo, x, y, size) {
     if (tipo === 'elemento') ctx.arc(x, y, r, 0, Math.PI * 2);
     else ctx.rect(x - r, y - r, size, size);
     ctx.strokeStyle = color;
-    ctx.lineWidth = Math.max(1, size * 0.06);
+    ctx.lineWidth = Math.max(1, size * 0.08);
     ctx.stroke();
 }
 
@@ -656,28 +620,41 @@ export function aplicarHerramienta(q, r, key) {
     window.dispatchEvent(new Event('mapaModificado'));
 }
 
+import { crearHexData } from './region-state.js';
+
 function _accionHex(q, r, key) {
-    const herr = editor.herramienta;
+    const herr = editor.herramienta; // Ahora es 'agregar' en vez de pintar
     const capa = editor.capaActual;
 
-    if (herr === 'pintar') {
+    if (herr === 'agregar') {
         if (!editor.propSeleccionado) return;
         if (!mapaActual.hexes[key]) mapaActual.hexes[key] = crearHexData();
+        
         const pid = editor.propSeleccionado.id;
-        const arr = mapaActual.hexes[key][capa];
-        if (!arr.includes(pid)) arr.push(pid);
-
-    } else if (herr === 'colorear') {
-        if (!mapaActual.hexes[key]) mapaActual.hexes[key] = crearHexData();
-        mapaActual.hexes[key].color = editor.colorActual;
+        
+        // Si es el pincel falso, aplicamos color de fondo, no agregamos un prop físico
+        if (pid === 'prop_pintar') {
+            mapaActual.hexes[key].color = editor.colorActual;
+            mapaActual.hexes[key].opacidad = editor.opacidadPincel ?? 0.7;
+        } else {
+            // Agregamos el prop real a la capa seleccionada
+            const arr = mapaActual.hexes[key][capa];
+            if (!arr.includes(pid)) arr.push(pid);
+        }
 
     } else if (herr === 'borrar') {
         if (!mapaActual.hexes[key]) return;
         const hex = mapaActual.hexes[key];
+        
         if (editor.propSeleccionado) {
             const pid = editor.propSeleccionado.id;
-            hex[capa] = hex[capa].filter(p => p !== pid);
+            if (pid === 'prop_pintar') {
+                hex.color = null; // Borramos el color pintado
+            } else {
+                hex[capa] = hex[capa].filter(p => p !== pid); // Borramos el prop
+            }
         } else {
+            // Borrado general
             hex[capa] = [];
             hex.color = null;
         }
