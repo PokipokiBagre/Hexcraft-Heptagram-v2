@@ -92,10 +92,14 @@ window.abrirMenuOP = async () => {
     }
 };
 
+window.setFiltroImagen = (v) => { ui.filtroImagen = v; renderPanel(); };
+
 window.seleccionarProp = (id) => {
     editor.propSeleccionado = props[id] || null;
-    // Solo cambia a agregar si estabas en una herramienta "neutral" (no borrar, región, etc.)
-    if (editor.herramienta !== 'borrar' && editor.herramienta !== 'region' && editor.herramienta !== 'seleccionar') {
+    // Solo cambia a 'agregar' si la herramienta actual no tiene sentido mantener (mover, seleccionar)
+    // NUNCA cambia si estás en borrar o region — esas herramientas no dependen del prop activo
+    const herrSinProp = ['borrar', 'region', 'seleccionar', 'mover'];
+    if (!herrSinProp.includes(editor.herramienta)) {
         editor.herramienta = 'agregar';
         document.querySelectorAll('.tool-btn').forEach(b => {
             b.classList.toggle('activo', b.dataset.tool === 'agregar');
@@ -124,6 +128,14 @@ window.eliminarPropUI = async (id) => {
     if (!confirm(`¿Eliminar el prop "${props[id]?.nombre}"?`)) return;
     // Si era el prop activo, deseleccionar
     if (editor.propSeleccionado?.id === id) editor.propSeleccionado = null;
+    // Limpiar referencias en todos los hexes del mapa
+    Object.values(mapaActual.hexes).forEach(hex => {
+        if (!hex) return;
+        ['back','mid','over'].forEach(capa => {
+            if (Array.isArray(hex[capa]))
+                hex[capa] = hex[capa].filter(pid => pid !== id);
+        });
+    });
     delete props[id];
     await eliminarProp(id);
     renderPanel();
@@ -381,6 +393,59 @@ window.guardarMapaUI = async () => {
 };
 
 window.cerrarModalRegion = cerrarModal;
+
+// ── Deseleccionar región ──────────────────────────────────────
+window.deseleccionarRegion = () => {
+    ui.selectedRegion = null;
+    renderPanel();
+};
+
+// ── Subida de imagen para NPC desde el panel Imágenes ─────────
+window.subirNPCImagen = async (e) => {
+    const file = e.target.files[0];
+    if (file) await _subirNPCFile(file);
+    e.target.value = '';
+};
+window.dropNPCImagen = async (e) => {
+    e.preventDefault();
+    document.getElementById('drop-npc-zone')?.classList.remove('drag-sobre');
+    const file = e.dataTransfer.files[0];
+    if (file) await _subirNPCFile(file);
+};
+
+async function _subirNPCFile(file) {
+    const npcId = document.getElementById('up-npc-id')?.value?.trim();
+    if (!npcId) return mostrarToast('Selecciona un NPC primero', 'error');
+    const npc = npcsMapaLocal[npcId];
+    if (!npc) return mostrarToast('NPC no encontrado', 'error');
+
+    const key = normKey(npc.nombre);
+    const progEl = document.getElementById('up-npc-progress');
+    const fillEl = document.getElementById('up-npc-fill');
+    const statEl = document.getElementById('up-npc-status');
+    const show = (pct, msg) => {
+        if (progEl) progEl.style.display = 'block';
+        if (fillEl) fillEl.style.width = pct + '%';
+        if (statEl) { statEl.innerText = msg; statEl.style.color = pct === 100 ? '#00ff88' : '#aaa'; }
+    };
+    show(0, 'Iniciando...');
+    try {
+        const url = await subirImagenProp(file, 'imgnpcs', key, (pct, msg) => show(pct, msg));
+        npc.icono = url;
+        await guardarNPC(npc);
+        mostrarToast(`Imagen de ${npc.nombre} actualizada ✅`);
+        renderPanel();
+    } catch (err) {
+        show(0, '❌ ' + err.message);
+        mostrarToast('Error: ' + err.message, 'error');
+    }
+}
+
+// Pre-rellenar selector de NPC en la pestaña imágenes
+window.setNPCParaSubida = (npcId) => {
+    const sel = document.getElementById('up-npc-id');
+    if (sel) sel.value = npcId;
+};
 
 function actualizarBreadcrumb() {
     const el = document.getElementById('breadcrumb');
