@@ -48,9 +48,15 @@
 <div class="bottom-tools solo-op" style="display:none;">
     <button class="tool-btn activo" data-tool="agregar" onclick="window.setHerramienta('agregar')" title="Agregar (A)"><span class="icon">➕</span>Agregar</button>
     <button class="tool-btn"        data-tool="borrar"  onclick="window.setHerramienta('borrar')"  title="Borrar (B)"><span class="icon">🧹</span>Borrar</button>
-    <button class="tool-btn"        data-tool="entrar"  onclick="window.setHerramienta('entrar')"  title="Entrar a Interior (E)"><span class="icon">🚪</span>Puerta</button>
-    <button class="tool-btn"        data-tool="mover"   onclick="window.setHerramienta('mover')"   title="Mover cámara/Info (M)"><span class="icon">🤚</span>Mover</button>
+    
     <div style="width:1px; background:var(--border); margin:0 4px;"></div>
+    
+    <button class="tool-btn"        data-tool="ingresar" onclick="window.setHerramienta('ingresar')" title="Ingresar a Región (I)"><span class="icon">🔽</span>Ingresar</button>
+    <button class="tool-btn"        id="tool-salir" style="display:none; color:#ffcc00;" onclick="window.volverMapaPadre()" title="Salir al mapa superior (O)"><span class="icon">🔼</span>Salir</button>
+    
+    <div style="width:1px; background:var(--border); margin:0 4px;"></div>
+
+    <button class="tool-btn"        data-tool="mover"   onclick="window.setHerramienta('mover')"   title="Mover cámara/Info (M)"><span class="icon">🤚</span>Mover</button>
     <button class="tool-btn" onclick="window.cambiarPanelUI('imagenes')" title="Gestionar imágenes"><span class="icon">🖼️</span>Imgs</button>
 </div>
 
