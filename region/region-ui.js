@@ -8,9 +8,6 @@ import {
     STORAGE_URL
 } from './region-state.js';
 import { setBackground } from './region-render.js';
-import {
-    htmlFormProp, abrirModalUI, cerrarModalUI, mostrarToastUI
-} from './region-ui-elements.js';
 import { hexKey, normKey } from './region-utils.js'; 
 
 const NO_IMG = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
@@ -33,7 +30,6 @@ export function renderPanel() {
 function htmlPropsPanel() {
     const busq = (ui.busqueda || '').toLowerCase();
     
-    // Todos los props, incluyendo el de región universal
     const lista = Object.values(props).filter(p => {
         if (p.id === 'prop_region') return false;
         if (busq && !p.nombre.toLowerCase().includes(busq)) return false;
@@ -257,6 +253,15 @@ export function renderInfoHexPanel(q, r, key) {
         <div class="divider"></div>
         ${misionesHtml ? `<div class="detalle-fila"><b>Misiones:</b><br>${misionesHtml}</div>` : ''}
         ${npcsHtml ? `<div class="detalle-fila"><b>Presentes:</b>${npcsHtml}</div>` : ''}
+
+        ${editor.activo ? `
+        <div class="divider"></div>
+        <div class="brush-row" style="margin-top:5px;">
+            <span style="color:#aaa; font-size:0.75em;">Elevación (3D):</span>
+            <input type="number" value="${hex.elevation || 0}" style="width:50px; background:#000; border:1px solid #444; color:#fff;"
+                onchange="window.actualizarElevacionUI('${key}', this.value)">
+        </div>
+        ` : ''}
     </div>`;
 }
 
