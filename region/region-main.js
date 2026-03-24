@@ -12,7 +12,7 @@ import {
     cargarTodo, guardarMapa, guardarProp, eliminarProp, 
     guardarNPC, eliminarNPC, subirImagenStorage 
 } from './region-data.js';
-import { inicializarEngine } from './region-engine.js';
+import { inicializarEngine, aplicarRuidoVisible } from './region-engine.js';
 import { setBackground } from './region-render.js';
 import { renderPanel, renderInfoHexPanel, cargarListaBG_UI } from './region-ui.js';
 import { 
@@ -75,6 +75,12 @@ window.setBrushSizeUI = (n) => { editor.brushSize = n; renderPanel(); };
 window.setCapaActualUI = (c) => { editor.capaActual = c; renderPanel(); };
 window.setColorActual = (color) => { editor.colorActual = color; renderPanel(); };
 window.setOpacidadPincel = (val) => { editor.opacidadPincel = parseFloat(val); };
+
+window.aplicarRuido = () => {
+    const color = editor.colorActual || '#4488cc';
+    aplicarRuidoVisible(color, editor.opacidadPincel ?? 1.0, 0.35);
+    mostrarToastUI('≋ Ruido aplicado a la capa ' + editor.capaActual.toUpperCase(), 'info');
+};
 
 window.abrirMenuOP = async () => {
     if (hexAuth.esAdmin()) {
@@ -149,7 +155,10 @@ window.eliminarPropUI = async (id) => {
     
     Object.values(mapaActual.hexes).forEach(hex => {
         ['back','mid','over'].forEach(capa => {
-            if (Array.isArray(hex[capa])) hex[capa] = hex[capa].filter(pid => pid !== id);
+            if (Array.isArray(hex[capa])) hex[capa] = hex[capa].filter(pid => {
+                const basePid = typeof pid === 'string' ? pid.split(':')[0] : pid;
+                return basePid !== id;
+            });
         });
     });
     delete props[id];
