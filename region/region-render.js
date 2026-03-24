@@ -29,32 +29,37 @@ export function dibujarEscena() {
         context.fillStyle = '#0a0018'; context.fillRect(0, 0, W, H);
     }
 
-    const listDrawingItems = getDrawingList(W, H);
+    const layers = getDrawingLayers(W, H);
     
-    listDrawingItems.forEach(item => {
-        const currentOpac = item.opacidad || 1.0;
+    // FASE 1: Suelo y texturas (Garantiza que nada solape los bordes después)
+    layers.ground.forEach(item => dibujarHexTop3D(item.q, item.r, item.hex, item.projPos));
+    
+    // FASE 2: Bordes de región (Siempre encima del suelo)
+    layers.borders.forEach(item => dibujarHexRegionBorder(item.q, item.r, item.hex, item.projPos));
 
-        switch (item.type) {
-            case 'hexTop':    
-                dibujarHexTop3D(item.q, item.r, item.hex, item.projPos); break;
-            case 'itemMid':   
-                dibujarBillboardItem(item.q, item.r, item.propId, item.projPos, currentOpac, 'mid'); break;
-            case 'itemNPC':   
-                dibujarNPC(item.q, item.r, item.npc, item.projPos, currentOpac); break;
-            case 'hexOverBg': 
-                dibujarHexOverBackground(item.q, item.r, item.propId, item.hex, item.projPos, currentOpac); break;
-            case 'hexOverItem': 
-                dibujarHexOverItem(item.q, item.r, item.propId, item.hex, item.projPos, currentOpac); break;
-            case 'gridOverlay': 
-                dibujarGridAndOverlay(item.q, item.r, item.hex, item.projPos, item.layer); break;
-        }
+    // FASE 3: Rejilla base (Grid)
+    layers.gridBase.forEach(item => dibujarGridAndOverlay(item.q, item.r, item.hex, item.projPos, 'base'));
+
+    // FASE 4: Props, personajes y entidades
+    layers.props.forEach(item => {
+        const currentOpac = item.opacidad || 1.0;
+        if (item.type === 'itemMid') dibujarBillboardItem(item.q, item.r, item.propId, item.projPos, currentOpac, 'mid');
+        if (item.type === 'itemNPC') dibujarNPC(item.q, item.r, item.npc, item.projPos, currentOpac);
+    });
+
+    // FASE 5: Capa OVER flotante
+    layers.over.forEach(item => {
+        const currentOpac = item.opacidad || 1.0;
+        if (item.type === 'hexOverBg') dibujarHexOverBackground(item.q, item.r, item.propId, item.hex, item.projPos, currentOpac);
+        if (item.type === 'hexOverItem') dibujarHexOverItem(item.q, item.r, item.propId, item.hex, item.projPos, currentOpac);
+        if (item.type === 'gridOverlay') dibujarGridAndOverlay(item.q, item.r, item.hex, item.projPos, 'over');
     });
 
     if (editor.activo) dibujarHUDEditor(W, H);
 }
 
-function getDrawingList(W, H) {
-    const list = [];
+function getDrawingLayers(W, H) {
+    const layers = { ground: [], borders: [], gridBase: [], props: [], over: [] };
     const margen = HEX_SIZE * camara.zoom * 6;
     
     for (const key in mapaActual.hexes) {
@@ -66,8 +71,8 @@ function getDrawingList(W, H) {
 
         const baseDepth = baseProjPos.y; 
 
-        // PLANO BASE 
-        list.push({ type: 'hexTop', q, r, hex, projPos: baseProjPos, depth: baseDepth });
+        layers.ground.push({ type: 'hexTop', q, r, hex, projPos: baseProjPos, depth: baseDepth });
+        if (hex.region) layers.borders.push({ type: 'regionBorder', q, r, hex, projPos: baseProjPos, depth: baseDepth });
 
         hex.mid?.forEach(pid => {
             let opac = 1.0;
@@ -75,22 +80,20 @@ function getDrawingList(W, H) {
                 if (pid.startsWith('COLOR:')) opac = parseFloat(pid.split(':')[2]) || 1.0;
                 else if (pid.includes(':')) opac = parseFloat(pid.split(':')[1]) || 1.0;
             }
-            list.push({ type: 'itemMid', q, r, propId: pid, projPos: baseProjPos, opacidad: opac, depth: baseDepth + 1 });
+            layers.props.push({ type: 'itemMid', q, r, propId: pid, projPos: baseProjPos, opacidad: opac, depth: baseDepth + 1 });
         });
         
         Object.values(npcsMapaLocal).forEach(npc => {
-            if (npc.hex_pos === key) list.push({ type: 'itemNPC', q, r, npc, projPos: baseProjPos, opacidad: 1.0, depth: baseDepth + 2 });
+            if (npc.hex_pos === key) layers.props.push({ type: 'itemNPC', q, r, npc, projPos: baseProjPos, opacidad: 1.0, depth: baseDepth + 2 });
         });
 
-        list.push({ type: 'gridOverlay', q, r, hex, projPos: baseProjPos, layer: 'base', depth: baseDepth + 3 });
+        layers.gridBase.push({ type: 'gridOverlay', q, r, hex, projPos: baseProjPos, depth: baseDepth + 3 });
 
-        // PLANO OVER (Flotante Limpio)
         if (hex.over?.length > 0) {
             const overProjPos = { 
                 x: baseProjPos.x + (OVER_OFFSET_X * camara.zoom), 
                 y: baseProjPos.y + (OVER_OFFSET_Y * camara.zoom)
             };
-            
             const overDepth = baseDepth + 5000;
 
             hex.over.forEach(pid => {
@@ -100,62 +103,26 @@ function getDrawingList(W, H) {
                 else if (typeof pid === 'string' && pid.includes(':')) opac = parseFloat(pid.split(':')[1]) || 1.0;
                 
                 if (isColor) {
-                    list.push({ type: 'hexOverBg', q, r, propId: pid, hex, projPos: overProjPos, opacidad: opac, depth: overDepth });
+                    layers.over.push({ type: 'hexOverBg', q, r, propId: pid, hex, projPos: overProjPos, opacidad: opac, depth: overDepth });
                 } else {
-                    list.push({ type: 'hexOverItem', q, r, propId: pid, hex, projPos: overProjPos, opacidad: opac, depth: overDepth + 1 });
+                    layers.over.push({ type: 'hexOverItem', q, r, propId: pid, hex, projPos: overProjPos, opacidad: opac, depth: overDepth + 1 });
                 }
             });
-
-            list.push({ type: 'gridOverlay', q, r, hex, projPos: overProjPos, layer: 'over', depth: overDepth + 2 });
+            layers.over.push({ type: 'gridOverlay', q, r, hex, projPos: overProjPos, depth: overDepth + 2 });
         }
     }
 
-    return list.sort((a, b) => a.depth - b.depth);
+    Object.values(layers).forEach(arr => arr.sort((a, b) => a.depth - b.depth));
+    return layers;
 }
 
-// ── PLANO BASE Y REGIONES (CONTORNO INTELIGENTE PERFECTO) ──
+// ── PLANO BASE ──
 function dibujarHexTop3D(q, r, hex, topPos) {
     const verts = isometricHexVertices(topPos.x, topPos.y, 0);
-    const reg = hex.region ? mapaActual.regiones[hex.region] : null;
 
-    if (reg) {
-        context.save();
-        context.strokeStyle = reg.color || '#334';
-        context.lineWidth = 4 * camara.zoom; 
-        context.lineCap = 'round';
-        context.lineJoin = 'round';
-        context.globalAlpha = reg.opacidad ? Math.min(1, reg.opacidad + 0.4) : 0.8;
-
-        // Vértices 0 a 5 mapeados EXACTAMENTE a las coordenadas axiales vecinas. 
-        // No hay margen de error por redondeos ni escalas isométricas.
-        const edgeNeighbors = [
-            {dq: 1, dr: 0},   // Arista 0 (Bottom-Right)
-            {dq: 0, dr: 1},   // Arista 1 (Bottom)
-            {dq: -1, dr: 1},  // Arista 2 (Bottom-Left)
-            {dq: -1, dr: 0},  // Arista 3 (Top-Left)
-            {dq: 0, dr: -1},  // Arista 4 (Top)
-            {dq: 1, dr: -1}   // Arista 5 (Top-Right)
-        ];
-
-        context.beginPath();
-        for (let i = 0; i < 6; i++) {
-            const dir = edgeNeighbors[i];
-            const nHex = mapaActual.hexes[`${q + dir.dq},${r + dir.dr}`];
-            
-            // Si no hay vecino, o el vecino pertenece a OTRA región, trazamos la línea.
-            if (!nHex || nHex.region !== hex.region) {
-                context.moveTo(verts[i].x, verts[i].y);
-                context.lineTo(verts[(i+1)%6].x, verts[(i+1)%6].y);
-            }
-        }
-        context.stroke();
-        context.restore();
-
-    } else {
-        trazarHexPath(verts);
-        context.fillStyle = '#0a0018'; 
-        context.fill();
-    }
+    trazarHexPath(verts);
+    context.fillStyle = '#0a0018'; // Base obligatoria para ocultar agujeros
+    context.fill();
 
     const backItems = hex.back || [];
     const size = HEX_SIZE * camara.zoom;
@@ -190,6 +157,43 @@ function dibujarHexTop3D(q, r, hex, topPos) {
         context.drawImage(img, topPos.x - drawW / 2, topPos.y - drawH / 2, drawW, drawH);
         context.restore();
     });
+}
+
+// ── BORDES DE REGIÓN (Inteligentes y Aislados) ──
+function dibujarHexRegionBorder(q, r, hex, topPos) {
+    const reg = mapaActual.regiones[hex.region];
+    if (!reg) return;
+
+    const verts = isometricHexVertices(topPos.x, topPos.y, 0);
+
+    context.save();
+    context.strokeStyle = reg.color || '#334';
+    context.lineWidth = 4.5 * camara.zoom; 
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.globalAlpha = reg.opacidad ? Math.min(1, reg.opacidad + 0.4) : 0.8;
+
+    const edgeNeighbors = [
+        {dq: 1, dr: 0},   // Bottom-Right
+        {dq: 0, dr: 1},   // Bottom
+        {dq: -1, dr: 1},  // Bottom-Left
+        {dq: -1, dr: 0},  // Top-Left
+        {dq: 0, dr: -1},  // Top
+        {dq: 1, dr: -1}   // Top-Right
+    ];
+
+    context.beginPath();
+    for (let i = 0; i < 6; i++) {
+        const dir = edgeNeighbors[i];
+        const nHex = mapaActual.hexes[`${q + dir.dq},${r + dir.dr}`];
+        
+        if (!nHex || nHex.region !== hex.region) {
+            context.moveTo(verts[i].x, verts[i].y);
+            context.lineTo(verts[(i+1)%6].x, verts[(i+1)%6].y);
+        }
+    }
+    context.stroke();
+    context.restore();
 }
 
 // ── PLANO OVER (Limpio y plano sin sombras) ──
