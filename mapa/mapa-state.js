@@ -3,6 +3,7 @@ export const estadoMapa = {
     modoVisual: 'descubiertos', // MODO POR DEFECTO
     jugadorActivo: 'Todos',
     jugadores: [],
+    npcJugadores: [],
     inventario: {},
     vistaJugador: {
         posesiones: new Set(),
