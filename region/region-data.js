@@ -65,7 +65,17 @@ export async function cargarTodo(mapaId = 'mundo') {
         // 5. NPCs del Mapa (Locales)
         for (const k in npcsMapaLocal) delete npcsMapaLocal[k];
         npcsRes.data?.forEach(n => {
-            if (n.mapa_id === mapaId) npcsMapaLocal[n.id] = { ...n };
+            if (n.mapa_id === mapaId) {
+                npcsMapaLocal[n.id] = { ...n };
+                
+                // INYECTAR NPC LOCAL COMO PROP PARA PODER PINTARLO
+                props[n.id] = {
+                    id: n.id,
+                    nombre: n.nombre,
+                    tipo: 'entidad',
+                    imagen: n.icono_url || ''
+                };
+            }
         });
 
         return true;
