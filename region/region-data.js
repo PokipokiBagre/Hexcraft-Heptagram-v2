@@ -30,10 +30,8 @@ export async function cargarTodo(mapaId = 'mundo') {
             db.misiones.getAll()
         ]);
 
-        // ── Props ─────────────────────────────────────────────
         for (const k in props) delete props[k];
         
-        // Inyectamos el prop falso universal al inicio
         props['prop_pintar'] = {
             id: 'prop_pintar',
             nombre: '🖌️ PINCEL DE COLOR',
@@ -52,7 +50,6 @@ export async function cargarTodo(mapaId = 'mundo') {
             });
         }
 
-        // ── Personajes (Se cargan TODOS y se vuelven Props) ───
         personajesDB.length = 0;
         personajesArr.forEach(p => {
             personajesDB.push({
@@ -63,7 +60,6 @@ export async function cargarTodo(mapaId = 'mundo') {
                 color:    '#888'
             });
 
-            // Agregarlo a la lista de props para poder pintarlo en el mapa
             const pid = `pj_${normKey(p.nombre)}`;
             props[pid] = {
                 id: pid,
@@ -73,7 +69,6 @@ export async function cargarTodo(mapaId = 'mundo') {
             };
         });
 
-        // ── Misiones ──────────────────────────────────────────
         misionesActivas.length = 0;
         misionesArr.forEach(m => {
             if (m.estado === 1 || m.estado === 2) {
@@ -87,7 +82,6 @@ export async function cargarTodo(mapaId = 'mundo') {
             }
         });
 
-        // ── NPCs del mapa ─────────────────────────────────────
         for (const k in npcsMapaLocal) delete npcsMapaLocal[k];
         if (npcsRes.data) {
             npcsRes.data.forEach(n => {
@@ -107,7 +101,6 @@ export async function cargarTodo(mapaId = 'mundo') {
             });
         }
 
-        // ── Mapa ──────────────────────────────────────────────
         if (mapaRes.data) {
             const m = mapaRes.data;
             mapaActual.id     = m.id;
@@ -118,12 +111,9 @@ export async function cargarTodo(mapaId = 'mundo') {
             mapaActual.parentId   = m.parent_id || null;
             mapaActual.parentHex  = m.parent_hex || null;
 
-            // Hexes
             for (const k in mapaActual.hexes) delete mapaActual.hexes[k];
             if (m.datos_hexes) {
                 const parsed = typeof m.datos_hexes === 'string' ? JSON.parse(m.datos_hexes) : m.datos_hexes;
-                
-                // Migración de datos viejos (background -> back)
                 for (const key in parsed) {
                     if (parsed[key].background) {
                         parsed[key].back = parsed[key].background;
@@ -133,7 +123,6 @@ export async function cargarTodo(mapaId = 'mundo') {
                 Object.assign(mapaActual.hexes, parsed);
             }
 
-            // Regiones
             for (const k in mapaActual.regiones) delete mapaActual.regiones[k];
             if (m.datos_regiones) {
                 const parsed = typeof m.datos_regiones === 'string' ? JSON.parse(m.datos_regiones) : m.datos_regiones;
@@ -163,10 +152,7 @@ export async function guardarMapa() {
             updated_at:    new Date().toISOString()
         };
 
-        const { error } = await supabase
-            .from('region_mapas')
-            .upsert(payload, { onConflict: 'id' });
-
+        const { error } = await supabase.from('region_mapas').upsert(payload, { onConflict: 'id' });
         if (error) throw error;
         return true;
     } catch (e) {
