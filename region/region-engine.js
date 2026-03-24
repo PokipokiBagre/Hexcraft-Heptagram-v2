@@ -83,7 +83,6 @@ function onMouseDown(e) {
 
     if (e.button === 0) { 
         if (editor.activo) {
-            // LÓGICA DE INGRESAR
             if (editor.herramienta === 'ingresar') {
                 const hex = mapaActual.hexes[key];
                 if (hex && hex.region) {
@@ -227,6 +226,7 @@ function _accionHex(q, r, key) {
         const hex = mapaActual.hexes[key];
         const pid = editor.selectedPropId;
 
+        // 🌟 BORRADO DE REGIÓN
         if (pid === 'prop_region') {
             if (hex.region) {
                 if (mapaActual.regiones[hex.region]) {
@@ -237,16 +237,8 @@ function _accionHex(q, r, key) {
             return;
         }
 
-        if (pid === 'prop_pintar') {
-            hex[capa] = hex[capa].filter(e => !(typeof e === 'string' && e.startsWith('COLOR:')));
-        } else if (pid) {
-            hex[capa] = hex[capa].filter(e => {
-                const eId = typeof e === 'string' ? (e.startsWith('COLOR:') ? e : e.split(':')[0]) : e;
-                return eId !== pid;
-            });
-        } else {
-            hex[capa] = [];
-        }
+        // 🌟 BORRADO UNIVERSAL DE LA CAPA ACTUAL
+        hex[capa] = [];
     }
 }
 
