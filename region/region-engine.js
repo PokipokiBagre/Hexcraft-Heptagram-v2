@@ -620,8 +620,6 @@ export function aplicarHerramienta(q, r, key) {
     window.dispatchEvent(new Event('mapaModificado'));
 }
 
-import { crearHexData } from './region-state.js';
-
 function _accionHex(q, r, key) {
     const herr = editor.herramienta; // Ahora es 'agregar' en vez de pintar
     const capa = editor.capaActual;
