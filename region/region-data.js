@@ -18,41 +18,48 @@ export async function cargarTodo(mapaId = 'mundo') {
             db.personajes.getAll(), db.misiones.getAll()
         ]);
 
+        // 🌟 CORRECCIÓN CRÍTICA: Limpiar TODO el mapa actual en memoria obligatoriamente
+        for (const k in mapaActual.hexes) delete mapaActual.hexes[k];
+        for (const k in mapaActual.regiones) delete mapaActual.regiones[k];
+        mapaActual.bg_imagen = null;
         for (const k in props) delete props[k];
+        for (const k in npcsMapaLocal) delete npcsMapaLocal[k];
         
         props['prop_pintar'] = { id: 'prop_pintar', nombre: '🖌️ PINCEL DE COLOR', tipo: 'terreno', imagen: null };
         props['prop_region'] = { id: 'prop_region', nombre: '🗺️ PINCEL DE REGIÓN', tipo: 'terreno', imagen: null };
 
         propsRes.data?.forEach(p => {
-            props[p.id] = { id:p.id, nombre: p.nombre || 'Prop', tipo:p.tipo, imagen:p.imagen_url };
+            props[p.id] = { id:p.id, nombre:p.nombre, tipo:p.tipo, imagen:p.imagen_url };
         });
 
         personajesDB.length = 0;
-        (personajesArr || []).forEach(p => {
-            const nombreStr = p.nombre || 'Jugador';
-            const pid = `pj_${normKey(nombreStr)}`;
-            const iconoBase = p.icono_override || p.icon || nombreStr;
-            props[pid] = { id: pid, nombre: nombreStr, tipo: 'entidad', imagen: `${STORAGE_URL}/imgpersonajes/${normKey(iconoBase)}icon.png` };
-            personajesDB.push({ ...p, icon: iconoBase });
+        personajesArr.forEach(p => {
+            const pid = `pj_${normKey(p.nombre)}`;
+            props[pid] = { id: pid, nombre: p.nombre, tipo: 'entidad', imagen: `${STORAGE_URL}/imgpersonajes/${normKey(p.icono_override || p.nombre)}icon.png` };
+            personajesDB.push({ ...p, icon: p.icono_override || p.nombre });
         });
 
         misionesActivas.length = 0;
-        (misionesArr || []).forEach(m => { if (m.estado === 1 || m.estado === 2) misionesActivas.push(m); });
+        misionesArr.forEach(m => { if (m.estado === 1 || m.estado === 2) misionesActivas.push(m); });
 
-        if (mapaRes.data) {
+        const mapaExiste = !!mapaRes.data;
+
+        if (mapaExiste) {
             Object.assign(mapaActual, mapaRes.data);
-            mapaActual.hexes = mapaActual.datos_hexes || {};
-            mapaActual.regiones = mapaActual.datos_regiones || {};
+            const dbHexes = mapaActual.datos_hexes || {};
+            const dbRegiones = mapaActual.datos_regiones || {};
+            for (const k in dbHexes) mapaActual.hexes[k] = dbHexes[k];
+            for (const k in dbRegiones) mapaActual.regiones[k] = dbRegiones[k];
         }
 
-        for (const k in npcsMapaLocal) delete npcsMapaLocal[k];
         npcsRes.data?.forEach(n => {
             if (n.mapa_id === mapaId) {
-                npcsMapaLocal[n.id] = { ...n, nombre: n.nombre || 'NPC' };
-                props[n.id] = { id: n.id, nombre: n.nombre || 'NPC', tipo: 'entidad', imagen: n.icono_url || '' };
+                npcsMapaLocal[n.id] = { ...n };
+                props[n.id] = { id: n.id, nombre: n.nombre, tipo: 'entidad', imagen: n.icono_url || '' };
             }
         });
-        return true;
+
+        return mapaExiste; // Falso si el mapa no existía y se debe crear uno en blanco
     } catch (e) { 
         console.error("Error al cargarTodo:", e);
         return false; 
