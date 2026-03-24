@@ -14,9 +14,10 @@ import {
 } from './region-data.js';
 import { inicializarEngine, aplicarRuidoVisible, centrarCamara } from './region-engine.js';
 import { setBackground } from './region-render.js';
-// IMPORTACIONES 100% CORRECTAS:
-import { renderPanel, renderInfoHexPanel, htmlFormNPC } from './region-ui.js';
-import { htmlFormProp, abrirModalUI, cerrarModalUI, mostrarToastUI } from './region-ui-elements.js';
+
+// IMPORTACIONES PERFECTAMENTE SINCRONIZADAS
+import { renderPanel, renderInfoHexPanel, cargarListaBG_UI } from './region-ui.js';
+import { htmlFormProp, htmlFormNPC, abrirModalUI, cerrarModalUI, mostrarToastUI } from './region-ui-elements.js';
 import { normKey } from './region-utils.js';
 
 let cambiosPendientes = false;
@@ -114,7 +115,6 @@ window.guardarMapaUI = async () => {
     }
 };
 
-// MODAL DEL PINCEL DE REGION
 window.abrirModalRegionBrush = () => {
     const regs = Object.values(mapaActual.regiones);
     const options = regs.map(r => `<option value="${r.id}">${r.nombre}</option>`).join('');
@@ -247,7 +247,6 @@ window.subirPropImagenUI = async (e) => {
     }
 };
 
-// NPCs
 window.abrirCrearNPCUI = () => abrirModalUI(htmlFormNPC(), '➕ Nuevo NPC');
 window.seleccionarNPCUI = (id) => {
     if (!editor.activo) return;
@@ -262,9 +261,9 @@ window.guardarNPCUI = async () => {
     const npcData = {
         id: idExistente || `npc_${normKey(nombre)}_${Date.now()}`,
         nombre,
-        tipo: document.getElementById('fn-tipo').value,
+        tipo: document.getElementById('fn-tipo')?.value || 'sistema',
         icono_url: document.getElementById('fn-icono').value.trim(),
-        hex_pos: document.getElementById('fn-hex').value.trim() || null,
+        hex_pos: document.getElementById('fn-hex')?.value?.trim() || null,
         capa: 'mid',
         descripcion: document.getElementById('fn-desc').value.trim(),
         stats: {}
@@ -283,7 +282,6 @@ window.eliminarNPCUI = async (id) => {
     window.dispatchEvent(new Event('mapaModificado'));
 };
 
-// Regiones
 window.crearRegionUI = () => {
     const id = `reg_${Date.now()}`;
     mapaActual.regiones[id] = crearRegion(id);
@@ -308,7 +306,6 @@ window.actualizarRegion = (id, campo, valor) => {
     if (reg) { reg[campo] = valor; window.dispatchEvent(new Event('mapaModificado')); }
 };
 
-// NAVEGACIÓN SUBMUNDOS (Ingresar y Salir)
 window.abrirInterior = async (regionId) => {
     const reg = mapaActual.regiones[regionId];
     if (!reg) return;
