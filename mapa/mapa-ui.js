@@ -180,8 +180,10 @@ export function dibujarFrame() {
         if (window.mapaEditor.tempLink) {
             const temp = window.mapaEditor.tempLink;
             const seleccion = window.mapaEditor.seleccionMultiple;
+            const esEliminar = window.mapaEditor.herramienta === 'eliminar-enlace';
+            const colorFlecha = esEliminar ? '#ff4444' : '#00ffff';
             
-            const nodosOrigen = (window.mapaEditor.isShiftPressed && seleccion.has(temp.source) && seleccion.size > 1) 
+            const nodosOrigen = (!esEliminar && window.mapaEditor.isShiftPressed && seleccion.has(temp.source) && seleccion.size > 1) 
                 ? Array.from(seleccion) 
                 : [temp.source];
 
@@ -192,7 +194,7 @@ export function dibujarFrame() {
                 ctx.beginPath();
                 ctx.moveTo(nodoOrg.x, nodoOrg.y);
                 ctx.lineTo(temp.endX, temp.endY);
-                ctx.strokeStyle = '#00ffff'; 
+                ctx.strokeStyle = colorFlecha; 
                 ctx.lineWidth = 4.05 / scaleFactor; 
                 ctx.setLineDash([10/scaleFactor, 10/scaleFactor]);
                 ctx.stroke(); 
@@ -203,7 +205,7 @@ export function dibujarFrame() {
                 ctx.lineTo(temp.endX - headlen * Math.cos(angle - Math.PI / 7), temp.endY - headlen * Math.sin(angle - Math.PI / 7));
                 ctx.lineTo(temp.endX - headlen * Math.cos(angle + Math.PI / 7), temp.endY - headlen * Math.sin(angle + Math.PI / 7));
                 ctx.lineTo(temp.endX, temp.endY);
-                ctx.fillStyle = '#00ffff';
+                ctx.fillStyle = colorFlecha;
                 ctx.fill();
             });
         }
@@ -377,8 +379,10 @@ export function dibujarFrame() {
                     ? nodo.nombre
                     : `${nodo.nombreOriginal.replace(/\s*\(\d+\)$/, '').trim()} (${nodo.hex})`;
             } else if (isPlayerView) {
-                // En vista jugador: solo se ve el nombre si lo posee
-                textoADibujar = jugadorTieneNodo
+                // En vista jugador: si el nodo es conocido públicamente, se muestra su nombre real
+                // Si lo posee el jugador también se muestra
+                // Solo se enmascara si NO es conocido Y el jugador no lo posee
+                textoADibujar = (jugadorTieneNodo || nodo.esConocido)
                     ? nodo.nombre
                     : `${nodo.id} (${nodo.hex})`;
             } else {
@@ -425,13 +429,14 @@ export function actualizarPanelInfo() {
 
     if (!nodo) { panel.classList.add('oculto'); return; }
 
-    const esOcultoParaPublico = !nodo.esConocido && !nodo.isHexNode && !estadoMapa.esAdmin;
+    const jugadorTieneEsteNodo = estadoMapa.jugadorActivo !== 'Todos' && estadoMapa.vistaJugador.posesiones.has(nodo);
+    const esOcultoParaPublico = !nodo.esConocido && !nodo.isHexNode && !estadoMapa.esAdmin && !jugadorTieneEsteNodo;
     const tituloMostrado = esOcultoParaPublico ? nodo.id : nodo.nombre;
     document.getElementById('info-titulo').innerText = tituloMostrado;
     const colorData = window.mapaColores[nodo.afinidad];
     const colorAfinidad = colorData ? colorData.t : '#888';
     
-    if (nodo.esConocido || nodo.isHexNode) {
+    if (nodo.esConocido || nodo.isHexNode || jugadorTieneEsteNodo) {
         document.getElementById('info-titulo').style.color = colorAfinidad;
         document.getElementById('info-tags').innerHTML = 
             '<span class="tag" style="border-color:' + colorAfinidad + '; color:' + colorAfinidad + '">' + nodo.afinidad + '</span>' +
@@ -451,7 +456,7 @@ export function actualizarPanelInfo() {
     const efectoEl = document.getElementById('info-efecto');
     const detallesEl = document.getElementById('info-detalles');
     
-    if (nodo.esConocido) {
+    if (nodo.esConocido || nodo.isHexNode || jugadorTieneEsteNodo) {
         if (nodo.efecto) {
             efectoEl.innerText = "Efecto: " + nodo.efecto; 
             efectoEl.style.display = 'block';
