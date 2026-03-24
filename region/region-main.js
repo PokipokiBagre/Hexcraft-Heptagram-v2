@@ -22,6 +22,17 @@ let cambiosPendientes = false;
 let mapaIdActual = 'mundo';
 let historialMapas = []; 
 
+// Función helper para aplicar la visibilidad según si es flex o block
+function actualizarVisibilidadUI() {
+    document.querySelectorAll('.solo-op').forEach(el => {
+        if (editor.activo) {
+            el.style.display = (el.id === 'barra-herramientas' || el.classList.contains('tabs-panel') || el.classList.contains('navbar-center')) ? 'flex' : 'block';
+        } else {
+            el.style.display = 'none';
+        }
+    });
+}
+
 async function initApp() {
     let fav = document.querySelector("link[rel='icon']");
     if (!fav) { fav = document.createElement("link"); fav.rel = "icon"; document.head.appendChild(fav); }
@@ -35,14 +46,7 @@ async function initApp() {
     const badge = document.getElementById('hex-session-badge');
     if (badge && hexAuth.renderStatusBadge) badge.innerHTML = hexAuth.renderStatusBadge();
 
-    // Fuerza que los contenedores usen Flexbox o Block correctamente según el diseño general.
-    document.querySelectorAll('.solo-op').forEach(el => { 
-        if (editor.activo) {
-            el.style.display = (el.classList.contains('bottom-tools') || el.classList.contains('panel-tabs') || el.classList.contains('navbar-center')) ? 'flex' : 'block';
-        } else {
-            el.style.display = 'none';
-        }
-    });
+    actualizarVisibilidadUI();
 
     const canvas = document.getElementById('mapa-canvas');
     inicializarEngine(canvas);
@@ -107,21 +111,13 @@ window.abrirMenuOP = async () => {
     if (hexAuth.esAdmin()) {
         editor.activo = !editor.activo;
         mostrarToastUI(editor.activo ? '✏️ Modo Editor Activado' : '👁️ Modo Visualización', 'info');
-        document.querySelectorAll('.solo-op').forEach(el => {
-            if (editor.activo) {
-                el.style.display = (el.classList.contains('bottom-tools') || el.classList.contains('panel-tabs') || el.classList.contains('navbar-center')) ? 'flex' : 'block';
-            } else {
-                el.style.display = 'none';
-            }
-        });
+        actualizarVisibilidadUI();
         renderPanel();
     } else {
         await hexAuth._mostrarModalLogin();
         editor.activo = hexAuth.esAdmin();
         if (editor.activo) {
-            document.querySelectorAll('.solo-op').forEach(el => {
-                el.style.display = (el.classList.contains('bottom-tools') || el.classList.contains('panel-tabs') || el.classList.contains('navbar-center')) ? 'flex' : 'block';
-            });
+            actualizarVisibilidadUI();
             renderPanel();
         }
     }
