@@ -3,7 +3,7 @@
 // ============================================================
 
 import {
-    camara, editor, ui, mapaActual, crearHexData
+    camara, editor, ui, mapaActual, crearHexData, HEX_SIZE
 } from './region-state.js';
 import { inicializarRender, dibujarEscena } from './region-render.js';
 import { pixelToHex3D, hexKey, hexesEnRadio } from './region-utils.js';
@@ -170,7 +170,7 @@ function _accionHex(q, r, key) {
         const hex = mapaActual.hexes[key];
         
         const pid = editor.selectedPropId;
-        const opac = (editor.opacidadPincel ?? 1.0).toFixed(2); // Guardamos la opacidad actual
+        const opac = (editor.opacidadPincel ?? 1.0).toFixed(2);
         
         if (pid === 'prop_pintar') {
             const colorEntry = `COLOR:${editor.colorActual}:${opac}`;
@@ -181,7 +181,6 @@ function _accionHex(q, r, key) {
         } else {
             const propEntry = `${pid}:${opac}`;
             let arr = hex[capa];
-            // Remover el mismo prop si ya existe para actualizar su opacidad
             arr = arr.filter(e => {
                 const eId = typeof e === 'string' ? e.split(':')[0] : e;
                 return eId !== pid;
@@ -195,7 +194,6 @@ function _accionHex(q, r, key) {
         const hex = mapaActual.hexes[key];
         const pid = editor.selectedPropId;
 
-        // La herramienta borrar vacía TODA la capa seleccionada
         if (pid === 'prop_pintar') {
             hex[capa] = hex[capa].filter(e => !(typeof e === 'string' && e.startsWith('COLOR:')));
             if (capa === 'back') { hex.color = null; hex.opacidad = null; }
@@ -220,6 +218,47 @@ function _accionHex(q, r, key) {
             }
         }
     }
+}
+
+// ── Generador de Ruido ───────────────────────────────────────
+export function aplicarRuidoVisible(color, opacidad, densidad = 0.4) {
+    if (!canvas) return;
+    const W = window.innerWidth * (window.devicePixelRatio || 1);
+    const H = window.innerHeight * (window.devicePixelRatio || 1);
+    const margen = HEX_SIZE * camara.zoom * 2;
+    
+    const cs = [
+        pixelToHex3D(-margen, -margen),     pixelToHex3D(W+margen, -margen),
+        pixelToHex3D(-margen, H+margen),    pixelToHex3D(W+margen, H+margen)
+    ];
+    const qMin = Math.min(...cs.map(c=>c.q))-1, qMax = Math.max(...cs.map(c=>c.q))+1;
+    const rMin = Math.min(...cs.map(c=>c.r))-1, rMax = Math.max(...cs.map(c=>c.r))+1;
+
+    for (let q = qMin; q <= qMax; q++) {
+        for (let r = rMin; r <= rMax; r++) {
+            if (Math.random() > densidad) continue;
+            const key = hexKey(q, r);
+            if (!mapaActual.hexes[key]) mapaActual.hexes[key] = crearHexData();
+            
+            const h = parseInt(color.slice(1,3),16), s = parseInt(color.slice(3,5),16), l = parseInt(color.slice(5,7),16);
+            const v = Math.round((Math.random()-0.5)*40);
+            const clamp = n => Math.max(0,Math.min(255,n));
+            const toHex = n => n.toString(16).padStart(2,'0');
+            const noisyColor = `#${toHex(clamp(h+v))}${toHex(clamp(s+v))}${toHex(clamp(l+v))}`;
+            
+            const colorEntry = `COLOR:${noisyColor}:${opacidad.toFixed(2)}`;
+            const arr = mapaActual.hexes[key][editor.capaActual];
+            const idx = arr.findIndex(e => typeof e === 'string' && e.startsWith('COLOR:'));
+            if (idx >= 0) arr[idx] = colorEntry;
+            else arr.push(colorEntry);
+
+            if (editor.capaActual === 'back') {
+                mapaActual.hexes[key].color = noisyColor;
+                mapaActual.hexes[key].opacidad = opacidad;
+            }
+        }
+    }
+    window.dispatchEvent(new Event('mapaModificado'));
 }
 
 export function centrarCamara() {
