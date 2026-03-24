@@ -60,7 +60,7 @@ export let props = {};
 export let npcsMapaLocal = {};
 
 // ── Datos externos (personajes y misiones de DB) ────────────
-export let personnagesDB   = [];   
+export let personajesDB    = [];   // <-- ¡AQUÍ ESTABA EL ERROR! (personnagesDB)
 export let misionesActivas = [];  
 
 // ── UI state ─────────────────────────────────────────────────
