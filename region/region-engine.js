@@ -220,13 +220,14 @@ function _accionHex(q, r, key) {
     }
 }
 
-// ── Generador de Ruido ───────────────────────────────────────
+// ── Generador de Ruido (Restaurado para Map Planes) ─────────────────────
 export function aplicarRuidoVisible(color, opacidad, densidad = 0.4) {
     if (!canvas) return;
     const W = window.innerWidth * (window.devicePixelRatio || 1);
     const H = window.innerHeight * (window.devicePixelRatio || 1);
     const margen = HEX_SIZE * camara.zoom * 2;
     
+    // Proyección de las esquinas para el área visible
     const cs = [
         pixelToHex3D(-margen, -margen),     pixelToHex3D(W+margen, -margen),
         pixelToHex3D(-margen, H+margen),    pixelToHex3D(W+margen, H+margen)
@@ -240,18 +241,21 @@ export function aplicarRuidoVisible(color, opacidad, densidad = 0.4) {
             const key = hexKey(q, r);
             if (!mapaActual.hexes[key]) mapaActual.hexes[key] = crearHexData();
             
+            // Variación de color (ruido)
             const h = parseInt(color.slice(1,3),16), s = parseInt(color.slice(3,5),16), l = parseInt(color.slice(5,7),16);
-            const v = Math.round((Math.random()-0.5)*40);
+            const v = Math.round((Math.random()-0.5)*40); // Variación +/- 20
             const clamp = n => Math.max(0,Math.min(255,n));
             const toHex = n => n.toString(16).padStart(2,'0');
             const noisyColor = `#${toHex(clamp(h+v))}${toHex(clamp(s+v))}${toHex(clamp(l+v))}`;
             
+            // Guardar color en la capa actual
             const colorEntry = `COLOR:${noisyColor}:${opacidad.toFixed(2)}`;
             const arr = mapaActual.hexes[key][editor.capaActual];
             const idx = arr.findIndex(e => typeof e === 'string' && e.startsWith('COLOR:'));
             if (idx >= 0) arr[idx] = colorEntry;
             else arr.push(colorEntry);
 
+            // Si es back, actualizar también el color base para compatibilidad
             if (editor.capaActual === 'back') {
                 mapaActual.hexes[key].color = noisyColor;
                 mapaActual.hexes[key].opacidad = opacidad;
