@@ -1,5 +1,5 @@
 // ============================================================
-// region-ui.js — Paneles de UI: props, regiones, NPCs, misiones, imágenes
+// region-ui.js — Paneles de UI
 // ============================================================
 
 import {
@@ -13,7 +13,6 @@ import { supabase } from '../hex-auth.js';
 
 const NO_IMG = () => `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 
-// ── Render panel lateral ──────────────────────────────────────
 export function renderPanel() {
     const contenido = document.getElementById('panel-contenido');
     if (!contenido) return;
@@ -30,11 +29,8 @@ export function renderPanel() {
     actualizarTabsBotones();
 }
 
-// ── TAB: PROPS ───────────────────────────────────────────────
 function htmlProps() {
     const busq = (ui.busqueda || '').toLowerCase();
-
-    // Filtramos solo por búsqueda, mostramos TODOS los props y NPCs convertidos
     const lista = Object.values(props).filter(p => {
         if (busq && !p.nombre.toLowerCase().includes(busq)) return false;
         return true;
@@ -94,7 +90,6 @@ function htmlProps() {
     </div>`;
 }
 
-// ── Modales / Formularios ─────────────────────────────────────
 export function abrirModal(contenidoHtml, titulo = '') {
     document.getElementById('modal-titulo').innerText = titulo;
     document.getElementById('modal-cuerpo').innerHTML = contenidoHtml;
@@ -106,10 +101,10 @@ export function cerrarModal() {
 }
 
 export function htmlFormProp(propData = null) {
-    const p = propData || { nombre:'', tipo:'terreno', imagen:'' };
-    // Eliminado el ancho, alto y capa del formulario
+    const p = propData || { id:'', nombre:'', tipo:'terreno', imagen:'' };
     return `
     <div style="display:flex; flex-direction:column; gap:10px;">
+        <input type="hidden" id="fp-id" value="${p.id||''}">
         <label>Nombre
             <input type="text" id="fp-nombre" value="${p.nombre}" class="form-input">
         </label>
@@ -125,7 +120,6 @@ export function htmlFormProp(propData = null) {
     </div>`;
 }
 
-// ── TAB: REGIONES ─────────────────────────────────────────────
 function htmlRegiones() {
     const regs = Object.values(mapaActual.regiones);
     const lista = regs.map(reg => {
@@ -138,7 +132,6 @@ function htmlRegiones() {
                 <div class="region-nombre">${tieneInt} ${reg.nombre}</div>
                 <div class="region-meta">${reg.hexes.length} hexes · ${reg.controlador || 'Sin control'}</div>
             </div>
-            ${editor.activo ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarRegionUI('${reg.id}')">✕</button>` : ''}
         </div>`;
     }).join('') || '<p class="sin-resultado">No hay regiones.</p>';
 
@@ -148,24 +141,18 @@ function htmlRegiones() {
     return `
     <div class="panel-seccion">
         ${editor.activo ? `<button class="btn-panel-add" style="width:100%; margin-bottom:10px;" onclick="window.crearRegionUI()">＋ Nueva Región</button>` : ''}
-        <div class="lista-regiones">${lista}</div>
-        ${detalleHtml}
+        ${!regSel ? `<div class="lista-regiones">${lista}</div>` : detalleHtml}
     </div>`;
 }
 
 function htmlDetalleRegion(reg) {
     if (!editor.activo) {
-        // Vista de solo lectura
         const misls = (reg.misiones || []).map(mid => {
             const m = misionesActivas.find(x => x.id === mid);
             return m ? `<span class="tag-mision">${m.titulo}</span>` : '';
         }).join('');
 
-        // NPCs en hexes de esta región
-        const npcsRegion = Object.values(npcsMapaLocal).filter(n => {
-            if (!n.hex) return false;
-            return (reg.hexes || []).includes(n.hex);
-        });
+        const npcsRegion = Object.values(npcsMapaLocal).filter(n => (reg.hexes || []).includes(n.hex));
         const npcsHtml = npcsRegion.map(n => `
             <div style="display:flex; align-items:center; gap:6px; font-size:0.78em; margin-top:4px;">
                 <img src="${n.icono || NO_IMG()}" onerror="this.src='${NO_IMG()}'"
@@ -175,11 +162,12 @@ function htmlDetalleRegion(reg) {
 
         return `
         <div class="region-detalle">
+            <button onclick="window.deseleccionarRegion()" style="background:none;border:none;color:var(--cyan);cursor:pointer;margin-bottom:8px;font-size:0.8em;">⬅ Volver a lista</button>
             <div class="detalle-titulo">${reg.nombre}</div>
             <div class="detalle-fila"><b>Control:</b> ${reg.controlador || '—'}</div>
             <div class="detalle-fila"><b>Accesible:</b> ${reg.accesible ? 'Sí' : 'No'}</div>
             ${misls ? `<div class="detalle-fila" style="margin-top:6px;"><b>Misiones:</b><br>${misls}</div>` : ''}
-            ${npcsHtml ? `<div class="detalle-fila" style="margin-top:8px;"><b>Personajes presentes:</b>${npcsHtml}</div>` : ''}
+            ${npcsHtml ? `<div class="detalle-fila" style="margin-top:8px;"><b>Personajes presentes:</b>${npcsHtml}</div>` : '<div class="detalle-fila" style="margin-top:8px;color:#666;font-size:0.8em;">(Nota: Los jugadores aún no se posicionan en el mapa general)</div>'}
             ${reg.tieneInterior ? `
             <button class="btn-accion" style="width:100%;margin-top:8px;" onclick="window.entrarInterior('${reg.id}')">
                 🚪 Entrar al interior
@@ -187,8 +175,6 @@ function htmlDetalleRegion(reg) {
         </div>`;
     }
 
-    // ── Formulario de edición ──────────────────────────────────
-    // Misiones como checkboxes individuales (no multi-select problemático)
     const misionChecks = misionesActivas.map(m => {
         const checked = (reg.misiones || []).includes(m.id) ? 'checked' : '';
         const safeId  = m.id.replace(/'/g, "\\'");
@@ -202,14 +188,11 @@ function htmlDetalleRegion(reg) {
         </label>`;
     }).join('') || '<p style="font-size:0.75em;color:#666;">Sin misiones activas</p>';
 
-    // NPCs en esta región (solo lectura en la lista)
-    const npcsRegion = Object.values(npcsMapaLocal).filter(n => {
-        if (!n.hex) return false;
-        return (reg.hexes || []).includes(n.hex);
-    });
+    const npcsRegion = Object.values(npcsMapaLocal).filter(n => (reg.hexes || []).includes(n.hex));
 
     return `
     <div class="region-detalle edit">
+        <button onclick="window.deseleccionarRegion()" style="background:none;border:none;color:var(--cyan);cursor:pointer;margin-bottom:8px;font-size:0.8em;">⬅ Volver a lista</button>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
             <div class="detalle-titulo" style="color:var(--gold); margin:0;">✏️ Editando Región</div>
             <button onclick="window.eliminarRegionUI('${reg.id}')"
@@ -261,7 +244,7 @@ function htmlDetalleRegion(reg) {
         <div style="margin-top:8px; font-size:0.72em; color:#888; font-family:sans-serif;">
             PERSONAJES EN LA REGIÓN (${npcsRegion.length}):
             ${npcsRegion.map(n=>`<div style="font-size:1em;color:#aaa;padding:2px 0;">${n.nombre}</div>`).join('')}
-        </div>` : ''}
+        </div>` : '<div style="margin-top:8px; font-size:0.72em; color:#666; font-family:sans-serif;">(Los jugadores no figuran con hex específico)</div>'}
 
         <div style="display:flex; gap:6px; margin-top:12px; flex-wrap:wrap;">
             <button class="btn-accion" style="flex:1;" onclick="window.activarHerramientaRegion('${reg.id}')">
@@ -274,21 +257,22 @@ function htmlDetalleRegion(reg) {
     </div>`;
 }
 
-// ── TAB: NPCs ─────────────────────────────────────────────────
 function htmlNPCs() {
     const todos = Object.values(npcsMapaLocal);
     const jugadores = personajesDB.filter(p => p.isPlayer || p.npcTipo === 'jugador');
-    const sistema   = personajesDB.filter(p => !p.isPlayer && p.npcTipo !== 'jugador');
 
-    const listaLocal = todos.map(n => `
-        <div class="npc-card" onclick="window.seleccionarNPCUI('${n.id}')">
+    const listaLocal = todos.map(n => {
+        const safeId = n.id.replace(/'/g, "\\'");
+        return `
+        <div class="npc-card" onclick="window.seleccionarNPCUI('${safeId}')">
             <img src="${n.icono || NO_IMG()}" onerror="this.src='${NO_IMG()}'" class="npc-thumb">
             <div>
                 <div class="npc-nombre">${n.nombre}</div>
                 <div class="npc-meta">${n.tipo} · ${n.hex||'Sin posición'}</div>
             </div>
-            ${editor.activo ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarNPCUI('${n.id}')">✕</button>` : ''}
-        </div>`).join('') || '<p class="sin-resultado">No hay NPCs en el mapa.</p>';
+            ${editor.activo ? `<button class="prop-card-del" onclick="event.stopPropagation(); window.eliminarNPCUI('${safeId}')">✕</button>` : ''}
+        </div>`;
+    }).join('') || '<p class="sin-resultado">No hay NPCs en el mapa.</p>';
 
     const listaJug = jugadores.map(p => `
         <div class="npc-card npc-db">
@@ -301,16 +285,15 @@ function htmlNPCs() {
 
     return `
     <div class="panel-seccion">
-        <div class="panel-sub-titulo">NPCs del Mapa</div>
+        <div class="panel-sub-titulo">NPCs del Mapa (Sistema y Región)</div>
         ${editor.activo ? `<button class="btn-panel-add" style="width:100%; margin-bottom:8px;" onclick="window.abrirCrearNPC()">＋ Nuevo NPC</button>` : ''}
         <div class="lista-npcs">${listaLocal}</div>
 
-        <div class="panel-sub-titulo" style="margin-top:15px;">Jugadores & NPCs del Sistema</div>
+        <div class="panel-sub-titulo" style="margin-top:15px;">Jugadores de DB</div>
         <div class="lista-npcs">${listaJug}</div>
     </div>`;
 }
 
-// ── TAB: MISIONES ────────────────────────────────────────────
 function htmlMisiones() {
     const activas = misionesActivas;
     if (!activas.length) return `<div class="panel-seccion"><p class="sin-resultado">No hay misiones activas.</p></div>`;
@@ -325,29 +308,31 @@ function htmlMisiones() {
     return `<div class="panel-seccion"><div class="lista-misiones-panel">${items}</div></div>`;
 }
 
-// ── TAB: IMÁGENES ─────────────────────────────────────────────
 function htmlImagenes() {
-    const todosProps = Object.values(props);
+    let todosProps = Object.values(props);
     const imgFallback = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 
+    // Filtro por imagen
+    if (ui.filtroImgs === 'con') todosProps = todosProps.filter(p => p.imagen);
+    if (ui.filtroImgs === 'sin') todosProps = todosProps.filter(p => !p.imagen);
+
     const gridProps = todosProps.length === 0
-        ? '<p class="sin-resultado">Aún no hay props. Crea uno y sube su imagen.</p>'
+        ? '<p class="sin-resultado">No hay resultados para este filtro.</p>'
         : todosProps.map(p => {
             const tieneImg = !!p.imagen;
-            const claseCard = tieneImg ? 'ok' : 'falta';
             const badge = tieneImg
                 ? `<div style="position:absolute;top:4px;right:4px;background:#00aa44;color:#fff;font-size:0.55em;padding:1px 4px;border-radius:3px;font-weight:bold;">✓</div>`
                 : `<div style="position:absolute;top:4px;right:4px;background:#ff4444;color:#fff;font-size:0.55em;padding:1px 4px;border-radius:3px;font-weight:bold;">!</div>`;
             const src = tieneImg ? p.imagen : imgFallback;
-            const safeNombre = p.nombre.replace(/'/g,"\'");
+            const safeId = p.id.replace(/'/g,"\\'");
             return `
             <div style="background:${tieneImg?'rgba(0,40,10,0.35)':'rgba(80,0,0,0.25)'};border:1px solid ${tieneImg?'#00aa44':'#ff4444'};border-radius:6px;padding:6px;text-align:center;position:relative;">
                 ${badge}
                 <img src="${src}" onerror="this.src='${imgFallback}'"
                     style="width:100%;aspect-ratio:1;object-fit:cover;border-radius:4px;display:block;">
                 <div style="font-size:0.62em;color:#ccc;margin-top:4px;word-break:break-word;font-family:sans-serif;">${p.nombre}</div>
-                <div style="font-size:0.57em;color:#666;">${p.tipo}·${p.capa}</div>
-                ${editor.activo ? `<button onclick="window.abrirSubidaProp('${p.id}')"
+                <div style="font-size:0.57em;color:#666;">${p.tipo}</div>
+                ${editor.activo ? `<button onclick="window.abrirSubidaProp('${safeId}')"
                     style="margin-top:4px;background:${tieneImg?'#004a00':'#4a0000'};border:1px solid ${tieneImg?'#00ff00':'#ff4444'};color:#fff;padding:2px 6px;border-radius:3px;font-size:0.65em;cursor:pointer;width:100%;">
                     ${tieneImg?'🔄 Cambiar':'📤 Subir'}
                 </button>` : ''}
@@ -359,14 +344,12 @@ function htmlImagenes() {
         ${editor.activo ? `
         <div class="panel-sub-titulo">📤 Subir imagen de prop</div>
         <div id="upload-prop-form">
+            <input type="hidden" id="up-prop-id">
             <input type="text" id="up-prop-nombre" placeholder="Nombre del prop"
                 style="width:100%;box-sizing:border-box;background:#0a0018;border:1px solid #444;color:#fff;padding:6px;border-radius:4px;font-size:0.82em;margin-bottom:6px;">
             <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:6px;">
                 <select id="up-prop-tipo" style="background:#0a0018;border:1px solid #444;color:#fff;padding:5px;border-radius:4px;font-size:0.8em;">
                     ${PROP_TIPOS.map(t => `<option value="${t}">${t}</option>`).join('')}
-                </select>
-                <select id="up-prop-capa" style="background:#0a0018;border:1px solid #444;color:#fff;padding:5px;border-radius:4px;font-size:0.8em;">
-                    ${CAPAS.map(c => `<option value="${c}">${c}</option>`).join('')}
                 </select>
             </div>
             <div class="drop-prop" id="drop-prop-zone"
@@ -374,7 +357,7 @@ function htmlImagenes() {
                 ondragover="event.preventDefault(); this.classList.add('drag-sobre')"
                 ondragleave="this.classList.remove('drag-sobre')"
                 ondrop="window.dropPropImagen(event)">
-                🖼️ Arrastra o haz clic para subir imagen
+                🖼️ Arrastra o haz clic para subir imagen al Prop
             </div>
             <input type="file" id="file-prop-input" accept="image/*" style="display:none" onchange="window.subirPropImagen(event)">
             <div id="up-prop-progress" style="display:none;margin-top:6px;">
@@ -383,6 +366,25 @@ function htmlImagenes() {
                 </div>
                 <p id="up-prop-status" style="font-size:0.75em;color:#aaa;text-align:center;margin:3px 0;"></p>
             </div>
+        </div>
+
+        <hr style="border-color:#333;margin:12px 0;">
+        <div class="panel-sub-titulo">👤 Subir imagen de NPC de Región</div>
+        <select id="up-npc-id" style="width:100%;box-sizing:border-box;background:#0a0018;border:1px solid #444;color:#fff;padding:6px;border-radius:4px;font-size:0.82em;margin-bottom:6px;">
+            <option value="">-- Selecciona un NPC --</option>
+            ${Object.values(npcsMapaLocal).map(n => `<option value="${n.id}">${n.nombre}</option>`).join('')}
+        </select>
+        <div class="drop-prop" id="drop-npc-zone"
+            onclick="document.getElementById('file-npc-input').click()"
+            ondragover="event.preventDefault(); this.classList.add('drag-sobre')"
+            ondragleave="this.classList.remove('drag-sobre')"
+            ondrop="window.dropNPCImagen(event)">
+            👤 Haz clic para subir imagen al NPC
+        </div>
+        <input type="file" id="file-npc-input" accept="image/*" style="display:none" onchange="window.subirNPCImagen(event)">
+        <div id="up-npc-progress" style="display:none;margin-top:6px;">
+            <div style="height:4px;background:#0a0018;border-radius:2px;overflow:hidden;"><div id="up-npc-fill" style="height:100%;background:#00ffff;width:0%;"></div></div>
+            <p id="up-npc-status" style="font-size:0.75em;color:#aaa;text-align:center;margin:3px 0;"></p>
         </div>
 
         <hr style="border-color:#333;margin:12px 0;">
@@ -402,14 +404,21 @@ function htmlImagenes() {
             <p class="sin-resultado sin-resultado-sm">Cargando...</p>
         </div>
 
-        <div class="panel-sub-titulo">🧱 Props (${Object.values(props).filter(p=>p.imagen).length}/${Object.values(props).length} con imagen)</div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-top:12px;">
+            <div class="panel-sub-titulo" style="margin:0;">🧱 Props </div>
+            <select style="background:#0a0018;border:1px solid #444;color:#fff;padding:2px 5px;border-radius:4px;font-size:0.7em;" onchange="window.setFiltroImagenUI(this.value)">
+                <option value="todos" ${ui.filtroImgs === 'todos' ? 'selected' : ''}>Todos</option>
+                <option value="con" ${ui.filtroImgs === 'con' ? 'selected' : ''}>Con Imagen</option>
+                <option value="sin" ${ui.filtroImgs === 'sin' ? 'selected' : ''}>Sin Imagen</option>
+            </select>
+        </div>
+        
         <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:5px;margin-top:6px;">
             ${gridProps}
         </div>
     </div>`;
 }
 
-// ── Info de hex seleccionado (modo jugador) ──────────────────
 export function renderInfoHex(q, r, key) {
     const panel = document.getElementById('panel-info-hex');
     if (!panel) return;
@@ -421,10 +430,6 @@ export function renderInfoHex(q, r, key) {
     const reg = regionId ? mapaActual.regiones[regionId] : null;
 
     const npcsAqui = Object.values(npcsMapaLocal).filter(n => n.hex === key);
-    const jugAqui  = personajesDB.filter(p => {
-        // Buscar si hay NPC de sistema con ese hex
-        return false; // Los jugadores no tienen posición en el mapa por ahora
-    });
 
     const misHtml = reg ? (reg.misiones||[]).map(mid => {
         const m = misionesActivas.find(x => x.id === mid);
@@ -463,8 +468,7 @@ export function renderInfoHex(q, r, key) {
 }
 
 export function htmlFormNPC(npcData = null) {
-    const n = npcData || { nombre:'', tipo:'sistema', icono:'', hex:'', capa:'mid', desc:'', stats:{} };
-    const hexOpts = Object.keys(mapaActual.hexes).slice(0, 200);
+    const n = npcData || { id:'', nombre:'', tipo:'sistema', icono:'', hex:'', capa:'mid', desc:'', stats:{} };
     return `
     <div style="display:flex; flex-direction:column; gap:10px;">
         <label>Nombre
@@ -476,17 +480,11 @@ export function htmlFormNPC(npcData = null) {
                 <option value="jugador" ${n.tipo==='jugador'?'selected':''}>NPC Jugador (tiene ficha)</option>
             </select>
         </label>
-        <label>Icono URL
+        <label>Icono URL (o sube imagen desde la pestaña Imgs)
             <input type="text" id="fn-icono" value="${n.icono||''}" class="form-input" placeholder="URL de imagen">
         </label>
         <label>Posición (hex q,r) — deja en blanco para sin posición
             <input type="text" id="fn-hex" value="${n.hex||''}" class="form-input" placeholder="ej: 3,2">
-        </label>
-        <label>Capa
-            <select id="fn-capa" class="form-input">
-                <option value="mid" ${n.capa==='mid'?'selected':''}>Mid</option>
-                <option value="over" ${n.capa==='over'?'selected':''}>Over</option>
-            </select>
         </label>
         <label>Descripción
             <textarea id="fn-desc" class="form-input" rows="3">${n.desc||''}</textarea>
@@ -495,14 +493,12 @@ export function htmlFormNPC(npcData = null) {
     </div>`;
 }
 
-// ── Actualizar tabs ───────────────────────────────────────────
 function actualizarTabsBotones() {
     document.querySelectorAll('.tab-panel-btn').forEach(b => {
         b.classList.toggle('activo', b.dataset.panel === ui.panelActual);
     });
 }
 
-// ── Cargar backgrounds ────────────────────────────────────────
 export async function cargarListaBG() {
     const cont = document.getElementById('lista-bg-imgs');
     if (!cont) return;
