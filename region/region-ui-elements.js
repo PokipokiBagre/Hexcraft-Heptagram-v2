@@ -2,12 +2,7 @@
 // region-ui-elements.js — Elementos de UI Comunes y Formularios
 // ============================================================
 
-import {
-    editor, PROP_TIPOS, CAPAS
-} from './region-state.js';
-import { STORAGE_URL } from './region-state.js';
-
-const NO_IMG = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
+import { PROP_TIPOS } from './region-state.js';
 
 export function htmlFormProp(propData = null) {
     const p = propData || { id: '', nombre: '', tipo: 'terreno', imagen: '' };
@@ -26,33 +21,6 @@ export function htmlFormProp(propData = null) {
             <input type="text" id="fp-imagen" value="${p.imagen}" class="form-input" placeholder="https://...">
         </label>
         <button class="btn-accion" style="background:var(--gold); color:#000;" onclick="window.guardarPropUI()">💾 Guardar Prop</button>
-    </div>`;
-}
-
-export function htmlFormNPC(npcData = null) {
-    const n = npcData || { id: '', nombre: '', tipo: 'sistema', icono_url: '', hex_pos: '', capa: 'mid', descripcion: '' };
-    return `
-    <div style="display:flex; flex-direction:column; gap:10px;">
-        <input type="hidden" id="fn-id" value="${n.id || ''}">
-        <label>Nombre
-            <input type="text" id="fn-nombre" value="${n.nombre}" class="form-input" placeholder="Nombre del NPC">
-        </label>
-        <label>Tipo
-            <select id="fn-tipo" class="form-input">
-                <option value="sistema" ${n.tipo==='sistema'?'selected':''}>NPC Sistema</option>
-                <option value="jugador" ${n.tipo==='jugador'?'selected':''}>NPC Jugador</option>
-            </select>
-        </label>
-        <label>Icono URL
-            <input type="text" id="fn-icono" value="${n.icono_url || ''}" class="form-input" placeholder="https://...">
-        </label>
-        <label>Posición (q,r)
-            <input type="text" id="fn-hex" value="${n.hex_pos || ''}" class="form-input" placeholder="ej: 3,2">
-        </label>
-        <label>Descripción
-            <textarea id="fn-desc" class="form-input" rows="3">${n.descripcion || ''}</textarea>
-        </label>
-        <button class="btn-accion" style="background:var(--gold); color:#000;" onclick="window.guardarNPCUI()">💾 Guardar NPC</button>
     </div>`;
 }
 
