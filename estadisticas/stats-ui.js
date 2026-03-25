@@ -1,6 +1,9 @@
 import { statsGlobal, listaEstados, estadoUI, dbExtra } from './stats-state.js';
 import { calcularVidaRojaMax, calcularVexMax, getMayorAfinidad } from './stats-logic.js';
 
+// 🌟 CORRECCIÓN: Conectar al Storage de Supabase en lugar de carpetas locales
+const STORAGE_URL = 'https://gkscqurkpyteusqyspsu.supabase.co/storage/v1/object/public/imagenes-hex';
+
 const normalizar = (str) => str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/\s+/g,'_').replace(/[^a-z0-9ñ_]/g,'');
 const calcTotal = (base, spells, spellEff, buff) => (base || 0) + (spells || 0) + (spellEff || 0) + (buff || 0);
 
@@ -14,7 +17,8 @@ const bTextSplit = (spells, spellEff, buff) => {
     return `<div style="font-size:0.75em; display:flex; flex-direction:column; gap:4px; margin-top:8px; border-top:1px dashed #444; padding-top:8px;">${parts.join('')}</div>`;
 };
 
-const imgError = "this.onerror=null; this.src='../img/imgobjetos/no_encontrado.png'";
+// 🌟 CORRECCIÓN: Imagen de error apuntando a la nube
+const imgError = `this.onerror=null; this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png'`;
 const raridadValor = { "Legendario": 3, "Raro": 2, "Común": 1, "-": 0 };
 
 function AsegurarGuardaD(p) { if(p.guardaDorada === undefined) p.guardaDorada = 0; if(p.baseGuardaDorada === undefined) p.baseGuardaDorada = 0; }
@@ -102,7 +106,7 @@ export function dibujarCatalogo() {
         if (estadoUI.filtroAct === 'Activo' && !p.isActive) return; if (estadoUI.filtroAct === 'Inactivo' && p.isActive) return;
 
         const iconoMuestra = normalizar(p.iconoOverride || nombre);
-        const safeNombre = nombre.replace(/'/g, "\\'").replace(/"/g, "&quot;"); // 🌟 CORRECCIÓN DE BUG DE APÓSTROFES
+        const safeNombre = nombre.replace(/'/g, "\\'").replace(/"/g, "&quot;");
 
         let borderStyle = ""; let bgStyle = "background: #11001c;"; 
         
@@ -121,7 +125,7 @@ export function dibujarCatalogo() {
         html += `
         <div class="char-card ${claseInactiva}" style="position: relative; ${borderStyle} ${bgStyle} padding: 15px; border-radius: 12px; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'" onclick="window.abrirDetalle('${safeNombre}')">
             ${btnEliminar}
-            <img src="../img/imgpersonajes/${iconoMuestra}icon.png" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.2); margin-bottom: 10px;" onerror="${imgError}">
+            <img src="${STORAGE_URL}/imgpersonajes/${iconoMuestra}icon.png" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.2); margin-bottom: 10px;" onerror="${imgError}">
             <h3 style="margin: 0 0 10px 0; font-family: 'Cinzel', serif; font-size: 1.2em; text-transform: uppercase;">${nombre}</h3>
             <div style="background: rgba(0,0,0,0.5); padding: 8px; border-radius: 6px;">
                 <p style="margin: 0; font-size: 0.9em; color: #ddd;">HEX: <strong style="color: var(--gold);">${p.hex}</strong></p>
@@ -159,7 +163,7 @@ export function dibujarResumenVisual() {
         const topItems = myItems.sort((a,b) => (raridadValor[dbExtra.infoObjetos[b]?.rar]||0) - (raridadValor[dbExtra.infoObjetos[a]?.rar]||0)).slice(0, 5);
         let itemsHtml = topItems.map(o => {
             const rarClase = dbExtra.infoObjetos[o]?.rar === 'Raro' ? 'rarity-raro' : (dbExtra.infoObjetos[o]?.rar === 'Legendario' ? 'rarity-legendario' : 'rarity-comun');
-            return `<a href="${linkObj}" target="_blank" class="mini-item-card ${rarClase}" title="${o} (Clic para ir al inventario)" onclick="event.stopPropagation();"><img src="../img/imgobjetos/${normalizar(o)}.png" onerror="${imgError}"></a>`;
+            return `<a href="${linkObj}" target="_blank" class="mini-item-card ${rarClase}" title="${o} (Clic para ir al inventario)" onclick="event.stopPropagation();"><img src="${STORAGE_URL}/imgobjetos/${normalizar(o)}.png" onerror="${imgError}"></a>`;
         }).join('');
 
         const mySpells = (dbExtra.hechizos.inventario || []).filter(i => i.Personaje.toLowerCase() === pjNameLower);
@@ -191,7 +195,7 @@ export function dibujarResumenVisual() {
         html += `
         <div class="resumen-row" onclick="window.abrirDetalle('${safeNombre}')" style="background:#111; border-color:#333;">
             <div class="resumen-left">
-                <img src="../img/imgpersonajes/${iconoGrande}icon.png" style="border: 2px solid var(--gold);" onerror="${imgError}">
+                <img src="${STORAGE_URL}/imgpersonajes/${iconoGrande}icon.png" style="border: 2px solid var(--gold);" onerror="${imgError}">
                 <h3 style="margin:8px 0 0 0; font-size:1.1em; color:var(--gold); text-transform:uppercase; font-family:'Cinzel';">${nombre}</h3>
                 <div class="copy-wrap hex-label" onclick="window.copySilently('HEX: ${p.hex}', event)">
                     ${p.hex}<br><span style="font-size:0.5em; color:#fff;">HEX</span>
@@ -308,7 +312,7 @@ export function dibujarDetalle() {
     <div style="display: flex; align-items: center; gap: 30px; border-bottom: 2px solid #333; padding-bottom: 25px; opacity:${p.isActive ? '1' : '0.5'}; flex-wrap:wrap;">
         
         <div style="position: relative;">
-            <img src="../img/imgpersonajes/${iconoGrande}icon.png" style="width: 140px; height: 140px; border-radius: 50%; border: 4px solid var(--gold); box-shadow: 0 0 20px rgba(212,175,55,0.3); object-fit: cover; background:#000;" onerror="${imgError}">
+            <img src="${STORAGE_URL}/imgpersonajes/${iconoGrande}icon.png" style="width: 140px; height: 140px; border-radius: 50%; border: 4px solid var(--gold); box-shadow: 0 0 20px rgba(212,175,55,0.3); object-fit: cover; background:#000;" onerror="${imgError}">
             ${p.isNPC ? `<span style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); background: #4a0000; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.7em; font-weight: bold; border: 1px solid #ff0000;">NPC</span>` : ''}
         </div>
 
@@ -489,8 +493,6 @@ export function dibujarPanelEdicionOP() {
     const nombre = estadoUI.personajeSeleccionado; const p = statsGlobal[nombre];
     if(!p) return ``;
     
-    const safeNombre = nombre.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-    
     const pAfinidadesBase = [ { id: 'fisica', label: 'Física (BASE)', val: p.afinidadesBase.fisica }, { id: 'energetica', label: 'Energética (BASE)', val: p.afinidadesBase.energetica }, { id: 'espiritual', label: 'Espiritual (BASE)', val: p.afinidadesBase.espiritual }, { id: 'mando', label: 'Mando (BASE)', val: p.afinidadesBase.mando }, { id: 'psiquica', label: 'Psíquica (BASE)', val: p.afinidadesBase.psiquica }, { id: 'oscura', label: 'Oscura (BASE)', val: p.afinidadesBase.oscura } ];
 
     const pAfinidadesSpellEff = [ { id: 'fisica', label: 'Física (ALT)', val: p.hechizosEfecto.fisica }, { id: 'energetica', label: 'Energética (ALT)', val: p.hechizosEfecto.energetica }, { id: 'espiritual', label: 'Espiritual (ALT)', val: p.hechizosEfecto.espiritual }, { id: 'mando', label: 'Mando (ALT)', val: p.hechizosEfecto.mando }, { id: 'psiquica', label: 'Psíquica (ALT)', val: p.hechizosEfecto.psiquica }, { id: 'oscura', label: 'Oscura (ALT)', val: p.hechizosEfecto.oscura }, { id: 'danoRojo', label: 'Daño Rojo (ALT)', val: p.hechizosEfecto.danoRojo }, { id: 'danoAzul', label: 'Daño Azul (ALT)', val: p.hechizosEfecto.danoAzul }, { id: 'elimDorada', label: 'Elim. Dorada (ALT)', val: p.hechizosEfecto.elimDorada } ];
@@ -510,16 +512,16 @@ export function dibujarPanelEdicionOP() {
             <div class="edit-card" style="background: #111; border: 1px solid var(--gold); border-radius: 8px; padding: 15px; text-align: center;">
                 <h4 style="margin: 0 0 15px 0; color: var(--gold);">🪙 Sumar/Restar HEX</h4>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                    <button type="button" style="background:#1b5e20; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', 10)">+10</button>
-                    <button type="button" style="background:#b71c1c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', -10)">-10</button>
+                    <button type="button" style="background:#1b5e20; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 10)">+10</button>
+                    <button type="button" style="background:#b71c1c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -10)">-10</button>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                    <button type="button" style="background:#004d40; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', 50)">+50</button>
-                    <button type="button" style="background:#d84315; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', -50)">-50</button>
+                    <button type="button" style="background:#004d40; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 50)">+50</button>
+                    <button type="button" style="background:#d84315; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -50)">-50</button>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                    <button type="button" style="background:#4a148c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', 100)">+100</button>
-                    <button type="button" style="background:#880e4f; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', -100)">-100</button>
+                    <button type="button" style="background:#4a148c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 100)">+100</button>
+                    <button type="button" style="background:#880e4f; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -100)">-100</button>
                 </div>
             </div>
 
@@ -599,7 +601,7 @@ export function dibujarPanelEdicionOP() {
             <div style="display:flex; justify-content:center; align-items:stretch; gap:10px; flex-wrap:wrap;">
                 <select id="clon-source" style="padding: 12px; background: #000; color: white; border: 1px solid var(--gold); border-radius: 6px; font-family: 'Cinzel'; min-width: 250px; font-size: 1em;">
                     <option value="" disabled selected>-- Selecciona Origen --</option>
-                    ${Object.keys(statsGlobal).filter(n => n !== nombre).sort().map(n => `<option value="${n.replace(/"/g, "&quot;")}">${n}</option>`).join('')}
+                    ${Object.keys(statsGlobal).filter(n => n !== nombre).sort().map(n => `<option value="${n}">${n}</option>`).join('')}
                 </select>
                 <button type="button" onclick="window.ejecutarClonacion('estados')" style="background:#004a4a; border:none; border-bottom: 3px solid #00ffff; border-radius: 6px; padding:10px 15px; color:white; font-weight:bold; cursor:pointer; transition:0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">Importar Estados</button>
                 <button type="button" onclick="window.ejecutarClonacion('efectosExtras')" style="background:#4a90e2; border:none; border-bottom: 3px solid #1a365d; border-radius: 6px; padding:10px 15px; color:#111; font-weight:bold; cursor:pointer; transition:0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">Copiar Efectos</button>
@@ -636,9 +638,8 @@ export function dibujarHexOP() {
         const char = estadoUI.party[i];
         if(char && statsGlobal[char]) {
             const icono = normalizar(statsGlobal[char]?.iconoOverride || char);
-            const safeChar = char.replace(/'/g, "\\'").replace(/"/g, "&quot;");
-            html += `<div style="width:90px; height:90px; border:3px solid var(--gold); border-radius:10px; background:url('../img/imgpersonajes/${icono}icon.png') center/cover; position:relative; box-shadow: 0 4px 8px rgba(0,0,0,0.5);" title="${char}">
-                <button onclick="window.togglePartyMember('${safeChar}', false)" style="position:absolute; top:-10px; right:-10px; background:#ff0000; color:white; border-radius:50%; width:28px; height:28px; font-size:16px; font-weight:bold; border:2px solid #fff; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center; transition: 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">X</button>
+            html += `<div style="width:90px; height:90px; border:3px solid var(--gold); border-radius:10px; background:#0a0a0a url('${STORAGE_URL}/imgpersonajes/${icono}icon.png') center/cover; position:relative; box-shadow: 0 4px 8px rgba(0,0,0,0.5);" title="${char}">
+                <button onclick="window.togglePartyMember('${char}', false)" style="position:absolute; top:-10px; right:-10px; background:#ff0000; color:white; border-radius:50%; width:28px; height:28px; font-size:16px; font-weight:bold; border:2px solid #fff; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center; transition: 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">X</button>
                 <div style="position:absolute; bottom:0; background:rgba(0,0,0,0.8); width:100%; font-size:0.7em; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:4px 0; border-radius:0 0 7px 7px; color: var(--gold); font-weight: bold;">${char}</div>
             </div>`;
         } else {
@@ -657,11 +658,10 @@ export function dibujarHexOP() {
         if (p.isPlayer) {
             const isChecked = estadoUI.party.includes(nombre) ? 'checked' : '';
             const iconoMuestra = normalizar(p.iconoOverride || nombre);
-            const safeNombre = nombre.replace(/'/g, "\\'").replace(/"/g, "&quot;");
             html += `
                 <label style="display:flex; align-items:center; gap:10px; background:#111; padding:10px; border-radius:6px; border:1px solid #333; cursor:pointer; transition:0.2s; user-select:none;" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='#333'">
-                    <input type="checkbox" ${isChecked} onchange="window.togglePartyMember('${safeNombre}', this.checked)" style="transform:scale(1.4); cursor:pointer; margin-left: 5px;">
-                    <img src="../img/imgpersonajes/${iconoMuestra}icon.png" style="width:35px; height:35px; border-radius:50%; border:1px solid #fff; object-fit:cover;" onerror="${imgError}">
+                    <input type="checkbox" ${isChecked} onchange="window.togglePartyMember('${nombre}', this.checked)" style="transform:scale(1.4); cursor:pointer; margin-left: 5px;">
+                    <img src="${STORAGE_URL}/imgpersonajes/${iconoMuestra}icon.png" style="width:35px; height:35px; border-radius:50%; border:1px solid #fff; object-fit:cover;" onerror="${imgError}">
                     <span style="color:white; font-size:0.9em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:bold; flex:1;">${nombre}</span>
                 </label>
             `;
@@ -697,13 +697,12 @@ export function dibujarHexOP() {
     estadoUI.party.forEach(nombre => {
         if (nombre && statsGlobal[nombre]) {
             const p = statsGlobal[nombre];
-            const safeNombre = nombre.replace(/'/g, "\\'").replace(/"/g, "&quot;");
             const asisTexto = p.isPlayer ? `(${p.asistencia || 1}/7)` : `(NPC)`;
             const iconoMuestra = normalizar(p.iconoOverride || nombre);
             html += `
             <div class="edit-card" style="background: #111; border: 1px solid var(--gold); border-radius: 12px; padding: 20px;">
                 <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px; border-bottom: 1px solid #333; padding-bottom: 15px;">
-                    <img src="../img/imgpersonajes/${iconoMuestra}icon.png" style="width:60px; height:60px; border-radius:50%; border:2px solid var(--gold); object-fit:cover; background:#000;" onerror="${imgError}">
+                    <img src="${STORAGE_URL}/imgpersonajes/${iconoMuestra}icon.png" style="width:60px; height:60px; border-radius:50%; border:2px solid var(--gold); object-fit:cover; background:#000;" onerror="${imgError}">
                     <div style="text-align:left;">
                         <h4 style="margin:0 0 5px 0; font-size:1.1em; color: #fff;">${nombre}</h4>
                         <div style="color:var(--gold); font-size:1.1em; font-weight:bold;">HEX: ${p.hex}</div>
@@ -712,20 +711,20 @@ export function dibujarHexOP() {
                 </div>
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                    <button type="button" style="background:#1b5e20; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', 10)">+10</button>
-                    <button type="button" style="background:#b71c1c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', -10)">-10</button>
+                    <button type="button" style="background:#1b5e20; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 10)">+10</button>
+                    <button type="button" style="background:#b71c1c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -10)">-10</button>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                    <button type="button" style="background:#004d40; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', 50)">+50</button>
-                    <button type="button" style="background:#d84315; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', -50)">-50</button>
+                    <button type="button" style="background:#004d40; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 50)">+50</button>
+                    <button type="button" style="background:#d84315; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -50)">-50</button>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                    <button type="button" style="background:#4a148c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', 100)">+100</button>
-                    <button type="button" style="background:#880e4f; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', -100)">-100</button>
+                    <button type="button" style="background:#4a148c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 100)">+100</button>
+                    <button type="button" style="background:#880e4f; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -100)">-100</button>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                    <button type="button" style="background:#263238; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', 500)">+500</button>
-                    <button type="button" style="background:#3e2723; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', -500)">-500</button>
+                    <button type="button" style="background:#263238; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 500)">+500</button>
+                    <button type="button" style="background:#3e2723; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -500)">-500</button>
                 </div>
             </div>`;
         }
