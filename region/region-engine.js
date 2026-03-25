@@ -199,7 +199,6 @@ export function aplicarHerramienta(q, r, key) {
     let modificado = false;
     
     hexes.forEach(h => { 
-        // 🌟 APLICAR RUIDO AL PINCEL: Ignora hexágonos aleatoriamente para crear "huecos" orgánicos
         if (editor.ruidoActivo && editor.herramienta === 'agregar') {
             if (Math.random() > (editor.ruidoDensidad || 0.35)) return; 
         }
@@ -240,12 +239,11 @@ function _accionHex(q, r, key) {
         if (pid === 'prop_pintar') {
             let finalColor = editor.colorActual;
             
-            // 🌟 APLICAR RUIDO AL PINCEL: Si el ruido está activo, varía ligeramente la luminosidad del color base
             if (editor.ruidoActivo) {
                 const h = parseInt(finalColor.slice(1,3), 16);
                 const s = parseInt(finalColor.slice(3,5), 16);
                 const l = parseInt(finalColor.slice(5,7), 16);
-                const v = Math.round((Math.random() - 0.5) * 40); // Variación de +/- 20
+                const v = Math.round((Math.random() - 0.5) * 40); 
                 const clamp = n => Math.max(0, Math.min(255, n));
                 const toHex = n => n.toString(16).padStart(2, '0');
                 finalColor = `#${toHex(clamp(h+v))}${toHex(clamp(s+v))}${toHex(clamp(l+v))}`;
@@ -272,6 +270,7 @@ function _accionHex(q, r, key) {
         const hex = mapaActual.hexes[key];
         const pid = editor.selectedPropId;
 
+        // Si estamos borrando con el pincel de región, borramos la región.
         if (pid === 'prop_region') {
             if (hex.region) {
                 if (mapaActual.regiones[hex.region]) {
@@ -282,16 +281,8 @@ function _accionHex(q, r, key) {
             return;
         }
 
-        if (pid === 'prop_pintar') {
-            hex[capa] = hex[capa].filter(e => !(typeof e === 'string' && e.startsWith('COLOR:')));
-        } else if (pid) {
-            hex[capa] = hex[capa].filter(e => {
-                const eId = typeof e === 'string' ? (e.startsWith('COLOR:') ? e : e.split(':')[0]) : e;
-                return eId !== pid;
-            });
-        } else {
-            hex[capa] = [];
-        }
+        // BORRADO UNIVERSAL: Limpia toda la capa actual (back, mid, over) sin importar el prop seleccionado.
+        hex[capa] = [];
     }
 }
 
