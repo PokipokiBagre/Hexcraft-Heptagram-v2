@@ -29,7 +29,8 @@ export const editor = {
     brushSize: 1,
     colorActual: '#4488cc',
     opacidadPincel: 1.0,
-    ruidoDensidad: 0.35,
+    ruidoActivo: false,  // 🌟 NUEVO: Estado del check de ruido
+    ruidoDensidad: 0.35, // % de hexágonos que se pintan con el ruido
 };
 
 export let mapaActual = {
@@ -61,7 +62,7 @@ export function crearRegion(id) {
     return {
         id, nombre: 'Nueva Región', color: '#4488cc', opacidad: 0.35, controlador: '',      
         accesible: true, misiones: [], hexes: [],      
-        tieneInterior: true, // TODAS LAS REGIONES TIENEN INTERIOR AUTOMÁTICAMENTE
+        tieneInterior: true, 
         interiorId: `interior_${id}`
     };
 }
