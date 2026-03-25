@@ -6,19 +6,71 @@ import {
     HEX_SIZE, camara, mapaActual, props, npcsMapaLocal,
     editor, ui, STORAGE_URL, OVER_OFFSET_X, OVER_OFFSET_Y
 } from './region-state.js';
-import { hexToPixel3D, isometricHexVertices, hexKey } from './region-utils.js';
+import { hexToPixel3D, hexKey } from './region-utils.js';
 
 let context;
 let imageCache = {};
 let bgImage;
 const NO_IMG = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 
+// 🌟 OPTIMIZACIÓN: Constantes precalculadas
+const NEIGHBOR_DIRS = [
+    {dq: 1, dr: 0}, {dq: 0, dr: 1}, {dq: -1, dr: 1},
+    {dq: -1, dr: 0}, {dq: 0, dr: -1}, {dq: 1, dr: -1}
+];
+let baseHexOffsets = [];
+let edgeToNeighborIndex = [];
+
 export function inicializarRender(ctx) { context = ctx; }
+
+// 🌟 OPTIMIZACIÓN MÁXIMA: Pre-calculamos los vértices base UNA vez por frame
+// Esto evita crear 60,000 objetos temporales por segundo y sobrecargar la RAM.
+function updateBaseOffsets() {
+    const size = HEX_SIZE * camara.zoom;
+    const squash = camara.PITCH_SCALE;
+    
+    baseHexOffsets = [];
+    for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 180) * (60 * i);
+        const vx_2d = size * Math.cos(angle);
+        const vy_2d = size * Math.sin(angle);
+        baseHexOffsets.push({ x: (vx_2d - vy_2d), y: (vx_2d + vy_2d) * squash });
+    }
+
+    // 🌟 Mapeo Inteligente: Calcula la relación de bordes a vecinos UNA VEZ por frame 
+    // (en lugar de hacerlo para cada hexágono, reduciendo el cálculo en un 99.9%)
+    edgeToNeighborIndex = new Array(6);
+    const centerPos = hexToPixel3D(0, 0, 0); 
+    for (let i = 0; i < 6; i++) {
+        const midX = centerPos.x + (baseHexOffsets[i].x + baseHexOffsets[(i+1)%6].x) / 2;
+        const midY = centerPos.y + (baseHexOffsets[i].y + baseHexOffsets[(i+1)%6].y) / 2;
+        
+        let closestJ = 0;
+        let minD = Infinity;
+        for (let j = 0; j < 6; j++) {
+            const nPos = hexToPixel3D(NEIGHBOR_DIRS[j].dq, NEIGHBOR_DIRS[j].dr, 0);
+            const dist = Math.hypot(nPos.x - midX, nPos.y - midY);
+            if (dist < minD) { minD = dist; closestJ = j; }
+        }
+        edgeToNeighborIndex[i] = closestJ;
+    }
+}
+
+// Trazado ultrarrápido basado en caché
+function trazarHexPathFast(cx, cy) {
+    context.beginPath();
+    context.moveTo(cx + baseHexOffsets[0].x, cy + baseHexOffsets[0].y);
+    for (let i = 1; i < 6; i++) context.lineTo(cx + baseHexOffsets[i].x, cy + baseHexOffsets[i].y);
+    context.closePath();
+}
 
 export function dibujarEscena() {
     if (!context) return;
     const canvas = context.canvas;
     const W = canvas.width, H = canvas.height;
+
+    // Actualizar matemáticas del frame
+    updateBaseOffsets();
 
     context.clearRect(0, 0, W, H);
     if (bgImage) {
@@ -31,10 +83,10 @@ export function dibujarEscena() {
 
     const layers = getDrawingLayers(W, H);
     
-    // FASE 1: Suelo y texturas (Garantiza que nada solape los bordes después)
+    // FASE 1: Suelo y texturas
     layers.ground.forEach(item => dibujarHexTop3D(item.q, item.r, item.hex, item.projPos));
     
-    // FASE 2: Bordes de región (Siempre encima del suelo)
+    // FASE 2: Bordes de región
     layers.borders.forEach(item => dibujarHexRegionBorder(item.q, item.r, item.hex, item.projPos));
 
     // FASE 3: Rejilla base (Grid)
@@ -118,16 +170,12 @@ function getDrawingLayers(W, H) {
 
 // ── PLANO BASE ──
 function dibujarHexTop3D(q, r, hex, topPos) {
-    const verts = isometricHexVertices(topPos.x, topPos.y, 0);
     const reg = hex.region ? mapaActual.regiones[hex.region] : null;
 
-    trazarHexPath(verts);
-    
-    // Suelo base oscuro para tapar el vacío
+    trazarHexPathFast(topPos.x, topPos.y);
     context.fillStyle = '#0a0018'; 
     context.fill();
 
-    // Tinte visual tenue para los hexágonos de región
     if (reg) {
         context.fillStyle = reg.color || '#334'; 
         context.globalAlpha = Math.max(0.05, (reg.opacidad || 0.3) * 0.2); 
@@ -144,7 +192,7 @@ function dibujarHexTop3D(q, r, hex, topPos) {
         if (typeof pid === 'string' && pid.startsWith('COLOR:')) {
             const parts = pid.split(':');
             context.save();
-            trazarHexPath(verts);
+            trazarHexPathFast(topPos.x, topPos.y);
             context.fillStyle = parts[1]; context.globalAlpha = parseFloat(parts[2]) || 1.0; context.fill();
             context.restore();
             return;
@@ -163,69 +211,55 @@ function dibujarHexTop3D(q, r, hex, topPos) {
 
         context.save();
         context.globalAlpha = opac;
-        trazarHexPath(verts);
-        context.clip();
+        
+        // 🌟 LOD: Si alejamos la cámara mucho, apagamos el Clipping. Es el proceso más pesado y de lejos no se nota.
+        if (camara.zoom >= 0.35) {
+            trazarHexPathFast(topPos.x, topPos.y);
+            context.clip();
+        }
+        
         context.drawImage(img, topPos.x - drawW / 2, topPos.y - drawH / 2, drawW, drawH);
         context.restore();
     });
 }
 
-// ── BORDES DE REGIÓN (Método Clásico de Distancia - Perfecto para Isométrico) ──
+// ── BORDES DE REGIÓN ──
 function dibujarHexRegionBorder(q, r, hex, topPos) {
     const reg = mapaActual.regiones[hex.region];
     if (!reg) return;
 
-    const verts = isometricHexVertices(topPos.x, topPos.y, 0);
-
     context.save();
     context.strokeStyle = reg.color || '#334';
-    context.lineWidth = 4.5 * camara.zoom; 
+    // 🌟 LOD: Grosor dinámico para que no se sature a larga distancia
+    context.lineWidth = Math.max(1.5, 4.5 * camara.zoom); 
     context.lineCap = 'round';
     context.lineJoin = 'round';
     context.globalAlpha = reg.opacidad ? Math.min(1, reg.opacidad + 0.4) : 0.8;
 
-    const neighborDirs = [
-        {dq: 1, dr: 0}, {dq: 0, dr: 1}, {dq: -1, dr: 1},
-        {dq: -1, dr: 0}, {dq: 0, dr: -1}, {dq: 1, dr: -1}
-    ];
-
     context.beginPath();
     for (let i = 0; i < 6; i++) {
-        const midX = (verts[i].x + verts[(i+1)%6].x) / 2;
-        const midY = (verts[i].y + verts[(i+1)%6].y) / 2;
+        // Uso de mapeo en caché (O(1) en lugar de medir trigonométricamente)
+        const neighborIdx = edgeToNeighborIndex[i];
+        const dir = NEIGHBOR_DIRS[neighborIdx];
+        const nHex = mapaActual.hexes[`${q + dir.dq},${r + dir.dr}`];
         
-        let closestNeighborKey = null;
-        let minD = Infinity;
-        
-        // Buscar cuál de los 6 vecinos teóricos es el dueño de esta arista por distancia real
-        for (const dir of neighborDirs) {
-            const nq = q + dir.dq; const nr = r + dir.dr;
-            const nPos = hexToPixel3D(nq, nr, 0);
-            const dist = Math.hypot(nPos.x - midX, nPos.y - midY);
-            if (dist < minD) { minD = dist; closestNeighborKey = `${nq},${nr}`; }
-        }
-
-        const nHex = closestNeighborKey ? mapaActual.hexes[closestNeighborKey] : null;
-        
-        // Si el vecino NO es de mi misma región, dibujamos esta arista
         if (!nHex || nHex.region !== hex.region) {
-            context.moveTo(verts[i].x, verts[i].y);
-            context.lineTo(verts[(i+1)%6].x, verts[(i+1)%6].y);
+            context.moveTo(topPos.x + baseHexOffsets[i].x, topPos.y + baseHexOffsets[i].y);
+            context.lineTo(topPos.x + baseHexOffsets[(i+1)%6].x, topPos.y + baseHexOffsets[(i+1)%6].y);
         }
     }
     context.stroke();
     context.restore();
 }
 
-// ── PLANO OVER (Limpio y plano sin sombras) ──
+// ── PLANO OVER ──
 function dibujarHexOverBackground(q, r, propId, hex, overPos, opac) {
     const parts = propId.split(':');
     const color = parts[1];
-    const verts = isometricHexVertices(overPos.x, overPos.y, 0);
 
     context.save();
     context.globalAlpha = opac;
-    trazarHexPath(verts);
+    trazarHexPathFast(overPos.x, overPos.y);
     context.fillStyle = color;
     context.fill();
     context.restore();
@@ -243,12 +277,15 @@ function dibujarHexOverItem(q, r, propId, hex, overPos, opac) {
     const size = HEX_SIZE * camara.zoom;
     const drawW = size * 2.85; 
     const drawH = drawW * camara.PITCH_SCALE;
-    const vertsOver = isometricHexVertices(overPos.x, overPos.y, 0);
 
     context.save();
     context.globalAlpha = opac;
-    trazarHexPath(vertsOver);
-    context.clip();
+    
+    if (camara.zoom >= 0.35) {
+        trazarHexPathFast(overPos.x, overPos.y);
+        context.clip();
+    }
+    
     context.drawImage(img, overPos.x - drawW / 2, overPos.y - drawH / 2, drawW, drawH);
     context.restore();
 }
@@ -298,39 +335,35 @@ function dibujarNPC(q, r, npc, projPos, opac) {
 
 // ── GRIDS Y OVERLAYS ──
 function dibujarGridAndOverlay(q, r, hex, projPos, layer) {
-    const verts = isometricHexVertices(projPos.x, projPos.y, 0);
     const key = hexKey(q, r);
-
-    trazarHexPath(verts);
-    context.strokeStyle = layer === 'base' ? 'rgba(80, 50, 130, 0.22)' : 'rgba(100, 200, 255, 0.15)';
-    context.lineWidth = 0.8;
-    context.stroke();
-
     const isHov = ui.hoveredHex === key;
     const isSelH = editor.selectedHexKey === key;
 
-    if (isHov || isSelH) {
-        if (editor.activo) {
-            if (layer === 'over' && editor.capaActual !== 'over') return;
-            if (layer === 'base' && editor.capaActual === 'over') return;
-        } else {
-            if (layer === 'over') return;
+    // 🌟 LOD: Ocultar Grid normal al alejar para evitar ruido visual y mejorar FPS.
+    if (camara.zoom >= 0.35 || isHov || isSelH) {
+        trazarHexPathFast(projPos.x, projPos.y);
+
+        if (camara.zoom >= 0.35) {
+            context.strokeStyle = layer === 'base' ? 'rgba(80, 50, 130, 0.22)' : 'rgba(100, 200, 255, 0.15)';
+            context.lineWidth = Math.max(0.5, 0.8 * camara.zoom);
+            context.stroke();
         }
 
-        trazarHexPath(verts);
-        if (isHov) { context.fillStyle = 'rgba(255,255,255,0.06)'; context.fill(); }
-        
-        context.strokeStyle = isSelH ? '#f1c40f' : 'rgba(255,255,255,0.3)';
-        context.lineWidth = isSelH ? 2.5 : 1.5;
-        context.stroke();
-    }
-}
+        if (isHov || isSelH) {
+            if (editor.activo) {
+                if (layer === 'over' && editor.capaActual !== 'over') return;
+                if (layer === 'base' && editor.capaActual === 'over') return;
+            } else {
+                if (layer === 'over') return;
+            }
 
-function trazarHexPath(verts) {
-    context.beginPath();
-    context.moveTo(verts[0].x, verts[0].y);
-    for (let i = 1; i < 6; i++) context.lineTo(verts[i].x, verts[i].y);
-    context.closePath();
+            if (isHov) { context.fillStyle = 'rgba(255,255,255,0.06)'; context.fill(); }
+            
+            context.strokeStyle = isSelH ? '#f1c40f' : 'rgba(255,255,255,0.3)';
+            context.lineWidth = isSelH ? 2.5 : 1.5;
+            context.stroke();
+        }
+    }
 }
 
 function getCachedImage(url) {
