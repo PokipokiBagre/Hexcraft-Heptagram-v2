@@ -6,14 +6,13 @@ import {
     HEX_SIZE, camara, mapaActual, props, npcsMapaLocal,
     editor, ui, STORAGE_URL, OVER_OFFSET_X, OVER_OFFSET_Y
 } from './region-state.js';
-import { hexToPixel3D, hexKey } from './region-utils.js';
+import { hexToPixel3D, pixelToHex3D, hexKey } from './region-utils.js';
 
 let context;
 let imageCache = {};
 let bgImage;
 const NO_IMG = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
 
-// 🌟 OPTIMIZACIÓN EXTREMA: Constantes y variables precalculadas
 const NEIGHBOR_DIRS = [
     {dq: 1, dr: 0}, {dq: 0, dr: 1}, {dq: -1, dr: 1},
     {dq: -1, dr: 0}, {dq: 0, dr: -1}, {dq: 1, dr: -1}
@@ -23,7 +22,7 @@ let edgeToNeighborIndex = [];
 
 export function inicializarRender(ctx) { context = ctx; }
 
-// Calcula la geometría base 1 sola vez por frame en lugar de 10,000 veces
+// Geometría pre-calculada
 function updateBaseOffsets() {
     const size = HEX_SIZE * camara.zoom;
     const squash = camara.PITCH_SCALE;
@@ -58,7 +57,7 @@ export function dibujarEscena() {
     const canvas = context.canvas;
     const W = canvas.width, H = canvas.height;
 
-    updateBaseOffsets(); // Sincroniza geometría
+    updateBaseOffsets(); 
 
     context.clearRect(0, 0, W, H);
     if (bgImage) {
@@ -71,7 +70,6 @@ export function dibujarEscena() {
 
     const layers = getDrawingLayers(W, H);
     
-    // 🌟 BATCH RENDERING: Dibuja miles de cosas en 1 solo comando agrupándolas
     renderBatchSueloBase(layers.ground);
     renderBatchRegionesTint(layers.ground);
     renderBatchColoresFondo(layers.ground);
@@ -79,65 +77,104 @@ export function dibujarEscena() {
     renderBatchBordesRegion(layers.borders);
     renderBatchGrid(layers.gridBase);
     
-    // Elementos mid no se pueden hacer en batch tan fácil, pero son pocos
     renderPropsYPersonajes(layers.props);
     renderCapaOver(layers.over);
 
     if (editor.activo) dibujarHUDEditor(W, H);
 }
 
+// 🌟 OPTIMIZACIÓN MÁXIMA: Culling Espacial Matemático (Bounding Box)
 function getDrawingLayers(W, H) {
     const layers = { ground: [], borders: [], gridBase: [], props: [], over: [] };
-    const margen = HEX_SIZE * camara.zoom * 6;
     
-    for (const key in mapaActual.hexes) {
-        const [q, r] = key.split(',').map(Number);
-        const hex = mapaActual.hexes[key];
-        
-        const baseProjPos = hexToPixel3D(q, r, 0); 
-        // Culling: Si está fuera de la pantalla, no procesar
-        if (baseProjPos.x < -margen || baseProjPos.x > W + margen || baseProjPos.y < -margen || baseProjPos.y > H + margen) continue;
+    // Mapeo ultra rápido de NPCs a coordenadas
+    const npcsPorHex = {};
+    for(const nKey in npcsMapaLocal) {
+        const npc = npcsMapaLocal[nKey];
+        if(npc.hex_pos) {
+            if(!npcsPorHex[npc.hex_pos]) npcsPorHex[npc.hex_pos] = [];
+            npcsPorHex[npc.hex_pos].push(npc);
+        }
+    }
 
-        const baseDepth = baseProjPos.y; 
+    // Calcula las 4 esquinas de la pantalla y las traduce a (Q, R)
+    const cs = [
+        pixelToHex3D(0, 0),
+        pixelToHex3D(W, 0),
+        pixelToHex3D(0, H),
+        pixelToHex3D(W, H)
+    ];
+    
+    // Definimos el rango mínimo y máximo visible de Q y R con un margen de seguridad
+    const pad = 4;
+    const qMin = Math.floor(Math.min(cs[0].q, cs[1].q, cs[2].q, cs[3].q)) - pad;
+    const qMax = Math.ceil(Math.max(cs[0].q, cs[1].q, cs[2].q, cs[3].q)) + pad;
+    const rMin = Math.floor(Math.min(cs[0].r, cs[1].r, cs[2].r, cs[3].r)) - pad;
+    const rMax = Math.ceil(Math.max(cs[0].r, cs[1].r, cs[2].r, cs[3].r)) + pad;
 
-        layers.ground.push({ q, r, hex, projPos: baseProjPos, depth: baseDepth });
-        if (hex.region) layers.borders.push({ q, r, hex, projPos: baseProjPos, depth: baseDepth });
+    // SÓLO iteramos sobre los hexágonos que están 100% dentro de la pantalla
+    // ¡Adiós a los 10,000 cálculos innecesarios por frame!
+    for (let q = qMin; q <= qMax; q++) {
+        for (let r = rMin; r <= rMax; r++) {
+            const key = q + ',' + r;
+            const hex = mapaActual.hexes[key];
+            if (!hex) continue; // Si está vacío, ni lo mira (Instantáneo)
 
-        hex.mid?.forEach(pid => {
-            let opac = 1.0;
-            if (typeof pid === 'string') {
-                if (pid.startsWith('COLOR:')) opac = parseFloat(pid.split(':')[2]) || 1.0;
-                else if (pid.includes(':')) opac = parseFloat(pid.split(':')[1]) || 1.0;
-            }
-            layers.props.push({ type: 'itemMid', q, r, propId: pid, projPos: baseProjPos, opacidad: opac, depth: baseDepth + 1 });
-        });
-        
-        Object.values(npcsMapaLocal).forEach(npc => {
-            if (npc.hex_pos === key) layers.props.push({ type: 'itemNPC', q, r, npc, projPos: baseProjPos, opacidad: 1.0, depth: baseDepth + 2 });
-        });
+            const baseProjPos = hexToPixel3D(q, r, 0); 
+            const baseDepth = baseProjPos.y; 
 
-        layers.gridBase.push({ layer: 'base', q, r, hex, projPos: baseProjPos, depth: baseDepth + 3 });
+            layers.ground.push({ q, r, hex, projPos: baseProjPos, depth: baseDepth });
+            if (hex.region) layers.borders.push({ q, r, hex, projPos: baseProjPos, depth: baseDepth });
 
-        if (hex.over?.length > 0) {
-            const overProjPos = { 
-                x: baseProjPos.x + (OVER_OFFSET_X * camara.zoom), 
-                y: baseProjPos.y + (OVER_OFFSET_Y * camara.zoom)
-            };
-            const overDepth = baseDepth + 5000;
-
-            hex.over.forEach(pid => {
-                const isColor = typeof pid === 'string' && pid.startsWith('COLOR:');
-                let opac = 1.0;
-                if (isColor) opac = parseFloat(pid.split(':')[2]) || 1.0;
-                else if (typeof pid === 'string' && pid.includes(':')) opac = parseFloat(pid.split(':')[1]) || 1.0;
-                
-                if (isColor) {
-                    layers.over.push({ type: 'hexOverBg', q, r, propId: pid, hex, projPos: overProjPos, opacidad: opac, depth: overDepth });
-                } else {
-                    layers.over.push({ type: 'hexOverItem', q, r, propId: pid, hex, projPos: overProjPos, opacidad: opac, depth: overDepth + 1 });
+            if (hex.mid && hex.mid.length > 0) {
+                for(let i=0; i<hex.mid.length; i++) {
+                    const pid = hex.mid[i];
+                    let opac = 1.0;
+                    if (typeof pid === 'string') {
+                        if (pid.startsWith('COLOR:')) opac = parseFloat(pid.split(':')[2]) || 1.0;
+                        else {
+                            const cidx = pid.indexOf(':');
+                            if(cidx !== -1) opac = parseFloat(pid.slice(cidx+1)) || 1.0;
+                        }
+                    }
+                    layers.props.push({ type: 'itemMid', q, r, propId: pid, projPos: baseProjPos, opacidad: opac, depth: baseDepth + 1 });
                 }
-            });
-            layers.over.push({ layer: 'over', q, r, hex, projPos: overProjPos, depth: overDepth + 2 });
+            }
+            
+            if (npcsPorHex[key]) {
+                const npcsAqui = npcsPorHex[key];
+                for(let i=0; i<npcsAqui.length; i++) {
+                    layers.props.push({ type: 'itemNPC', q, r, npc: npcsAqui[i], projPos: baseProjPos, opacidad: 1.0, depth: baseDepth + 2 });
+                }
+            }
+
+            layers.gridBase.push({ layer: 'base', q, r, hex, projPos: baseProjPos, depth: baseDepth + 3 });
+
+            if (hex.over && hex.over.length > 0) {
+                const overProjPos = { 
+                    x: baseProjPos.x + (OVER_OFFSET_X * camara.zoom), 
+                    y: baseProjPos.y + (OVER_OFFSET_Y * camara.zoom)
+                };
+                const overDepth = baseDepth + 5000;
+
+                for(let i=0; i<hex.over.length; i++) {
+                    const pid = hex.over[i];
+                    const isColor = typeof pid === 'string' && pid.startsWith('COLOR:');
+                    let opac = 1.0;
+                    if (isColor) opac = parseFloat(pid.split(':')[2]) || 1.0;
+                    else if (typeof pid === 'string') {
+                        const cidx = pid.indexOf(':');
+                        if(cidx !== -1) opac = parseFloat(pid.slice(cidx+1)) || 1.0;
+                    }
+                    
+                    if (isColor) {
+                        layers.over.push({ type: 'hexOverBg', q, r, propId: pid, hex, projPos: overProjPos, opacidad: opac, depth: overDepth });
+                    } else {
+                        layers.over.push({ type: 'hexOverItem', q, r, propId: pid, hex, projPos: overProjPos, opacidad: opac, depth: overDepth + 1 });
+                    }
+                }
+                layers.over.push({ layer: 'over', q, r, hex, projPos: overProjPos, depth: overDepth + 2 });
+            }
         }
     }
 
@@ -146,21 +183,19 @@ function getDrawingLayers(W, H) {
 }
 
 // ────────────────────────────────────────────────────────────
-// FUNCIONES DE BATCH RENDERING (Optimizadas para Canvas 2D)
+// BATCH RENDERING (Generación unificada de Pathing)
 // ────────────────────────────────────────────────────────────
 
 function addHexToPath(p) {
     context.moveTo(p.x + baseHexOffsets[0].x, p.y + baseHexOffsets[0].y);
     for (let j = 1; j < 6; j++) context.lineTo(p.x + baseHexOffsets[j].x, p.y + baseHexOffsets[j].y);
-    context.lineTo(p.x + baseHexOffsets[0].x, p.y + baseHexOffsets[0].y); // Cierra el path
+    context.lineTo(p.x + baseHexOffsets[0].x, p.y + baseHexOffsets[0].y); 
 }
 
 function renderBatchSueloBase(groundLayers) {
     if(groundLayers.length === 0) return;
     context.beginPath();
-    for(let i=0; i<groundLayers.length; i++) {
-        addHexToPath(groundLayers[i].projPos);
-    }
+    for(let i=0; i<groundLayers.length; i++) addHexToPath(groundLayers[i].projPos);
     context.fillStyle = '#0a0018';
     context.fill();
 }
@@ -222,7 +257,7 @@ function renderBatchImagenesFondo(groundLayers) {
     const size = HEX_SIZE * camara.zoom;
     const drawW = size * 2.85; 
     const drawH = drawW * camara.PITCH_SCALE;
-    const isLOD = camara.zoom < 0.35; // LOD: Desactiva clipping si está muy lejos
+    const isLOD = camara.zoom < 0.45; // 🌟 LOD optimizado: quita clip más rápido a la distancia
 
     for(let i=0; i<groundLayers.length; i++) {
         const item = groundLayers[i];
@@ -303,8 +338,8 @@ function renderBatchBordesRegion(borderLayers) {
 }
 
 function renderBatchGrid(gridLayers) {
-    // 🌟 BATCH de grid completo para dibujar todo de una sola vez
-    if (camara.zoom >= 0.35) { 
+    // 🌟 LOD optimizado: Oculta la grilla a distancias medias para evitar latencia
+    if (camara.zoom >= 0.45) { 
         context.beginPath();
         for(let i=0; i<gridLayers.length; i++) {
             addHexToPath(gridLayers[i].projPos);
@@ -314,7 +349,7 @@ function renderBatchGrid(gridLayers) {
         context.stroke();
     }
 
-    // Puntero y Selección (Deben dibujarse independientes por tener otro color)
+    // Dibujado del Puntero y Selección actual (Independiente del LOD general)
     for(let i=0; i<gridLayers.length; i++) {
         const item = gridLayers[i];
         const key = hexKey(item.q, item.r);
@@ -341,7 +376,7 @@ function renderBatchGrid(gridLayers) {
 }
 
 // ────────────────────────────────────────────────────────────
-// RENDERIZADO DE PROPS, NPCS Y CAPA OVER
+// RENDERS FINALES: Props, Personajes y Over
 // ────────────────────────────────────────────────────────────
 
 function renderPropsYPersonajes(propLayers) {
@@ -383,12 +418,11 @@ function renderPropsYPersonajes(propLayers) {
 }
 
 function renderCapaOver(overLayers) {
-    const isLOD = camara.zoom < 0.35;
+    const isLOD = camara.zoom < 0.45;
     const size = HEX_SIZE * camara.zoom;
     const drawW = size * 2.85; 
     const drawH = drawW * camara.PITCH_SCALE;
     
-    // Batch Backgrounds for Over
     const colorBatches = {};
     for(let i=0; i<overLayers.length; i++) {
         const item = overLayers[i];
@@ -411,7 +445,6 @@ function renderCapaOver(overLayers) {
     }
     context.globalAlpha = 1.0;
 
-    // Items Over and Grids
     for(let i=0; i<overLayers.length; i++) {
         const item = overLayers[i];
         if (item.type === 'hexOverItem') {
@@ -432,7 +465,6 @@ function renderCapaOver(overLayers) {
             context.drawImage(img, item.projPos.x - drawW / 2, item.projPos.y - drawH / 2, drawW, drawH);
             context.restore();
         } else if (item.type === 'gridOverlay') {
-            // Renderiza Grid OVER igual que la base, solo si es hover
             const key = hexKey(item.q, item.r);
             const isHov = ui.hoveredHex === key;
             const isSelH = editor.selectedHexKey === key;
