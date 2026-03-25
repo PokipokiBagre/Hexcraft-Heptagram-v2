@@ -63,18 +63,22 @@ function htmlPropsPanel() {
         </div>
         <div class="brush-row" style="margin-bottom:12px;">
             <span style="color:#888; font-size:0.8em;">Brush:</span>
-            ${[1,2,3,4].map(n => `<button class="filtro-pill ${editor.brushSize===n?'activo':''}" onclick="window.setBrushSizeUI(${n})">${n}</button>`).join('')}
+            ${[1, 2, 3, 4, 5, 10, 20].map(n => `<button class="filtro-pill ${editor.brushSize===n?'activo':''}" onclick="window.setBrushSizeUI(${n})">${n}</button>`).join('')}
         </div>
 
         <div style="background:rgba(0,0,0,0.6); border-left:3px solid var(--cyan); border-radius:4px; padding:10px; margin-bottom:15px;">
             <div style="font-size:0.7em;color:#00ffff;font-family:sans-serif;margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;">
-                🎨 OPCIONES DE PINCEL Y PROPS (Opacidad)
+                🎨 OPCIONES DE PINCEL (Opacidad y Ruido)
             </div>
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
                 <input type="color" value="${editor.colorActual||'#4488cc'}" onchange="window.setColorActual(this.value)" style="width:38px;height:32px;border:1px solid #555;border-radius:4px;background:none;cursor:pointer;padding:2px;">
                 <span style="font-size:0.7em;color:#888;">Opacidad:</span>
                 <input type="range" min="0.1" max="1" step="0.05" value="${editor.opacidadPincel ?? 1.0}" oninput="window.setOpacidadPincel(parseFloat(this.value))" style="flex:1;min-width:60px;accent-color:#00ccff;">
-                <button onclick="window.aplicarRuido()" style="background:#0a2a3a;border:1px solid #335566;color:#88ccdd;padding:4px 8px;border-radius:3px;font-size:0.7em;cursor:pointer;">≋ Ruido</button>
+                
+                <label style="display:flex; align-items:center; gap:4px; font-size:0.8em; color:#88ccdd; cursor:pointer; background:rgba(0,255,255,0.1); padding:4px 8px; border-radius:4px; border:1px solid rgba(0,255,255,0.2);">
+                    <input type="checkbox" ${editor.ruidoActivo ? 'checked' : ''} onchange="window.setRuidoActivo(this.checked)">
+                    ≋ Ruido
+                </label>
             </div>
         </div>
         ` : ''}
@@ -147,8 +151,7 @@ function htmlDetalleRegion(reg) {
     let misionesList = '<div style="font-size:0.8em; color:#888; font-style:italic;">No hay misiones activas.</div>';
     if (misionesActivas && misionesActivas.length > 0) {
         misionesList = misionesActivas.map(m => {
-            // SOLUCIÓN MISIONES: Buscar por m.titulo en vez de m.id
-            const tituloEscapado = m.titulo.replace(/'/g, "\\'"); // Escapar comillas para el onclick
+            const tituloEscapado = m.titulo.replace(/'/g, "\\'"); 
             const checked = (reg.misiones || []).includes(m.titulo) ? 'checked' : '';
             return `
             <label style="display:flex; align-items:center; gap:6px; font-size:0.8em; cursor:pointer; margin-bottom:4px; flex-direction:row; color:var(--text);">
@@ -289,7 +292,6 @@ export function renderInfoHexPanel(q, r, key) {
     const reg = hex.region ? mapaActual.regiones[hex.region] : null;
     let entidadesAqui = [];
 
-    // SOLUCIÓN: Escaneo universal si tocamos una región
     if (reg) {
         (reg.hexes || []).forEach(hKey => {
             const h = mapaActual.hexes[hKey];
@@ -309,7 +311,6 @@ export function renderInfoHexPanel(q, r, key) {
             }
         });
     } else {
-        // Escaneo aislado para un hexágono suelto
         Object.values(npcsMapaLocal).filter(n => n.hex_pos === key).forEach(n => {
             entidadesAqui.push({nombre: n.nombre, img: n.icono_url, desc: n.descripcion});
         });
@@ -326,7 +327,6 @@ export function renderInfoHexPanel(q, r, key) {
         }
     }
     
-    // SOLUCIÓN MISIONES: Relacionar usando .titulo (mid es ahora el título de la misión)
     const misionesHtml = reg ? (reg.misiones || []).map(mid => {
         const m = misionesActivas.find(x => x.titulo === mid);
         return m ? `<div style="font-size:0.82em; color:var(--text); margin-bottom:3px;"><span class="mision-estado m-${m.estado}" style="font-size:0.65em; padding:1px 4px; border-radius:3px;">${m.estado===1?'Pendiente':'En curso'}</span> ${m.titulo}</div>` : '';
