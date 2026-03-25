@@ -12,7 +12,7 @@ import {
     cargarTodo, guardarMapa, guardarProp, eliminarProp, 
     guardarNPC, eliminarNPC, subirImagenStorage, listarImagenesBackground 
 } from './region-data.js';
-import { inicializarEngine, aplicarRuidoVisible, centrarCamara } from './region-engine.js';
+import { inicializarEngine, centrarCamara } from './region-engine.js';
 import { setBackground } from './region-render.js';
 import { renderPanel, renderInfoHexPanel } from './region-ui.js';
 import { htmlFormProp, htmlFormNPC, abrirModalUI, cerrarModalUI, mostrarToastUI } from './region-ui-elements.js';
@@ -24,7 +24,6 @@ let historialMapas = [];
 
 function actualizarVisibilidadUI() {
     document.querySelectorAll('.solo-op').forEach(el => {
-        // En lugar de ocultar la barra entera, el HTML ahora solo oculta botones específicos
         el.style.display = editor.activo ? (el.tagName === 'BUTTON' || el.tagName === 'DIV' ? 'flex' : 'block') : 'none';
     });
 }
@@ -37,7 +36,6 @@ window.onload = async () => {
     await hexAuth.init();
     editor.activo = hexAuth.esAdmin();
 
-    // 🌟 Si no es Admin, forzamos que el panel sea Regiones y su herramienta sea Mover
     if (!editor.activo) {
         ui.panelActual = 'regiones';
         editor.herramienta = 'mover';
@@ -96,12 +94,7 @@ window.setBrushSizeUI = (n) => { editor.brushSize = n; renderPanel(); };
 window.setCapaActualUI = (c) => { editor.capaActual = c; renderPanel(); };
 window.setColorActual = (color) => { editor.colorActual = color; renderPanel(); };
 window.setOpacidadPincel = (val) => { editor.opacidadPincel = parseFloat(val); };
-
-window.aplicarRuido = () => {
-    const color = editor.colorActual || '#4488cc';
-    aplicarRuidoVisible(color, editor.opacidadPincel ?? 1.0, 0.35);
-    mostrarToastUI('≋ Ruido aplicado a la capa ' + editor.capaActual.toUpperCase(), 'info');
-};
+window.setRuidoActivo = (val) => { editor.ruidoActivo = val; renderPanel(); }; // 🌟 NUEVO
 
 window.abrirMenuOP = async () => {
     if (hexAuth.esAdmin()) {
