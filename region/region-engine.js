@@ -5,7 +5,7 @@
 import {
     camara, editor, ui, mapaActual, crearHexData, HEX_SIZE, OVER_OFFSET_X, OVER_OFFSET_Y
 } from './region-state.js';
-import { inicializarRender, dibujarEscena } from './region-render.js';
+import { inicializarRender, dibujarEscena, _needsRender, requestRender, notifyRendered } from './region-render.js';
 import { pixelToHex3D, hexKey, hexesEnRadio } from './region-utils.js';
 
 let canvas, rafId;
@@ -31,11 +31,19 @@ function redimensionar() {
     canvas.style.width  = window.innerWidth  + 'px';
     canvas.style.height = window.innerHeight + 'px';
     canvas.getContext('2d').scale(dpr, dpr);
+    requestRender(); // 🌟
 }
 
+// 🌟 RENDER-ON-DEMAND: Si sueltas el mouse, la tarjeta de video entra en 0% CPU
 function iniciarLoop() {
     if (rafId) cancelAnimationFrame(rafId);
-    const loop = () => { dibujarEscena(); rafId = requestAnimationFrame(loop); };
+    const loop = () => { 
+        if (_needsRender) {
+            dibujarEscena(); 
+            notifyRendered();
+        }
+        rafId = requestAnimationFrame(loop); 
+    };
     loop();
 }
 
@@ -64,13 +72,19 @@ function getHexFromScreenPos(clientX, clientY) {
 
 function onMouseMove(e) {
     const { q, r } = getHexFromScreenPos(e.clientX, e.clientY);
-    ui.hoveredHex = hexKey(q, r);
+    const newKey = hexKey(q, r);
+    
+    if (ui.hoveredHex !== newKey) {
+        ui.hoveredHex = newKey;
+        requestRender(); // 🌟 Solo renderiza si cambió el hover
+    }
 
     if (!_mouseDown) return;
 
     if (e.buttons === 2 || !editor.activo || editor.herramienta === 'mover' || editor.herramienta === 'ingresar') {
         camara.x += e.movementX; 
         camara.y += e.movementY;
+        requestRender(); // 🌟 Renderiza mientras paneas
     } else if (editor.activo && ui.modoPintar) {
         aplicarHerramienta(q, r, hexKey(q, r));
     }
@@ -79,6 +93,7 @@ function onMouseMove(e) {
 function onMouseDown(e) {
     if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
     _mouseDown = true;
+    requestRender(); // 🌟 
     
     const { q, r } = getHexFromScreenPos(e.clientX, e.clientY);
     const key = hexKey(q, r);
@@ -132,10 +147,12 @@ function onWheel(e) {
     camara.x = px - (px - camara.x) * (newZoom / camara.zoom);
     camara.y = py - (py - camara.y) * (newZoom / camara.zoom);
     camara.zoom = newZoom;
+    requestRender(); // 🌟 
 }
 
 function onTouchStart(e) {
     e.preventDefault();
+    requestRender(); // 🌟 
     if (e.touches.length === 2) {
         _pinchStart = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
     } else if (e.touches.length === 1) {
@@ -177,6 +194,7 @@ function onTouchMove(e) {
             camara.x = px - (px - camara.x) * (newZoom / camara.zoom);
             camara.y = py - (py - camara.y) * (newZoom / camara.zoom);
             camara.zoom = newZoom;
+            requestRender(); // 🌟 
         }
         _pinchStart = dist;
     } else if (e.touches.length === 1 && _mouseDown) {
@@ -184,6 +202,7 @@ function onTouchMove(e) {
         const dy = e.touches[0].clientY - _lastY;
         if (!editor.activo || editor.herramienta === 'mover' || editor.herramienta === 'ingresar') {
             camara.x += dx; camara.y += dy;
+            requestRender(); // 🌟 
         } else if (ui.modoPintar) {
             const { q, r } = getHexFromScreenPos(e.touches[0].clientX, e.touches[0].clientY);
             aplicarHerramienta(q, r, hexKey(q, r));
@@ -206,7 +225,10 @@ export function aplicarHerramienta(q, r, key) {
         modificado = true;
     });
 
-    if (modificado) window.dispatchEvent(new Event('mapaModificado'));
+    if (modificado) {
+        window.dispatchEvent(new Event('mapaModificado'));
+        requestRender(); // 🌟 
+    }
 }
 
 function _accionHex(q, r, key) {
@@ -270,7 +292,6 @@ function _accionHex(q, r, key) {
         const hex = mapaActual.hexes[key];
         const pid = editor.selectedPropId;
 
-        // Si estamos borrando con el pincel de región, borramos la región.
         if (pid === 'prop_region') {
             if (hex.region) {
                 if (mapaActual.regiones[hex.region]) {
@@ -281,7 +302,6 @@ function _accionHex(q, r, key) {
             return;
         }
 
-        // BORRADO UNIVERSAL: Limpia toda la capa actual (back, mid, over) sin importar el prop seleccionado.
         hex[capa] = [];
     }
 }
@@ -290,4 +310,5 @@ export function centrarCamara() {
     camara.x = window.innerWidth  / 2;
     camara.y = window.innerHeight / 2;
     camara.zoom = 1;
+    requestRender(); // 🌟 
 }
