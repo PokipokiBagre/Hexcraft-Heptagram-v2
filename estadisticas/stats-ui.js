@@ -1,20 +1,8 @@
 import { statsGlobal, listaEstados, estadoUI, dbExtra } from './stats-state.js';
-import { calcularVidaRojaMax, calcularVexMax, getMayorAfinidad, esNPCSistema } from './stats-logic.js';
-import { db } from '../hex-db.js';
+import { calcularVidaRojaMax, calcularVexMax, getMayorAfinidad } from './stats-logic.js';
 
-const normalizar = (str) => str.toString().trim().toLowerCase()
-    .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
-    .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
-    .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n')
-    .replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
-
+const normalizar = (str) => str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/\s+/g,'_').replace(/[^a-z0-9ñ_]/g,'');
 const calcTotal = (base, spells, spellEff, buff) => (base || 0) + (spells || 0) + (spellEff || 0) + (buff || 0);
-
-// Para NPC sistema: ignora la columna hechizos (hz_*), solo base+alt+ext
-const calcTotalPJ = (p, base, spells, spellEff, buff) =>
-    esNPCSistema(p)
-        ? (base || 0) + (spellEff || 0) + (buff || 0)
-        : calcTotal(base, spells, spellEff, buff);
 
 const bTextSplit = (spells, spellEff, buff) => {
     let parts = [];
@@ -26,11 +14,7 @@ const bTextSplit = (spells, spellEff, buff) => {
     return `<div style="font-size:0.75em; display:flex; flex-direction:column; gap:4px; margin-top:8px; border-top:1px dashed #444; padding-top:8px;">${parts.join('')}</div>`;
 };
 
-// Para NPC sistema: no muestra línea Hcz
-const bTextSplitPJ = (p, spells, spellEff, buff) =>
-    esNPCSistema(p) ? bTextSplit(0, spellEff, buff) : bTextSplit(spells, spellEff, buff);
-
-const imgError = `this.onerror=null; this.src='${db.storage.urlBase}/imginterfaz/no_encontrado.png'`;
+const imgError = "this.onerror=null; this.src='../img/imgobjetos/no_encontrado.png'";
 const raridadValor = { "Legendario": 3, "Raro": 2, "Común": 1, "-": 0 };
 
 function AsegurarGuardaD(p) { if(p.guardaDorada === undefined) p.guardaDorada = 0; if(p.baseGuardaDorada === undefined) p.baseGuardaDorada = 0; }
@@ -49,10 +33,10 @@ function generarVidasHTML(p) {
     let normalRojo = Math.min(p.vidaRojaActual, maxRojo); let vaciosRojo = Math.max(0, maxRojo - normalRojo); let extraRojo = Math.max(0, p.vidaRojaActual - maxRojo);
     let rojasHTML = ''; for(let i=0; i<normalRojo; i++) rojasHTML += `<div class="heart-red"></div>`; for(let i=0; i<vaciosRojo; i++) rojasHTML += `<div class="heart-red empty"></div>`; for(let i=0; i<extraRojo; i++) rojasHTML += `<div class="heart-red" style="background:#800000; border:1px solid #ff0000; transform:scale(0.9); box-shadow: 0 0 5px red;"></div>`;
     
-    const azulTotal = calcTotalPJ(p, p.baseVidaAzul, p.hechizos.vidaAzulExtra, p.hechizosEfecto.vidaAzulExtra, p.buffs.vidaAzulExtra);
+    const azulTotal = calcTotal(p.baseVidaAzul, p.hechizos.vidaAzulExtra, p.hechizosEfecto.vidaAzulExtra, p.buffs.vidaAzulExtra);
     let azulesHTML = ''; for(let i=0; i<azulTotal; i++) azulesHTML += `<div class="heart-blue"></div>`;
     
-    const guardaTotal = calcTotalPJ(p, p.baseGuardaDorada, p.hechizos.guardaDoradaExtra, p.hechizosEfecto.guardaDoradaExtra, p.buffs.guardaDoradaExtra);
+    const guardaTotal = calcTotal(p.baseGuardaDorada, p.hechizos.guardaDoradaExtra, p.hechizosEfecto.guardaDoradaExtra, p.buffs.guardaDoradaExtra);
     let guardasHTML = ''; for(let i=0; i<guardaTotal; i++) guardasHTML += `<div class="guard-gold"></div>`;
     
     return { rojasHTML, azulesHTML, guardasHTML, maxRojo, azulTotal, guardaTotal };
@@ -86,6 +70,10 @@ function generarGeometriaSVG(tipo, valor, maxVex, nroLados) {
     `;
 }
 
+// ============================================================================
+// VISTAS PRINCIPALES
+// ============================================================================
+
 export function dibujarCatalogo() {
     const contenedor = document.getElementById('vista-catalogo'); contenedor.className = ''; 
     estadoUI.filtroRol = estadoUI.filtroRol || 'Todos'; estadoUI.filtroAct = estadoUI.filtroAct || 'Todos';
@@ -114,6 +102,8 @@ export function dibujarCatalogo() {
         if (estadoUI.filtroAct === 'Activo' && !p.isActive) return; if (estadoUI.filtroAct === 'Inactivo' && p.isActive) return;
 
         const iconoMuestra = normalizar(p.iconoOverride || nombre);
+        const safeNombre = nombre.replace(/'/g, "\\'").replace(/"/g, "&quot;"); // 🌟 CORRECCIÓN DE BUG DE APÓSTROFES
+
         let borderStyle = ""; let bgStyle = "background: #11001c;"; 
         
         if (p.isPlayer && p.isActive) { borderStyle = "border: 2px solid var(--gold); box-shadow: 0 4px 15px rgba(212, 175, 55, 0.2);"; } 
@@ -124,17 +114,14 @@ export function dibujarCatalogo() {
         const claseInactiva = p.isActive ? '' : 'inactive-card';
         
         let btnEliminar = '';
-        if (estadoUI.esAdmin || p.isNPC) {
-            const estiloBtn = estadoUI.esAdmin
-                ? 'background: rgba(255, 0, 0, 0.1); color: #ff5555; border: 1px solid rgba(255, 0, 0, 0.3);'
-                : 'background: rgba(255, 0, 0, 0.07); color: #ff7777; border: 1px solid rgba(255, 0, 0, 0.2);';
-            btnEliminar = `<button onclick="window.borrarPersonaje('${nombre}', event)" style="position: absolute; top: 12px; right: 12px; ${estiloBtn} border-radius: 6px; width: 32px; height: 32px; font-size: 1.1em; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; z-index: 10;" onmouseover="this.style.background='#ff0000'; this.style.color='#fff'; this.style.borderColor='#ff0000';" onmouseout="this.style.background='rgba(255, 0, 0, 0.1)'; this.style.color='#ff5555'; this.style.borderColor='rgba(255, 0, 0, 0.3)';" title="Eliminar NPC">🗑️</button>`;
+        if (estadoUI.esAdmin) {
+            btnEliminar = `<button onclick="window.borrarPersonaje('${safeNombre}', event)" style="position: absolute; top: 12px; right: 12px; background: rgba(255, 0, 0, 0.1); color: #ff5555; border: 1px solid rgba(255, 0, 0, 0.3); border-radius: 6px; width: 32px; height: 32px; font-size: 1.1em; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; z-index: 10;" onmouseover="this.style.background='#ff0000'; this.style.color='#fff'; this.style.borderColor='#ff0000';" onmouseout="this.style.background='rgba(255, 0, 0, 0.1)'; this.style.color='#ff5555'; this.style.borderColor='rgba(255, 0, 0, 0.3)';" title="Eliminar Personaje">🗑️</button>`;
         }
 
         html += `
-        <div class="char-card ${claseInactiva}" style="position: relative; ${borderStyle} ${bgStyle} padding: 15px; border-radius: 12px; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'" onclick="window.abrirDetalle('${nombre}')">
+        <div class="char-card ${claseInactiva}" style="position: relative; ${borderStyle} ${bgStyle} padding: 15px; border-radius: 12px; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'" onclick="window.abrirDetalle('${safeNombre}')">
             ${btnEliminar}
-            <img src="${db.storage.urlBase}/imgpersonajes/${iconoMuestra}icon.png" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.2); margin-bottom: 10px;" onerror="${imgError}">
+            <img src="../img/imgpersonajes/${iconoMuestra}icon.png" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.2); margin-bottom: 10px;" onerror="${imgError}">
             <h3 style="margin: 0 0 10px 0; font-family: 'Cinzel', serif; font-size: 1.2em; text-transform: uppercase;">${nombre}</h3>
             <div style="background: rgba(0,0,0,0.5); padding: 8px; border-radius: 6px;">
                 <p style="margin: 0; font-size: 0.9em; color: #ddd;">HEX: <strong style="color: var(--gold);">${p.hex}</strong></p>
@@ -160,6 +147,7 @@ export function dibujarResumenVisual() {
         const pjNameLower = nombre.toLowerCase();
         const iconoGrande = normalizar(p.iconoOverride || nombre);
         const objCount = dbExtra.objetosCount[pjNameLower] || 0;
+        const safeNombre = nombre.replace(/'/g, "\\'").replace(/"/g, "&quot;");
         
         const myMissions = dbExtra.misionesActivas ? (dbExtra.misionesActivas[pjNameLower] || []) : [];
         const countMis = myMissions.length;
@@ -171,14 +159,13 @@ export function dibujarResumenVisual() {
         const topItems = myItems.sort((a,b) => (raridadValor[dbExtra.infoObjetos[b]?.rar]||0) - (raridadValor[dbExtra.infoObjetos[a]?.rar]||0)).slice(0, 5);
         let itemsHtml = topItems.map(o => {
             const rarClase = dbExtra.infoObjetos[o]?.rar === 'Raro' ? 'rarity-raro' : (dbExtra.infoObjetos[o]?.rar === 'Legendario' ? 'rarity-legendario' : 'rarity-comun');
-            return `<a href="${linkObj}" target="_blank" class="mini-item-card ${rarClase}" title="${o} (Clic para ir al inventario)" onclick="event.stopPropagation();"><img src="${db.storage.urlBase}/imgobjetos/${normalizar(o)}.png" onerror="${imgError}"></a>`;
+            return `<a href="${linkObj}" target="_blank" class="mini-item-card ${rarClase}" title="${o} (Clic para ir al inventario)" onclick="event.stopPropagation();"><img src="../img/imgobjetos/${normalizar(o)}.png" onerror="${imgError}"></a>`;
         }).join('');
 
         const mySpells = (dbExtra.hechizos.inventario || []).filter(i => i.Personaje.toLowerCase() === pjNameLower);
         mySpells.forEach(s => {
             const info = allNodos.find(n => normalizar(n.Nombre) === normalizar(s.Hechizo) || normalizar(n.ID) === normalizar(s.Hechizo));
             s.costo = info ? (parseInt(info.HEX) || 0) : 0;
-            
             s.isUndiscovered = (info && (!info.Conocido || String(info.Conocido).trim().toLowerCase() !== 'si'));
             s.displayName = s.Hechizo;
         });
@@ -202,9 +189,9 @@ export function dibujarResumenVisual() {
         const vexVisual = calcularVexMax(p);
 
         html += `
-        <div class="resumen-row" onclick="window.abrirDetalle('${nombre}')" style="background:#111; border-color:#333;">
+        <div class="resumen-row" onclick="window.abrirDetalle('${safeNombre}')" style="background:#111; border-color:#333;">
             <div class="resumen-left">
-                <img src="${db.storage.urlBase}/imgpersonajes/${iconoGrande}icon.png" style="border: 2px solid var(--gold);" onerror="${imgError}">
+                <img src="../img/imgpersonajes/${iconoGrande}icon.png" style="border: 2px solid var(--gold);" onerror="${imgError}">
                 <h3 style="margin:8px 0 0 0; font-size:1.1em; color:var(--gold); text-transform:uppercase; font-family:'Cinzel';">${nombre}</h3>
                 <div class="copy-wrap hex-label" onclick="window.copySilently('HEX: ${p.hex}', event)">
                     ${p.hex}<br><span style="font-size:0.5em; color:#fff;">HEX</span>
@@ -294,7 +281,6 @@ export function dibujarDetalle() {
     mySpells.forEach(s => {
         const info = allNodos.find(n => normalizar(n.Nombre) === normalizar(s.Hechizo) || normalizar(n.ID) === normalizar(s.Hechizo));
         s.costo = info ? (parseInt(info.HEX) || 0) : 0;
-        
         s.isUndiscovered = (info && (!info.Conocido || String(info.Conocido).trim().toLowerCase() !== 'si'));
         s.displayName = s.Hechizo;
     });
@@ -322,7 +308,7 @@ export function dibujarDetalle() {
     <div style="display: flex; align-items: center; gap: 30px; border-bottom: 2px solid #333; padding-bottom: 25px; opacity:${p.isActive ? '1' : '0.5'}; flex-wrap:wrap;">
         
         <div style="position: relative;">
-            <img src="${db.storage.urlBase}/imgpersonajes/${iconoGrande}icon.png" style="width: 140px; height: 140px; border-radius: 50%; border: 4px solid var(--gold); box-shadow: 0 0 20px rgba(212,175,55,0.3); object-fit: cover; background:#000;" onerror="${imgError}">
+            <img src="../img/imgpersonajes/${iconoGrande}icon.png" style="width: 140px; height: 140px; border-radius: 50%; border: 4px solid var(--gold); box-shadow: 0 0 20px rgba(212,175,55,0.3); object-fit: cover; background:#000;" onerror="${imgError}">
             ${p.isNPC ? `<span style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); background: #4a0000; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.7em; font-weight: bold; border: 1px solid #ff0000;">NPC</span>` : ''}
         </div>
 
@@ -332,12 +318,6 @@ export function dibujarDetalle() {
                 ${!p.isActive ? '<span style="font-size:0.4em; color:#ff4444; vertical-align: middle; margin-left: 10px; border: 1px solid #ff4444; padding: 2px 6px; border-radius: 4px;">INACTIVO</span>' : ''}
             </h1>
             ${asisUI}
-            ${p.isNPC ? `<div style="margin-top:8px; display:inline-flex; align-items:center; gap:8px;">
-                <span style="font-size:0.8em; padding:3px 10px; border-radius:10px; font-weight:bold; ${esNPCSistema(p) ? 'background:#1a0000; color:#ff9999; border:1px solid #ff4444;' : 'background:#001a33; color:#99ccff; border:1px solid #4a90e2;'}">
-                    ${esNPCSistema(p) ? '⚙️ NPC SISTEMA' : '🧑 NPC JUGADOR'}
-                </span>
-                ${(estadoUI.esAdmin || p.isNPC) ? `<button type="button" onclick="window.toggleNpcTipo('${nombre}')" style="font-size:0.75em; padding:3px 8px; border-radius:6px; background:#222; border:1px dashed #888; color:#aaa; cursor:pointer; transition:0.2s;" onmouseover="this.style.borderColor='var(--gold)'; this.style.color='var(--gold)'" onmouseout="this.style.borderColor='#888'; this.style.color='#aaa'">cambiar tipo</button>` : ''}
-            </div>` : ''}
             <div class="status-container" style="margin-top: 15px;">${estadosHTML}</div>
             
             <div style="background: linear-gradient(90deg, #111 0%, #1a1a1a 100%); border:1px solid #333; padding:15px; border-radius:8px; margin-top:20px; display:flex; justify-content:flex-start; flex-wrap:wrap; gap:15px; align-items:center;">
@@ -361,19 +341,11 @@ export function dibujarDetalle() {
             </div>
         </div>
 
-        ${(() => {
-            if (!estadoUI.esAdmin && !p.isNPC) return '';
-            const btnStyle = estadoUI.esAdmin
-                ? 'background: linear-gradient(135deg, #4a004a 0%, #2e004f 100%); border: 2px solid #ff00ff; box-shadow: 0 0 15px rgba(255,0,255,0.3);'
-                : 'background: linear-gradient(135deg, #001a33 0%, #002244 100%); border: 2px solid #00aaff; box-shadow: 0 0 15px rgba(0,170,255,0.3);';
-            const btnLabel  = estadoUI.esAdmin ? '⚙️ PANEL DE MÁSTER' : '🎭 EDITAR ESTE NPC';
-            const badgeText = estadoUI.esAdmin ? 'Modo Edición Activado' : 'Edición de NPC disponible';
-            return `
+        ${estadoUI.esAdmin ? `
         <div style="display: flex; flex-direction: column; gap: 10px; align-items: flex-end;">
-            <button onclick="window.abrirModalOP()" style="${btnStyle} padding: 15px 25px; font-size: 1.1em; color: white; font-weight: bold; border-radius: 8px; transition: 0.3s; cursor: pointer;" onmouseover="this.style.filter='brightness(1.3)'" onmouseout="this.style.filter='brightness(1)'">${btnLabel}</button>
-            <span style="color: #666; font-size: 0.8em; font-style: italic;">${badgeText}</span>
-        </div>`;
-        })()}
+            <button onclick="window.abrirModalOP()" style="background: linear-gradient(135deg, #4a004a 0%, #2e004f 100%); border: 2px solid #ff00ff; padding: 15px 25px; font-size: 1.1em; color: white; font-weight: bold; border-radius: 8px; box-shadow: 0 0 15px rgba(255,0,255,0.3); transition: 0.3s; cursor: pointer;" onmouseover="this.style.boxShadow='0 0 25px rgba(255,0,255,0.6)'" onmouseout="this.style.boxShadow='0 0 15px rgba(255,0,255,0.3)'">⚙️ PANEL DE MÁSTER</button>
+            <span style="color: #666; font-size: 0.8em; font-style: italic;">Modo Edición Activado</span>
+        </div>` : ''}
     </div>
 
     <div class="circle-wrap" style="margin: 40px 0; display: flex; justify-content: center; gap: 50px;">
@@ -416,24 +388,24 @@ export function dibujarDetalle() {
             
             <h3 style="margin-top:30px; font-family:'Cinzel'; font-size: 1.5em; border-bottom: 1px solid #444; padding-bottom: 10px; color: #eee;">⚔️ Puntos de Ataque</h3>
             <div class="affinities-grid" style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px;">
-                <div class="affinity-box copy-wrap" style="background: #1a0505; border-color: #500;" onclick="window.copySilently('Daño Rojo: ${calcTotalPJ(p, p.baseDanoRojo, p.hechizos.danoRojo, p.hechizosEfecto.danoRojo, p.buffs.danoRojo)}', event)"><label style="color:var(--red-life)">Daño Rojo</label><span style="font-size:1.6em; font-weight:bold;">${calcTotalPJ(p, p.baseDanoRojo, p.hechizos.danoRojo, p.hechizosEfecto.danoRojo, p.buffs.danoRojo)}</span>${bTextSplitPJ(p, p.hechizos.danoRojo, p.hechizosEfecto.danoRojo, p.buffs.danoRojo)}</div>
-                <div class="affinity-box copy-wrap" style="background: #050a1a; border-color: #002;" onclick="window.copySilently('Daño Azul: ${calcTotalPJ(p, p.baseDanoAzul, p.hechizos.danoAzul, p.hechizosEfecto.danoAzul, p.buffs.danoAzul)}', event)"><label style="color:var(--blue-life)">Daño Azul</label><span style="font-size:1.6em; font-weight:bold;">${calcTotalPJ(p, p.baseDanoAzul, p.hechizos.danoAzul, p.hechizosEfecto.danoAzul, p.buffs.danoAzul)}</span>${bTextSplitPJ(p, p.hechizos.danoAzul, p.hechizosEfecto.danoAzul, p.buffs.danoAzul)}</div>
-                <div class="affinity-box copy-wrap" style="background: #1a1a05; border-color: #550;" onclick="window.copySilently('Elim. Dorada: ${calcTotalPJ(p, p.baseElimDorada, p.hechizos.elimDorada, p.hechizosEfecto.elimDorada, p.buffs.elimDorada)}', event)"><label style="color:var(--gold)">Elim. Dorada</label><span style="font-size:1.6em; font-weight:bold;">${calcTotalPJ(p, p.baseElimDorada, p.hechizos.elimDorada, p.hechizosEfecto.elimDorada, p.buffs.elimDorada)}</span>${bTextSplitPJ(p, p.hechizos.elimDorada, p.hechizosEfecto.elimDorada, p.buffs.elimDorada)}</div>
+                <div class="affinity-box copy-wrap" style="background: #1a0505; border-color: #500;" onclick="window.copySilently('Daño Rojo: ${calcTotal(p.baseDanoRojo, p.hechizos.danoRojo, p.hechizosEfecto.danoRojo, p.buffs.danoRojo)}', event)"><label style="color:var(--red-life)">Daño Rojo</label><span style="font-size:1.6em; font-weight:bold;">${calcTotal(p.baseDanoRojo, p.hechizos.danoRojo, p.hechizosEfecto.danoRojo, p.buffs.danoRojo)}</span>${bTextSplit(p.hechizos.danoRojo, p.hechizosEfecto.danoRojo, p.buffs.danoRojo)}</div>
+                <div class="affinity-box copy-wrap" style="background: #050a1a; border-color: #002;" onclick="window.copySilently('Daño Azul: ${calcTotal(p.baseDanoAzul, p.hechizos.danoAzul, p.hechizosEfecto.danoAzul, p.buffs.danoAzul)}', event)"><label style="color:var(--blue-life)">Daño Azul</label><span style="font-size:1.6em; font-weight:bold;">${calcTotal(p.baseDanoAzul, p.hechizos.danoAzul, p.hechizosEfecto.danoAzul, p.buffs.danoAzul)}</span>${bTextSplit(p.hechizos.danoAzul, p.hechizosEfecto.danoAzul, p.buffs.danoAzul)}</div>
+                <div class="affinity-box copy-wrap" style="background: #1a1a05; border-color: #550;" onclick="window.copySilently('Elim. Dorada: ${calcTotal(p.baseElimDorada, p.hechizos.elimDorada, p.hechizosEfecto.elimDorada, p.buffs.elimDorada)}', event)"><label style="color:var(--gold)">Elim. Dorada</label><span style="font-size:1.6em; font-weight:bold;">${calcTotal(p.baseElimDorada, p.hechizos.elimDorada, p.hechizosEfecto.elimDorada, p.buffs.elimDorada)}</span>${bTextSplit(p.hechizos.elimDorada, p.hechizosEfecto.elimDorada, p.buffs.elimDorada)}</div>
             </div>
         </div>
 
         <div style="background: rgba(0,0,0,0.3); padding: 20px; border-radius: 12px; border: 1px solid #222;">
             <h3 style="margin-top:0; font-family:'Cinzel'; font-size: 1.5em; border-bottom: 1px solid #444; padding-bottom: 10px; color: #eee; text-align: left;">🔮 Afinidades Totales</h3>
             <div class="affinities-grid" style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 15px;">
-                <div class="affinity-box copy-wrap" onclick="window.copySilently('Física: ${calcTotalPJ(p, p.afinidadesBase.fisica, p.hechizos.fisica, p.hechizosEfecto.fisica, p.buffs.fisica)}', event)"><label>Física</label><span style="font-size:1.8em; font-weight:bold; color: #fff;">${calcTotalPJ(p, p.afinidadesBase.fisica, p.hechizos.fisica, p.hechizosEfecto.fisica, p.buffs.fisica)}</span>${bTextSplitPJ(p, p.hechizos.fisica, p.hechizosEfecto.fisica, p.buffs.fisica)}</div>
-                <div class="affinity-box copy-wrap" onclick="window.copySilently('Energética: ${calcTotalPJ(p, p.afinidadesBase.energetica, p.hechizos.energetica, p.hechizosEfecto.energetica, p.buffs.energetica)}', event)"><label>Energética</label><span style="font-size:1.8em; font-weight:bold; color: #fff;">${calcTotalPJ(p, p.afinidadesBase.energetica, p.hechizos.energetica, p.hechizosEfecto.energetica, p.buffs.energetica)}</span>${bTextSplitPJ(p, p.hechizos.energetica, p.hechizosEfecto.energetica, p.buffs.energetica)}</div>
-                <div class="affinity-box copy-wrap" onclick="window.copySilently('Espiritual: ${calcTotalPJ(p, p.afinidadesBase.espiritual, p.hechizos.espiritual, p.hechizosEfecto.espiritual, p.buffs.espiritual)}', event)"><label>Espiritual</label><span style="font-size:1.8em; font-weight:bold; color: #fff;">${calcTotalPJ(p, p.afinidadesBase.espiritual, p.hechizos.espiritual, p.hechizosEfecto.espiritual, p.buffs.espiritual)}</span>${bTextSplitPJ(p, p.hechizos.espiritual, p.hechizosEfecto.espiritual, p.buffs.espiritual)}</div>
-                <div class="affinity-box copy-wrap" onclick="window.copySilently('Mando: ${calcTotalPJ(p, p.afinidadesBase.mando, p.hechizos.mando, p.hechizosEfecto.mando, p.buffs.mando)}', event)"><label>Mando</label><span style="font-size:1.8em; font-weight:bold; color: #fff;">${calcTotalPJ(p, p.afinidadesBase.mando, p.hechizos.mando, p.hechizosEfecto.mando, p.buffs.mando)}</span>${bTextSplitPJ(p, p.hechizos.mando, p.hechizosEfecto.mando, p.buffs.mando)}</div>
-                <div class="affinity-box copy-wrap" onclick="window.copySilently('Psíquica: ${calcTotalPJ(p, p.afinidadesBase.psiquica, p.hechizos.psiquica, p.hechizosEfecto.psiquica, p.buffs.psiquica)}', event)"><label>Psíquica</label><span style="font-size:1.8em; font-weight:bold; color: #fff;">${calcTotalPJ(p, p.afinidadesBase.psiquica, p.hechizos.psiquica, p.hechizosEfecto.psiquica, p.buffs.psiquica)}</span>${bTextSplitPJ(p, p.hechizos.psiquica, p.hechizosEfecto.psiquica, p.buffs.psiquica)}</div>
-                <div class="affinity-box copy-wrap" onclick="window.copySilently('Oscura: ${calcTotalPJ(p, p.afinidadesBase.oscura, p.hechizos.oscura, p.hechizosEfecto.oscura, p.buffs.oscura)}', event)"><label>Oscura</label><span style="font-size:1.8em; font-weight:bold; color: #fff;">${calcTotalPJ(p, p.afinidadesBase.oscura, p.hechizos.oscura, p.hechizosEfecto.oscura, p.buffs.oscura)}</span>${bTextSplitPJ(p, p.hechizos.oscura, p.hechizosEfecto.oscura, p.buffs.oscura)}</div>
+                <div class="affinity-box copy-wrap" onclick="window.copySilently('Física: ${calcTotal(p.afinidadesBase.fisica, p.hechizos.fisica, p.hechizosEfecto.fisica, p.buffs.fisica)}', event)"><label>Física</label><span style="font-size:1.8em; font-weight:bold; color: #fff;">${calcTotal(p.afinidadesBase.fisica, p.hechizos.fisica, p.hechizosEfecto.fisica, p.buffs.fisica)}</span>${bTextSplit(p.hechizos.fisica, p.hechizosEfecto.fisica, p.buffs.fisica)}</div>
+                <div class="affinity-box copy-wrap" onclick="window.copySilently('Energética: ${calcTotal(p.afinidadesBase.energetica, p.hechizos.energetica, p.hechizosEfecto.energetica, p.buffs.energetica)}', event)"><label>Energética</label><span style="font-size:1.8em; font-weight:bold; color: #fff;">${calcTotal(p.afinidadesBase.energetica, p.hechizos.energetica, p.hechizosEfecto.energetica, p.buffs.energetica)}</span>${bTextSplit(p.hechizos.energetica, p.hechizosEfecto.energetica, p.buffs.energetica)}</div>
+                <div class="affinity-box copy-wrap" onclick="window.copySilently('Espiritual: ${calcTotal(p.afinidadesBase.espiritual, p.hechizos.espiritual, p.hechizosEfecto.espiritual, p.buffs.espiritual)}', event)"><label>Espiritual</label><span style="font-size:1.8em; font-weight:bold; color: #fff;">${calcTotal(p.afinidadesBase.espiritual, p.hechizos.espiritual, p.hechizosEfecto.espiritual, p.buffs.espiritual)}</span>${bTextSplit(p.hechizos.espiritual, p.hechizosEfecto.espiritual, p.buffs.espiritual)}</div>
+                <div class="affinity-box copy-wrap" onclick="window.copySilently('Mando: ${calcTotal(p.afinidadesBase.mando, p.hechizos.mando, p.hechizosEfecto.mando, p.buffs.mando)}', event)"><label>Mando</label><span style="font-size:1.8em; font-weight:bold; color: #fff;">${calcTotal(p.afinidadesBase.mando, p.hechizos.mando, p.hechizosEfecto.mando, p.buffs.mando)}</span>${bTextSplit(p.hechizos.mando, p.hechizosEfecto.mando, p.buffs.mando)}</div>
+                <div class="affinity-box copy-wrap" onclick="window.copySilently('Psíquica: ${calcTotal(p.afinidadesBase.psiquica, p.hechizos.psiquica, p.hechizosEfecto.psiquica, p.buffs.psiquica)}', event)"><label>Psíquica</label><span style="font-size:1.8em; font-weight:bold; color: #fff;">${calcTotal(p.afinidadesBase.psiquica, p.hechizos.psiquica, p.hechizosEfecto.psiquica, p.buffs.psiquica)}</span>${bTextSplit(p.hechizos.psiquica, p.hechizosEfecto.psiquica, p.buffs.psiquica)}</div>
+                <div class="affinity-box copy-wrap" onclick="window.copySilently('Oscura: ${calcTotal(p.afinidadesBase.oscura, p.hechizos.oscura, p.hechizosEfecto.oscura, p.buffs.oscura)}', event)"><label>Oscura</label><span style="font-size:1.8em; font-weight:bold; color: #fff;">${calcTotal(p.afinidadesBase.oscura, p.hechizos.oscura, p.hechizosEfecto.oscura, p.buffs.oscura)}</span>${bTextSplit(p.hechizos.oscura, p.hechizosEfecto.oscura, p.buffs.oscura)}</div>
                 
-                <div class="copy-wrap" onclick="window.copySilently('Suma Total Afinidades: ${['fisica','energetica','espiritual','mando','psiquica','oscura'].reduce((a,k)=>a+calcTotalPJ(p,p.afinidadesBase[k],p.hechizos[k],p.hechizosEfecto[k],p.buffs[k]),0)}', event)" style="grid-column: 1 / -1; background: #111; padding: 10px; border-radius: 6px; text-align:center; color:#aaa; font-size:0.9em; margin-top:10px; font-weight:bold; border:1px dashed #444; cursor: pointer; transition: 0.2s;" onmouseover="this.style.borderColor='var(--gold)'; this.style.color='var(--gold)';" onmouseout="this.style.borderColor='#444'; this.style.color='#aaa';">
-                    Suma Total Absoluta: ${['fisica','energetica','espiritual','mando','psiquica','oscura'].reduce((a,k)=>a+calcTotalPJ(p,p.afinidadesBase[k],p.hechizos[k],p.hechizosEfecto[k],p.buffs[k]),0)}
+                <div class="copy-wrap" onclick="window.copySilently('Suma Total Afinidades: ${['fisica','energetica','espiritual','mando','psiquica','oscura'].reduce((a,k)=>a+calcTotal(p.afinidadesBase[k],p.hechizos[k],p.hechizosEfecto[k],p.buffs[k]),0)}', event)" style="grid-column: 1 / -1; background: #111; padding: 10px; border-radius: 6px; text-align:center; color:#aaa; font-size:0.9em; margin-top:10px; font-weight:bold; border:1px dashed #444; cursor: pointer; transition: 0.2s;" onmouseover="this.style.borderColor='var(--gold)'; this.style.color='var(--gold)';" onmouseout="this.style.borderColor='#444'; this.style.color='#aaa';">
+                    Suma Total Absoluta: ${['fisica','energetica','espiritual','mando','psiquica','oscura'].reduce((a,k)=>a+calcTotal(p.afinidadesBase[k],p.hechizos[k],p.hechizosEfecto[k],p.buffs[k]),0)}
                 </div>
             </div>
         </div>
@@ -458,6 +430,10 @@ export function dibujarDetalle() {
 
     contenedor.innerHTML = html;
 }
+
+// ============================================================================
+// COMPONENTES DEL PANEL MÁSTER (OP)
+// ============================================================================
 
 function genCard(f, tipoAccion) {
     let clickMod = '';
@@ -498,7 +474,6 @@ function genCard(f, tipoAccion) {
         html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;"><button type="button" ${btnAdd1} onclick="${clickMod}('${paramId}', 10)">+10</button><button type="button" ${btnSub1} onclick="${clickMod}('${paramId}', -10)">-10</button></div>`;
         html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;"><button type="button" ${btnAdd2} onclick="${clickMod}('${paramId}', 50)">+50</button><button type="button" ${btnSub2} onclick="${clickMod}('${paramId}', -50)">-50</button></div>`;
         html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;"><button type="button" ${btnAdd3} onclick="${clickMod}('${paramId}', 100)">+100</button><button type="button" ${btnSub3} onclick="${clickMod}('${paramId}', -100)">-100</button></div>`;
-        html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;"><button type="button" style="${btnStyleBase} background: #e65100;" onclick="${clickMod}('${paramId}', 300)">+300</button><button type="button" style="${btnStyleBase} background: #bf360c;" onclick="${clickMod}('${paramId}', -300)">-300</button></div>`;
         html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;"><button type="button" style="${btnStyleBase} background: #263238;" onclick="${clickMod}('${paramId}', 500)">+500</button><button type="button" style="${btnStyleBase} background: #3e2723;" onclick="${clickMod}('${paramId}', -500)">-500</button></div>`;
     } else {
         html += `<div style="display: grid; grid-template-columns: 1fr 1fr; gap: 5px;"><button type="button" ${btnAdd1} onclick="${clickMod}('${paramId}', 1)">+1</button><button type="button" ${btnSub1} onclick="${clickMod}('${paramId}', -1)">-1</button></div>`;
@@ -514,6 +489,8 @@ export function dibujarPanelEdicionOP() {
     const nombre = estadoUI.personajeSeleccionado; const p = statsGlobal[nombre];
     if(!p) return ``;
     
+    const safeNombre = nombre.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+    
     const pAfinidadesBase = [ { id: 'fisica', label: 'Física (BASE)', val: p.afinidadesBase.fisica }, { id: 'energetica', label: 'Energética (BASE)', val: p.afinidadesBase.energetica }, { id: 'espiritual', label: 'Espiritual (BASE)', val: p.afinidadesBase.espiritual }, { id: 'mando', label: 'Mando (BASE)', val: p.afinidadesBase.mando }, { id: 'psiquica', label: 'Psíquica (BASE)', val: p.afinidadesBase.psiquica }, { id: 'oscura', label: 'Oscura (BASE)', val: p.afinidadesBase.oscura } ];
 
     const pAfinidadesSpellEff = [ { id: 'fisica', label: 'Física (ALT)', val: p.hechizosEfecto.fisica }, { id: 'energetica', label: 'Energética (ALT)', val: p.hechizosEfecto.energetica }, { id: 'espiritual', label: 'Espiritual (ALT)', val: p.hechizosEfecto.espiritual }, { id: 'mando', label: 'Mando (ALT)', val: p.hechizosEfecto.mando }, { id: 'psiquica', label: 'Psíquica (ALT)', val: p.hechizosEfecto.psiquica }, { id: 'oscura', label: 'Oscura (ALT)', val: p.hechizosEfecto.oscura }, { id: 'danoRojo', label: 'Daño Rojo (ALT)', val: p.hechizosEfecto.danoRojo }, { id: 'danoAzul', label: 'Daño Azul (ALT)', val: p.hechizosEfecto.danoAzul }, { id: 'elimDorada', label: 'Elim. Dorada (ALT)', val: p.hechizosEfecto.elimDorada } ];
@@ -522,15 +499,9 @@ export function dibujarPanelEdicionOP() {
     const renderHeader = (num, title, color) => `<h3 style="color:${color}; border-bottom:2px solid ${color}; padding-bottom:8px; text-align:left; margin: 30px 0 15px 0; font-family:'Cinzel'; text-transform: uppercase; font-size: 1.1em; opacity: 0.9;"><span style="background:${color}; color:#000; padding:2px 8px; border-radius:4px; margin-right:8px; font-weight:bold;">${num}</span> ${title}</h3>`;
 
     let html = `
-        <div style="display:flex; justify-content:center; gap:15px; margin-bottom:25px; background: #0a0a0a; padding: 15px; border-radius: 8px; border: 1px solid #333; flex-wrap:wrap;">
-            ${estadoUI.esAdmin
-                ? `<button type="button" onclick="window.toggleIdentidad('isPlayer')" style="flex: 1; padding: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; border: 2px solid ${p.isPlayer ? '#00e676' : '#ff1744'}; background: ${p.isPlayer ? '#003300' : '#330000'}; color: white; transition: 0.2s;">🎭 ${p.isPlayer ? 'ROL: JUGADOR' : 'ROL: NPC'}</button>`
-                : `<div style="flex: 1; padding: 12px; font-weight: bold; border-radius: 6px; border: 2px solid #ff1744; background: #330000; color: #aaa; text-align:center; font-size:0.95em;">🎭 ROL: NPC <span style="font-size:0.7em; display:block; color:#666;">(solo OP puede cambiar)</span></div>`
-            }
+        <div style="display:flex; justify-content:center; gap:15px; margin-bottom:25px; background: #0a0a0a; padding: 15px; border-radius: 8px; border: 1px solid #333;">
+            <button type="button" onclick="window.toggleIdentidad('isPlayer')" style="flex: 1; padding: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; border: 2px solid ${p.isPlayer ? '#00e676' : '#ff1744'}; background: ${p.isPlayer ? '#003300' : '#330000'}; color: white; transition: 0.2s;">🎭 ${p.isPlayer ? 'ROL: JUGADOR' : 'ROL: NPC'}</button>
             <button type="button" onclick="window.toggleIdentidad('isActive')" style="flex: 1; padding: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; border: 2px solid ${p.isActive ? '#00e676' : '#ff1744'}; background: ${p.isActive ? '#003300' : '#330000'}; color: white; transition: 0.2s;">🌟 ${p.isActive ? 'ESTADO: ACTIVO' : 'ESTADO: INACTIVO'}</button>
-            ${p.isNPC ? `<button type="button" onclick="window.toggleNpcTipo('${nombre}')" style="flex: 1; padding: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; border: 2px solid ${esNPCSistema(p) ? '#ff9900' : '#4a90e2'}; background: ${esNPCSistema(p) ? '#1a0900' : '#001a33'}; color: white; transition: 0.2s;">
-                ${esNPCSistema(p) ? '⚙️ TIPO: SISTEMA' : '🧑 TIPO: JUGADOR'}
-            </button>` : ''}
         </div>
         
         ${renderHeader(1, 'Acciones Rápidas (Vida y Energía)', 'var(--gold)')}
@@ -539,49 +510,18 @@ export function dibujarPanelEdicionOP() {
             <div class="edit-card" style="background: #111; border: 1px solid var(--gold); border-radius: 8px; padding: 15px; text-align: center;">
                 <h4 style="margin: 0 0 15px 0; color: var(--gold);">🪙 Sumar/Restar HEX</h4>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                    <button type="button" style="background:#1b5e20; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 10)">+10</button>
-                    <button type="button" style="background:#b71c1c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -10)">-10</button>
+                    <button type="button" style="background:#1b5e20; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', 10)">+10</button>
+                    <button type="button" style="background:#b71c1c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', -10)">-10</button>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                    <button type="button" style="background:#004d40; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 50)">+50</button>
-                    <button type="button" style="background:#d84315; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -50)">-50</button>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                    <button type="button" style="background:#4a148c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 100)">+100</button>
-                    <button type="button" style="background:#880e4f; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -100)">-100</button>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                    <button type="button" style="background:#e65100; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 300)">+300</button>
-                    <button type="button" style="background:#bf360c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -300)">-300</button>
+                    <button type="button" style="background:#004d40; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', 50)">+50</button>
+                    <button type="button" style="background:#d84315; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', -50)">-50</button>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                    <button type="button" style="background:#263238; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 500)">+500</button>
-                    <button type="button" style="background:#3e2723; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -500)">-500</button>
+                    <button type="button" style="background:#4a148c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', 100)">+100</button>
+                    <button type="button" style="background:#880e4f; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', -100)">-100</button>
                 </div>
             </div>
-
-            ${esNPCSistema(p) ? `
-            <div class="edit-card" style="background: #050a1a; border: 1px solid #4a90e2; border-radius: 8px; padding: 15px; text-align: center;">
-                <h4 style="margin: 0 0 15px 0; color: #4a90e2;">🔷 VEX Absoluto (Sistema)</h4>
-                <div style="font-size:2em; font-weight:bold; color:#4a90e2; background:#000; padding:8px; border-radius:6px; border:1px solid #222; margin-bottom:12px;">${p.vex || 0}</div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                    <button type="button" style="background:#1a3a6a; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modVexSistema('${nombre}', 100)">+100</button>
-                    <button type="button" style="background:#4a0000; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modVexSistema('${nombre}', -100)">-100</button>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px;">
-                    <button type="button" style="background:#0a2a4a; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modVexSistema('${nombre}', 500)">+500</button>
-                    <button type="button" style="background:#3a0000; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modVexSistema('${nombre}', -500)">-500</button>
-                </div>
-                <div style="display:flex; gap:6px; align-items:center;">
-                    <input type="number" id="vex-fijo-input" placeholder="Total fijo..." style="flex:1; background:#000; color:#4a90e2; border:1px solid #4a90e2; border-radius:4px; padding:6px; font-size:1em; text-align:center;">
-                    <button type="button" style="background:#4a90e2; border:none; color:#000; padding:6px 10px; border-radius:4px; font-weight:bold; cursor:pointer; white-space:nowrap;" onclick="window.setVexFijoSistema('${nombre}')">SET</button>
-                </div>
-            </div>` : `
-            <div class="edit-card" style="background: #050a1a; border: 1px solid #333; border-radius: 8px; padding: 15px; text-align: center; opacity:0.6;">
-                <h4 style="margin: 0 0 10px 0; color: #4a90e2; font-size:0.9em;">🔷 VEX</h4>
-                <div style="font-size:1.5em; font-weight:bold; color:#4a90e2; margin-bottom:8px;">${calcularVexMax(p)}</div>
-                <p style="font-size:0.75em; color:#666; margin:0;">Calculado desde afinidad Oscura</p>
-            </div>`}
 
             <div class="edit-card" style="background: #110000; border: 1px solid var(--red-life); border-radius: 8px; padding: 15px; text-align: center;">
                 <h4 style="margin: 0 0 15px 0; color: var(--red-life);">❤️ Curar/Dañar (Vida Roja)</h4>
@@ -659,7 +599,7 @@ export function dibujarPanelEdicionOP() {
             <div style="display:flex; justify-content:center; align-items:stretch; gap:10px; flex-wrap:wrap;">
                 <select id="clon-source" style="padding: 12px; background: #000; color: white; border: 1px solid var(--gold); border-radius: 6px; font-family: 'Cinzel'; min-width: 250px; font-size: 1em;">
                     <option value="" disabled selected>-- Selecciona Origen --</option>
-                    ${Object.keys(statsGlobal).filter(n => n !== nombre).sort().map(n => `<option value="${n}">${n}</option>`).join('')}
+                    ${Object.keys(statsGlobal).filter(n => n !== nombre).sort().map(n => `<option value="${n.replace(/"/g, "&quot;")}">${n}</option>`).join('')}
                 </select>
                 <button type="button" onclick="window.ejecutarClonacion('estados')" style="background:#004a4a; border:none; border-bottom: 3px solid #00ffff; border-radius: 6px; padding:10px 15px; color:white; font-weight:bold; cursor:pointer; transition:0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">Importar Estados</button>
                 <button type="button" onclick="window.ejecutarClonacion('efectosExtras')" style="background:#4a90e2; border:none; border-bottom: 3px solid #1a365d; border-radius: 6px; padding:10px 15px; color:#111; font-weight:bold; cursor:pointer; transition:0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">Copiar Efectos</button>
@@ -673,25 +613,20 @@ export function dibujarPanelEdicionOP() {
 }
 
 export function dibujarMenuOP() {
-    const titulo = estadoUI.esAdmin ? 'PANEL GENERAL MÁSTER' : 'GESTIÓN DE NPCs';
-    const tabForjar = `<button type="button" onclick="window.mostrarPaginaOP('crear')" style="background: linear-gradient(135deg, #004a4a 0%, #008080 100%); color: white; font-weight: bold; border: none; padding: 12px 25px; border-radius: 8px; font-size: 1.1em; cursor: pointer; box-shadow: 0 4px 10px rgba(0,128,128,0.3); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">🛠️ Forjar Nuevo Personaje</button>`;
     return `
-        <h3 style="color: var(--gold); font-family: 'Cinzel'; text-align: center; font-size: 2em; margin-bottom: 30px; text-transform: uppercase; text-shadow: 0 0 10px rgba(212,175,55,0.5);">${titulo}</h3>
+        <h3 style="color: var(--gold); font-family: 'Cinzel'; text-align: center; font-size: 2em; margin-bottom: 30px; text-transform: uppercase; text-shadow: 0 0 10px rgba(212,175,55,0.5);">PANEL GENERAL MÁSTER</h3>
         <div style="display: flex; gap: 15px; justify-content: center; flex-wrap: wrap; margin-bottom: 30px;">
             <button type="button" onclick="window.mostrarPaginaOP('hex')" style="background: linear-gradient(135deg, #b8860b 0%, #d4af37 100%); color: #000; font-weight: bold; border: none; padding: 12px 25px; border-radius: 8px; font-size: 1.1em; cursor: pointer; box-shadow: 0 4px 10px rgba(212,175,55,0.3); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">⚔️ Gestión de HEX y Party</button>
-            ${tabForjar}
+            <button type="button" onclick="window.mostrarPaginaOP('crear')" style="background: linear-gradient(135deg, #004a4a 0%, #008080 100%); color: white; font-weight: bold; border: none; padding: 12px 25px; border-radius: 8px; font-size: 1.1em; cursor: pointer; box-shadow: 0 4px 10px rgba(0,128,128,0.3); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">🛠️ Forjar Nuevo NPC</button>
+            <button type="button" onclick="window.descargarAumentada()" style="background: linear-gradient(135deg, #333 0%, #555 100%); color: white; font-weight: bold; border: none; padding: 12px 25px; border-radius: 8px; font-size: 1.1em; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.5); transition: 0.2s;" onmouseover="this.style.transform='translateY(-2px)'" onmouseout="this.style.transform='translateY(0)'">📥 Descargar CSV Aumentado</button>
         </div>
         <div id="sub-vista-op"></div>
     `;
 }
 
 export function dibujarHexOP() {
-    const esAdmin = estadoUI.esAdmin;
-    const tituloPanel = esAdmin ? 'Gestión de HEX y Party (MÁSTER)' : 'Gestión de HEX de NPCs';
-    const labelSelector = esAdmin ? 'Seleccionar Jugadores de la Lista' : 'Seleccionar NPCs de la Lista';
-
     let html = `<div style="text-align:center; max-width:1200px; margin:0 auto;">
-        <h2 style="color:var(--gold); margin-top:0; font-family: 'Cinzel';">${tituloPanel}</h2>
+        <h2 style="color:var(--gold); margin-top:0; font-family: 'Cinzel';">Gestión de HEX y Party (MÁSTER)</h2>
         
         <div style="background:#1a0033; padding:20px; border-radius:12px; border:1px solid var(--gold); margin-bottom:25px; box-shadow: 0 0 15px rgba(212,175,55,0.1);">
             <h3 style="color:var(--gold); margin-top:0;">Party Activa (Máx 6 Slots)</h3>
@@ -700,12 +635,10 @@ export function dibujarHexOP() {
     for(let i=0; i<6; i++) {
         const char = estadoUI.party[i];
         if(char && statsGlobal[char]) {
-            const p = statsGlobal[char];
-            const asisTexto = p.isPlayer ? `(${p.asistencia || 1}/7)` : `(NPC)`;
-            const icono = normalizar(p.iconoOverride || char);
-            
-            html += `<div style="width:90px; height:90px; border:3px solid var(--gold); border-radius:10px; background:url('${db.storage.urlBase}/imgpersonajes/${icono}icon.png') center/cover; position:relative; box-shadow: 0 4px 8px rgba(0,0,0,0.5);" title="${char}">
-                <button onclick="window.togglePartyMember('${char}', false)" style="position:absolute; top:-10px; right:-10px; background:#ff0000; color:white; border-radius:50%; width:28px; height:28px; font-size:16px; font-weight:bold; border:2px solid #fff; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center; transition: 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">X</button>
+            const icono = normalizar(statsGlobal[char]?.iconoOverride || char);
+            const safeChar = char.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+            html += `<div style="width:90px; height:90px; border:3px solid var(--gold); border-radius:10px; background:url('../img/imgpersonajes/${icono}icon.png') center/cover; position:relative; box-shadow: 0 4px 8px rgba(0,0,0,0.5);" title="${char}">
+                <button onclick="window.togglePartyMember('${safeChar}', false)" style="position:absolute; top:-10px; right:-10px; background:#ff0000; color:white; border-radius:50%; width:28px; height:28px; font-size:16px; font-weight:bold; border:2px solid #fff; cursor:pointer; padding:0; display:flex; align-items:center; justify-content:center; transition: 0.2s;" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">X</button>
                 <div style="position:absolute; bottom:0; background:rgba(0,0,0,0.8); width:100%; font-size:0.7em; text-align:center; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding:4px 0; border-radius:0 0 7px 7px; color: var(--gold); font-weight: bold;">${char}</div>
             </div>`;
         } else {
@@ -716,35 +649,31 @@ export function dibujarHexOP() {
     html += `</div>
             
             <div style="margin: 15px auto; max-width: 800px; background: #050510; border: 1px solid #4a90e2; border-radius: 8px; padding: 20px; text-align: left;">
-                <h4 style="margin: 0 0 15px 0; color: #4a90e2; text-align: center;">${labelSelector}</h4>
+                <h4 style="margin: 0 0 15px 0; color: #4a90e2; text-align: center;">Seleccionar Jugadores de la Lista</h4>
                 <div style="max-height: 200px; overflow-y: auto; padding-right: 10px; display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px;">`;
     
     Object.keys(statsGlobal).sort().forEach(nombre => {
         const p = statsGlobal[nombre];
-        // Admin ve jugadores; público ve NPCs
-        const mostrar = esAdmin ? p.isPlayer : (p.isNPC && p.isActive);
-        if (!mostrar) return;
-        const isChecked = estadoUI.party.includes(nombre) ? 'checked' : '';
-        const iconoMuestra = normalizar(p.iconoOverride || nombre);
-        html += `
+        if (p.isPlayer) {
+            const isChecked = estadoUI.party.includes(nombre) ? 'checked' : '';
+            const iconoMuestra = normalizar(p.iconoOverride || nombre);
+            const safeNombre = nombre.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+            html += `
                 <label style="display:flex; align-items:center; gap:10px; background:#111; padding:10px; border-radius:6px; border:1px solid #333; cursor:pointer; transition:0.2s; user-select:none;" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='#333'">
-                    <input type="checkbox" ${isChecked} onchange="window.togglePartyMember('${nombre}', this.checked)" style="transform:scale(1.4); cursor:pointer; margin-left: 5px;">
-                    <img src="${db.storage.urlBase}/imgpersonajes/${iconoMuestra}icon.png" style="width:35px; height:35px; border-radius:50%; border:1px solid #fff; object-fit:cover;" onerror="${imgError}">
+                    <input type="checkbox" ${isChecked} onchange="window.togglePartyMember('${safeNombre}', this.checked)" style="transform:scale(1.4); cursor:pointer; margin-left: 5px;">
+                    <img src="../img/imgpersonajes/${iconoMuestra}icon.png" style="width:35px; height:35px; border-radius:50%; border:1px solid #fff; object-fit:cover;" onerror="${imgError}">
                     <span style="color:white; font-size:0.9em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:bold; flex:1;">${nombre}</span>
                 </label>
             `;
+        }
     });
-
-    const botonesAdminParty = esAdmin
-        ? '<button type="button" onclick="window.establecerPartyActiva()" style="background: linear-gradient(135deg, #004a00 0%, #006600 100%); border: none; color: white; font-weight: bold; padding: 12px 20px; border-radius: 6px; cursor: pointer; transition: 0.2s;" onmouseover="this.style.filter=\'brightness(1.2)\'" onmouseout="this.style.filter=\'brightness(1)\'">✓ ESTABLECER COMO ÚNICOS ACTIVOS</button>'
-        + '<button type="button" onclick="window.addAsistenciaGlobal()" style="background: linear-gradient(135deg, #4a004a 0%, #660066 100%); border: none; color: white; font-weight: bold; padding: 12px 20px; border-radius: 6px; cursor: pointer; transition: 0.2s;" onmouseover="this.style.filter=\'brightness(1.2)\'" onmouseout="this.style.filter=\'brightness(1)\'">⭐ SUMAR ASISTENCIA (+1) A PARTY</button>'
-        : '';
 
     html += `   </div>
             </div>
             <div style="display:flex; justify-content:center; gap:15px; flex-wrap:wrap; margin-top:25px;">
-                ${botonesAdminParty}
+                <button type="button" onclick="window.establecerPartyActiva()" style="background: linear-gradient(135deg, #004a00 0%, #006600 100%); border: none; color: white; font-weight: bold; padding: 12px 20px; border-radius: 6px; cursor: pointer; transition: 0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">✓ ESTABLECER COMO ÚNICOS ACTIVOS</button>
                 <button type="button" onclick="window.vaciarParty()" style="background: linear-gradient(135deg, #4a0000 0%, #660000 100%); border: none; color: white; padding: 12px 20px; border-radius: 6px; cursor: pointer; transition: 0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">🗑️ VACIAR SLOTS</button>
+                <button type="button" onclick="window.addAsistenciaGlobal()" style="background: linear-gradient(135deg, #4a004a 0%, #660066 100%); border: none; color: white; font-weight: bold; padding: 12px 20px; border-radius: 6px; cursor: pointer; transition: 0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">⭐ SUMAR ASISTENCIA (+1) A PARTY</button>
             </div>
         </div>
         
@@ -757,8 +686,6 @@ export function dibujarHexOP() {
                 <button type="button" onclick="window.modHexGlobal(-50)" style="background:#d84315; color:white; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer;">-50</button>
                 <button type="button" onclick="window.modHexGlobal(100)" style="background:#4a148c; color:white; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer; margin-left: 10px;">+100</button>
                 <button type="button" onclick="window.modHexGlobal(-100)" style="background:#880e4f; color:white; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer;">-100</button>
-                <button type="button" onclick="window.modHexGlobal(300)" style="background:#e65100; color:white; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer; margin-left: 10px;">+300</button>
-                <button type="button" onclick="window.modHexGlobal(-300)" style="background:#bf360c; color:white; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer;">-300</button>
                 <button type="button" onclick="window.modHexGlobal(500)" style="background:#263238; color:white; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer; margin-left: 10px;">+500</button>
                 <button type="button" onclick="window.modHexGlobal(-500)" style="background:#3e2723; color:white; border:none; padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer;">-500</button>
                 <button type="button" onclick="window.modHexGlobal(1000)" style="background:#000; border: 1px solid var(--gold); color:var(--gold); padding:10px 15px; border-radius:6px; font-weight:bold; cursor:pointer; margin-left: 10px;">+1000</button>
@@ -770,45 +697,35 @@ export function dibujarHexOP() {
     estadoUI.party.forEach(nombre => {
         if (nombre && statsGlobal[nombre]) {
             const p = statsGlobal[nombre];
-            const asisTexto = p.isPlayer ? '(' + (p.asistencia || 1) + '/7)' : '(NPC)';
-            const botonesAsis = p.isPlayer
-                ? '<button type="button" onclick="window.modAsistenciaInd(\'' + nombre + '\', 1)" style="background:#1b5e20; border:none; color:white; padding:2px 8px; border-radius:4px; cursor:pointer; font-weight:bold;">+</button>'
-                + '<button type="button" onclick="window.modAsistenciaInd(\'' + nombre + '\', -1)" style="background:#b71c1c; border:none; color:white; padding:2px 8px; border-radius:4px; cursor:pointer; font-weight:bold;">-</button>'
-                : '';
+            const safeNombre = nombre.replace(/'/g, "\\'").replace(/"/g, "&quot;");
+            const asisTexto = p.isPlayer ? `(${p.asistencia || 1}/7)` : `(NPC)`;
             const iconoMuestra = normalizar(p.iconoOverride || nombre);
             html += `
             <div class="edit-card" style="background: #111; border: 1px solid var(--gold); border-radius: 12px; padding: 20px;">
                 <div style="display:flex; align-items:center; gap:15px; margin-bottom:15px; border-bottom: 1px solid #333; padding-bottom: 15px;">
-                    <img src="${db.storage.urlBase}/imgpersonajes/${iconoMuestra}icon.png" style="width:60px; height:60px; border-radius:50%; border:2px solid var(--gold); object-fit:cover; background:#000;" onerror="${imgError}">
+                    <img src="../img/imgpersonajes/${iconoMuestra}icon.png" style="width:60px; height:60px; border-radius:50%; border:2px solid var(--gold); object-fit:cover; background:#000;" onerror="${imgError}">
                     <div style="text-align:left;">
                         <h4 style="margin:0 0 5px 0; font-size:1.1em; color: #fff;">${nombre}</h4>
                         <div style="color:var(--gold); font-size:1.1em; font-weight:bold;">HEX: ${p.hex}</div>
-                        <div style="color:#aaa; font-size:0.8em; margin-top: 2px; display: flex; align-items: center; gap: 5px;">
-                            Asistencia: ${asisTexto}
-                            ${botonesAsis}
-                        </div>
+                        <div style="color:#aaa; font-size:0.8em; margin-top: 2px;">Asistencia: ${asisTexto}</div>
                     </div>
                 </div>
                 
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                    <button type="button" style="background:#1b5e20; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 10)">+10</button>
-                    <button type="button" style="background:#b71c1c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -10)">-10</button>
+                    <button type="button" style="background:#1b5e20; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', 10)">+10</button>
+                    <button type="button" style="background:#b71c1c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', -10)">-10</button>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                    <button type="button" style="background:#004d40; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 50)">+50</button>
-                    <button type="button" style="background:#d84315; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -50)">-50</button>
+                    <button type="button" style="background:#004d40; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', 50)">+50</button>
+                    <button type="button" style="background:#d84315; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', -50)">-50</button>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                    <button type="button" style="background:#4a148c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 100)">+100</button>
-                    <button type="button" style="background:#880e4f; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -100)">-100</button>
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 8px;">
-                    <button type="button" style="background:#e65100; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 300)">+300</button>
-                    <button type="button" style="background:#bf360c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -300)">-300</button>
+                    <button type="button" style="background:#4a148c; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', 100)">+100</button>
+                    <button type="button" style="background:#880e4f; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', -100)">-100</button>
                 </div>
                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
-                    <button type="button" style="background:#263238; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', 500)">+500</button>
-                    <button type="button" style="background:#3e2723; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${nombre}', -500)">-500</button>
+                    <button type="button" style="background:#263238; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', 500)">+500</button>
+                    <button type="button" style="background:#3e2723; border:none; color:white; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;" onclick="window.modHexInd('${safeNombre}', -500)">-500</button>
                 </div>
             </div>`;
         }
@@ -851,15 +768,9 @@ export function dibujarFormularioCrear() {
         
         <div style="background:#1a0033; padding:20px; border-radius:12px; margin-bottom:30px; border:1px solid var(--gold); max-width:600px; margin-left:auto; margin-right:auto;">
             <h3 style="color:var(--gold); margin-top:0; font-family: 'Cinzel';">Identidad Inicial</h3>
-            <div style="display:flex; justify-content:center; gap:20px; flex-wrap:wrap;">
-                ${estadoUI.esAdmin
-                    ? `<button type="button" id="btn-crear-rol" onclick="window.toggleCrearRol()" data-val="npc" style="flex: 1; padding: 15px; background:#4a0000; border: 2px solid #ff0000; border-radius: 8px; color:white; font-weight: bold; font-size: 1.1em; cursor: pointer; transition: 0.2s;">🎭 ROL: NPC</button>`
-                    : `<button type="button" id="btn-crear-rol" data-val="npc" disabled style="flex: 1; padding: 15px; background:#2a0000; border: 2px dashed #ff1744; border-radius: 8px; color:#aaa; font-weight: bold; font-size: 1.1em; cursor: not-allowed;">🎭 ROL: NPC <span style="font-size:0.65em; display:block; color:#666;">(solo OP puede cambiar)</span></button>`
-                }
+            <div style="display:flex; justify-content:center; gap:20px;">
+                <button type="button" id="btn-crear-rol" onclick="window.toggleCrearRol()" data-val="npc" style="flex: 1; padding: 15px; background:#4a0000; border: 2px solid #ff0000; border-radius: 8px; color:white; font-weight: bold; font-size: 1.1em; cursor: pointer; transition: 0.2s;">🎭 ROL: NPC</button>
                 <button type="button" id="btn-crear-act" onclick="window.toggleCrearAct()" data-val="activo" style="flex: 1; padding: 15px; background:#004a00; border: 2px solid #00ff00; border-radius: 8px; color:white; font-weight: bold; font-size: 1.1em; cursor: pointer; transition: 0.2s;">🌟 ESTADO: ACTIVO</button>
-            </div>
-            <div id="npc-tipo-selector" style="display:flex; justify-content:center; gap:20px; margin-top:15px;">
-                <button type="button" id="btn-crear-npc-tipo" onclick="window.toggleCrearNpcTipo()" data-val="sistema" style="flex: 1; padding: 12px; background:#1a0900; border: 2px solid #ff9900; border-radius: 8px; color:white; font-weight: bold; font-size: 1em; cursor: pointer; transition: 0.2s;">⚙️ NPC TIPO: SISTEMA</button>
             </div>
         </div>
 
@@ -877,7 +788,7 @@ export function dibujarFormularioCrear() {
         <div class="edit-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 15px;">
             ${afinGridHtml}
         </div>
-        <div id="creation-affinity-sum-display" style="text-align:center; color:var(--gold); background: #111; padding: 15px; border-radius: 8px; border: 1px dashed var(--gold); font-weight:bold; font-size:1.2em; margin-bottom:40px; font-family:monospace; max-width: 500px; margin-left: auto; margin-right: auto;">Total Afinidades: 0</div>
+        <div id="creation-affinity-sum-display" style="text-align:center; color:var(--gold); background: #111; padding: 10px; border-radius: 6px; border: 1px dashed var(--gold); font-weight:bold; font-size:1.2em; margin-bottom:40px; font-family:monospace; max-width: 300px; margin-left: auto; margin-right: auto;">Total Afinidades: 0</div>
         
         <button type="button" onclick="window.ejecutarCreacionNPC()" style="width:100%; max-width:500px; background: linear-gradient(135deg, #b8860b 0%, #d4af37 100%); border: none; color:black; font-weight:bold; font-size:1.5em; padding:20px; border-radius:8px; font-family:'Cinzel'; cursor: pointer; box-shadow: 0 5px 15px rgba(212,175,55,0.4); transition: 0.2s;" onmouseover="this.style.transform='translateY(-3px)'" onmouseout="this.style.transform='translateY(0)'">✨ FORJAR PERSONAJE ✨</button>
     </div>`;
