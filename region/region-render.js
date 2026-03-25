@@ -10,8 +10,14 @@ import { hexToPixel3D, pixelToHex3D, hexKey } from './region-utils.js';
 
 let context;
 let imageCache = {};
+let imageMaskCache = {}; // 🌟 NUEVO: Caché de imágenes pre-recortadas
 let bgImage;
 const NO_IMG = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
+
+// 🌟 SISTEMA RENDER-ON-DEMAND (0% CPU en reposo)
+export let _needsRender = true;
+export function requestRender() { _needsRender = true; }
+export function notifyRendered() { _needsRender = false; }
 
 const NEIGHBOR_DIRS = [
     {dq: 1, dr: 0}, {dq: 0, dr: 1}, {dq: -1, dr: 1},
@@ -22,7 +28,6 @@ let edgeToNeighborIndex = [];
 
 export function inicializarRender(ctx) { context = ctx; }
 
-// Geometría pre-calculada
 function updateBaseOffsets() {
     const size = HEX_SIZE * camara.zoom;
     const squash = camara.PITCH_SCALE;
@@ -54,8 +59,7 @@ function updateBaseOffsets() {
 
 export function dibujarEscena() {
     if (!context) return;
-    const canvas = context.canvas;
-    const W = canvas.width, H = canvas.height;
+    const W = context.canvas.width, H = context.canvas.height;
 
     updateBaseOffsets(); 
 
@@ -73,7 +77,7 @@ export function dibujarEscena() {
     renderBatchSueloBase(layers.ground);
     renderBatchRegionesTint(layers.ground);
     renderBatchColoresFondo(layers.ground);
-    renderBatchImagenesFondo(layers.ground);
+    renderBatchImagenesFondo(layers.ground); // 🌟 Ahora usa imágenes pre-recortadas
     renderBatchBordesRegion(layers.borders);
     renderBatchGrid(layers.gridBase);
     
@@ -83,11 +87,10 @@ export function dibujarEscena() {
     if (editor.activo) dibujarHUDEditor(W, H);
 }
 
-// 🌟 OPTIMIZACIÓN MÁXIMA: Culling Espacial Matemático (Bounding Box)
+// 🌟 CULLING ESPACIAL: Renderizado Ultra Optimizado
 function getDrawingLayers(W, H) {
     const layers = { ground: [], borders: [], gridBase: [], props: [], over: [] };
     
-    // Mapeo ultra rápido de NPCs a coordenadas
     const npcsPorHex = {};
     for(const nKey in npcsMapaLocal) {
         const npc = npcsMapaLocal[nKey];
@@ -97,89 +100,95 @@ function getDrawingLayers(W, H) {
         }
     }
 
-    // Calcula las 4 esquinas de la pantalla y las traduce a (Q, R)
-    const cs = [
-        pixelToHex3D(0, 0),
-        pixelToHex3D(W, 0),
-        pixelToHex3D(0, H),
-        pixelToHex3D(W, H)
-    ];
+    const cs = [ pixelToHex3D(0, 0), pixelToHex3D(W, 0), pixelToHex3D(0, H), pixelToHex3D(W, H) ];
+    const pad = Math.ceil(22 / camara.zoom); 
     
-    // Definimos el rango mínimo y máximo visible de Q y R con un margen de seguridad
-    const pad = 4;
     const qMin = Math.floor(Math.min(cs[0].q, cs[1].q, cs[2].q, cs[3].q)) - pad;
     const qMax = Math.ceil(Math.max(cs[0].q, cs[1].q, cs[2].q, cs[3].q)) + pad;
     const rMin = Math.floor(Math.min(cs[0].r, cs[1].r, cs[2].r, cs[3].r)) - pad;
     const rMax = Math.ceil(Math.max(cs[0].r, cs[1].r, cs[2].r, cs[3].r)) + pad;
 
-    // SÓLO iteramos sobre los hexágonos que están 100% dentro de la pantalla
-    // ¡Adiós a los 10,000 cálculos innecesarios por frame!
-    for (let q = qMin; q <= qMax; q++) {
-        for (let r = rMin; r <= rMax; r++) {
-            const key = q + ',' + r;
-            const hex = mapaActual.hexes[key];
-            if (!hex) continue; // Si está vacío, ni lo mira (Instantáneo)
+    const activeKeys = Object.keys(mapaActual.hexes);
+    const area = (qMax - qMin) * (rMax - rMin);
 
-            const baseProjPos = hexToPixel3D(q, r, 0); 
-            const baseDepth = baseProjPos.y; 
-
-            layers.ground.push({ q, r, hex, projPos: baseProjPos, depth: baseDepth });
-            if (hex.region) layers.borders.push({ q, r, hex, projPos: baseProjPos, depth: baseDepth });
-
-            if (hex.mid && hex.mid.length > 0) {
-                for(let i=0; i<hex.mid.length; i++) {
-                    const pid = hex.mid[i];
-                    let opac = 1.0;
-                    if (typeof pid === 'string') {
-                        if (pid.startsWith('COLOR:')) opac = parseFloat(pid.split(':')[2]) || 1.0;
-                        else {
-                            const cidx = pid.indexOf(':');
-                            if(cidx !== -1) opac = parseFloat(pid.slice(cidx+1)) || 1.0;
-                        }
-                    }
-                    layers.props.push({ type: 'itemMid', q, r, propId: pid, projPos: baseProjPos, opacidad: opac, depth: baseDepth + 1 });
-                }
-            }
-            
-            if (npcsPorHex[key]) {
-                const npcsAqui = npcsPorHex[key];
-                for(let i=0; i<npcsAqui.length; i++) {
-                    layers.props.push({ type: 'itemNPC', q, r, npc: npcsAqui[i], projPos: baseProjPos, opacidad: 1.0, depth: baseDepth + 2 });
-                }
-            }
-
-            layers.gridBase.push({ layer: 'base', q, r, hex, projPos: baseProjPos, depth: baseDepth + 3 });
-
-            if (hex.over && hex.over.length > 0) {
-                const overProjPos = { 
-                    x: baseProjPos.x + (OVER_OFFSET_X * camara.zoom), 
-                    y: baseProjPos.y + (OVER_OFFSET_Y * camara.zoom)
-                };
-                const overDepth = baseDepth + 5000;
-
-                for(let i=0; i<hex.over.length; i++) {
-                    const pid = hex.over[i];
-                    const isColor = typeof pid === 'string' && pid.startsWith('COLOR:');
-                    let opac = 1.0;
-                    if (isColor) opac = parseFloat(pid.split(':')[2]) || 1.0;
-                    else if (typeof pid === 'string') {
-                        const cidx = pid.indexOf(':');
-                        if(cidx !== -1) opac = parseFloat(pid.slice(cidx+1)) || 1.0;
-                    }
-                    
-                    if (isColor) {
-                        layers.over.push({ type: 'hexOverBg', q, r, propId: pid, hex, projPos: overProjPos, opacidad: opac, depth: overDepth });
-                    } else {
-                        layers.over.push({ type: 'hexOverItem', q, r, propId: pid, hex, projPos: overProjPos, opacidad: opac, depth: overDepth + 1 });
-                    }
-                }
-                layers.over.push({ layer: 'over', q, r, hex, projPos: overProjPos, depth: overDepth + 2 });
+    if (activeKeys.length < area) {
+        for(let i=0; i<activeKeys.length; i++) {
+            const key = activeKeys[i];
+            const [q, r] = key.split(',').map(Number);
+            if (q < qMin || q > qMax || r < rMin || r > rMax) continue;
+            processHexForRender(q, r, key, layers, npcsPorHex);
+        }
+    } else {
+        for (let q = qMin; q <= qMax; q++) {
+            for (let r = rMin; r <= rMax; r++) {
+                processHexForRender(q, r, q + ',' + r, layers, npcsPorHex);
             }
         }
     }
 
     layers.props.sort((a, b) => a.depth - b.depth);
     return layers;
+}
+
+function processHexForRender(q, r, key, layers, npcsPorHex) {
+    const hex = mapaActual.hexes[key];
+    if (!hex) return;
+    
+    const baseProjPos = hexToPixel3D(q, r, 0); 
+    const baseDepth = baseProjPos.y; 
+
+    layers.ground.push({ q, r, hex, projPos: baseProjPos, depth: baseDepth });
+    if (hex.region) layers.borders.push({ q, r, hex, projPos: baseProjPos, depth: baseDepth });
+
+    if (hex.mid && hex.mid.length > 0) {
+        for(let i=0; i<hex.mid.length; i++) {
+            const pid = hex.mid[i];
+            let opac = 1.0;
+            if (typeof pid === 'string') {
+                if (pid.startsWith('COLOR:')) opac = parseFloat(pid.split(':')[2]) || 1.0;
+                else {
+                    const cidx = pid.indexOf(':');
+                    if(cidx !== -1) opac = parseFloat(pid.slice(cidx+1)) || 1.0;
+                }
+            }
+            layers.props.push({ type: 'itemMid', q, r, propId: pid, projPos: baseProjPos, opacidad: opac, depth: baseDepth + 1 });
+        }
+    }
+    
+    if (npcsPorHex[key]) {
+        const npcsAqui = npcsPorHex[key];
+        for(let i=0; i<npcsAqui.length; i++) {
+            layers.props.push({ type: 'itemNPC', q, r, npc: npcsAqui[i], projPos: baseProjPos, opacidad: 1.0, depth: baseDepth + 2 });
+        }
+    }
+
+    layers.gridBase.push({ layer: 'base', q, r, hex, projPos: baseProjPos, depth: baseDepth + 3 });
+
+    if (hex.over && hex.over.length > 0) {
+        const overProjPos = { 
+            x: baseProjPos.x + (OVER_OFFSET_X * camara.zoom), 
+            y: baseProjPos.y + (OVER_OFFSET_Y * camara.zoom)
+        };
+        const overDepth = baseDepth + 5000;
+
+        for(let i=0; i<hex.over.length; i++) {
+            const pid = hex.over[i];
+            const isColor = typeof pid === 'string' && pid.startsWith('COLOR:');
+            let opac = 1.0;
+            if (isColor) opac = parseFloat(pid.split(':')[2]) || 1.0;
+            else if (typeof pid === 'string') {
+                const cidx = pid.indexOf(':');
+                if(cidx !== -1) opac = parseFloat(pid.slice(cidx+1)) || 1.0;
+            }
+            
+            if (isColor) {
+                layers.over.push({ type: 'hexOverBg', q, r, propId: pid, hex, projPos: overProjPos, opacidad: opac, depth: overDepth });
+            } else {
+                layers.over.push({ type: 'hexOverItem', q, r, propId: pid, hex, projPos: overProjPos, opacidad: opac, depth: overDepth + 1 });
+            }
+        }
+        layers.over.push({ layer: 'over', q, r, hex, projPos: overProjPos, depth: overDepth + 2 });
+    }
 }
 
 // ────────────────────────────────────────────────────────────
@@ -253,11 +262,47 @@ function renderBatchColoresFondo(groundLayers) {
     context.globalAlpha = 1.0;
 }
 
+// 🌟 MAGIA PURA: Genera una imagen pre-recortada en caché para evitar usar clip() en vivo
+function getHexClippedImage(url) {
+    if (!url) return null;
+    if (imageMaskCache[url]) return imageMaskCache[url];
+    
+    const originalImg = getCachedImage(url);
+    if (!originalImg || !originalImg.complete || originalImg.naturalWidth === 0) return null;
+
+    const SIZE = 128; // Resolución estándar de caché
+    const PITCH = camara.PITCH_SCALE;
+    const drawW = SIZE * 2.85;
+    const drawH = drawW * PITCH;
+    
+    const canvasMask = document.createElement('canvas');
+    canvasMask.width = drawW; canvasMask.height = drawH;
+    const ctx = canvasMask.getContext('2d');
+    
+    const cx = drawW / 2; const cy = drawH / 2;
+
+    ctx.beginPath();
+    for (let i = 0; i < 6; i++) {
+        const angle = (Math.PI / 180) * (60 * i);
+        const vx = SIZE * Math.cos(angle);
+        const vy = SIZE * Math.sin(angle);
+        const px = vx - vy;
+        const py = (vx + vy) * PITCH;
+        if (i === 0) ctx.moveTo(cx + px, cy + py);
+        else ctx.lineTo(cx + px, cy + py);
+    }
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(originalImg, 0, 0, drawW, drawH);
+    
+    imageMaskCache[url] = canvasMask;
+    return canvasMask;
+}
+
 function renderBatchImagenesFondo(groundLayers) {
     const size = HEX_SIZE * camara.zoom;
     const drawW = size * 2.85; 
     const drawH = drawW * camara.PITCH_SCALE;
-    const isLOD = camara.zoom < 0.45; // 🌟 LOD optimizado: quita clip más rápido a la distancia
 
     for(let i=0; i<groundLayers.length; i++) {
         const item = groundLayers[i];
@@ -275,17 +320,14 @@ function renderBatchImagenesFondo(groundLayers) {
 
             const p = props[basePid];
             if (!p || !p.imagen) continue;
-            const img = getCachedImage(p.imagen);
-            if (!img?.complete) continue;
+            
+            // 🌟 Usamos la imagen pre-recortada (Se elimina clip() del loop de renderizado)
+            const clippedImg = getHexClippedImage(p.imagen);
+            if (!clippedImg) continue;
 
             context.save();
             context.globalAlpha = opac;
-            if (!isLOD) {
-                context.beginPath();
-                addHexToPath(item.projPos);
-                context.clip();
-            }
-            context.drawImage(img, item.projPos.x - drawW / 2, item.projPos.y - drawH / 2, drawW, drawH);
+            context.drawImage(clippedImg, item.projPos.x - drawW / 2, item.projPos.y - drawH / 2, drawW, drawH);
             context.restore();
         }
     }
@@ -338,18 +380,14 @@ function renderBatchBordesRegion(borderLayers) {
 }
 
 function renderBatchGrid(gridLayers) {
-    // 🌟 LOD optimizado: Oculta la grilla a distancias medias para evitar latencia
     if (camara.zoom >= 0.45) { 
         context.beginPath();
-        for(let i=0; i<gridLayers.length; i++) {
-            addHexToPath(gridLayers[i].projPos);
-        }
+        for(let i=0; i<gridLayers.length; i++) addHexToPath(gridLayers[i].projPos);
         context.strokeStyle = 'rgba(80, 50, 130, 0.22)';
         context.lineWidth = Math.max(0.5, 0.8 * camara.zoom);
         context.stroke();
     }
 
-    // Dibujado del Puntero y Selección actual (Independiente del LOD general)
     for(let i=0; i<gridLayers.length; i++) {
         const item = gridLayers[i];
         const key = hexKey(item.q, item.r);
@@ -374,10 +412,6 @@ function renderBatchGrid(gridLayers) {
         }
     }
 }
-
-// ────────────────────────────────────────────────────────────
-// RENDERS FINALES: Props, Personajes y Over
-// ────────────────────────────────────────────────────────────
 
 function renderPropsYPersonajes(propLayers) {
     for(let i=0; i<propLayers.length; i++) {
@@ -418,7 +452,6 @@ function renderPropsYPersonajes(propLayers) {
 }
 
 function renderCapaOver(overLayers) {
-    const isLOD = camara.zoom < 0.45;
     const size = HEX_SIZE * camara.zoom;
     const drawW = size * 2.85; 
     const drawH = drawW * camara.PITCH_SCALE;
@@ -452,17 +485,13 @@ function renderCapaOver(overLayers) {
             if (typeof item.propId === 'string' && item.propId.includes(':')) basePid = item.propId.split(':')[0];
             const p = props[basePid];
             if (!p || !p.imagen) continue;
-            const img = getCachedImage(p.imagen);
-            if (!img?.complete) continue;
+            
+            const clippedImg = getHexClippedImage(p.imagen);
+            if (!clippedImg) continue;
 
             context.save();
             context.globalAlpha = item.opacidad;
-            if (!isLOD) {
-                context.beginPath();
-                addHexToPath(item.projPos);
-                context.clip();
-            }
-            context.drawImage(img, item.projPos.x - drawW / 2, item.projPos.y - drawH / 2, drawW, drawH);
+            context.drawImage(clippedImg, item.projPos.x - drawW / 2, item.projPos.y - drawH / 2, drawW, drawH);
             context.restore();
         } else if (item.type === 'gridOverlay') {
             const key = hexKey(item.q, item.r);
@@ -484,15 +513,18 @@ function renderCapaOver(overLayers) {
 function getCachedImage(url) {
     if (!url) return null;
     if (imageCache[url]) return imageCache[url];
-    const img = new Image(); img.src = url;
+    const img = new Image(); 
+    img.crossOrigin = "Anonymous";
+    img.src = url;
     imageCache[url] = img;
+    img.onload = () => requestRender(); // Fuerza a dibujar cuando carga la imagen
     return img;
 }
 
 export function setBackground(url) {
     if (!url) { bgImage = null; return; }
     const img = new Image(); img.src = url;
-    img.onload = () => { bgImage = img; };
+    img.onload = () => { bgImage = img; requestRender(); };
 }
 
 function dibujarHUDEditor(W, H) {
