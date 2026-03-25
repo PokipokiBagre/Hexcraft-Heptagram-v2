@@ -84,7 +84,6 @@ function onMouseDown(e) {
     const key = hexKey(q, r);
 
     if (e.button === 0) { 
-        // 🌟 DOBLE CLICK PARA ENTRAR
         const now = Date.now();
         const isDblClick = (now - _lastClickTime < 300);
         _lastClickTime = now;
@@ -150,7 +149,6 @@ function onTouchStart(e) {
         const { q, r } = getHexFromScreenPos(e.touches[0].clientX, e.touches[0].clientY);
         const key = hexKey(q, r);
 
-        // 🌟 DOBLE TAP PARA ENTRAR
         if (isDblTouch) {
             const hex = mapaActual.hexes[key];
             if (hex && hex.region) { window.abrirInterior(hex.region); return; }
@@ -198,8 +196,18 @@ function onTouchEnd() { _mouseDown = false; ui.modoPintar = false; _pinchStart =
 
 export function aplicarHerramienta(q, r, key) {
     const hexes = editor.brushSize > 1 ? hexesEnRadio(q, r, editor.brushSize - 1) : [{ q, r }];
-    hexes.forEach(h => { _accionHex(h.q, h.r, hexKey(h.q, h.r)); });
-    window.dispatchEvent(new Event('mapaModificado'));
+    let modificado = false;
+    
+    hexes.forEach(h => { 
+        // 🌟 APLICAR RUIDO AL PINCEL: Ignora hexágonos aleatoriamente para crear "huecos" orgánicos
+        if (editor.ruidoActivo && editor.herramienta === 'agregar') {
+            if (Math.random() > (editor.ruidoDensidad || 0.35)) return; 
+        }
+        _accionHex(h.q, h.r, hexKey(h.q, h.r)); 
+        modificado = true;
+    });
+
+    if (modificado) window.dispatchEvent(new Event('mapaModificado'));
 }
 
 function _accionHex(q, r, key) {
@@ -228,8 +236,22 @@ function _accionHex(q, r, key) {
         }
 
         const opac = (editor.opacidadPincel ?? 1.0).toFixed(2);
+        
         if (pid === 'prop_pintar') {
-            const colorEntry = `COLOR:${editor.colorActual}:${opac}`;
+            let finalColor = editor.colorActual;
+            
+            // 🌟 APLICAR RUIDO AL PINCEL: Si el ruido está activo, varía ligeramente la luminosidad del color base
+            if (editor.ruidoActivo) {
+                const h = parseInt(finalColor.slice(1,3), 16);
+                const s = parseInt(finalColor.slice(3,5), 16);
+                const l = parseInt(finalColor.slice(5,7), 16);
+                const v = Math.round((Math.random() - 0.5) * 40); // Variación de +/- 20
+                const clamp = n => Math.max(0, Math.min(255, n));
+                const toHex = n => n.toString(16).padStart(2, '0');
+                finalColor = `#${toHex(clamp(h+v))}${toHex(clamp(s+v))}${toHex(clamp(l+v))}`;
+            }
+
+            const colorEntry = `COLOR:${finalColor}:${opac}`;
             let arr = hex[capa];
             arr = arr.filter(e => !(typeof e === 'string' && e.startsWith('COLOR:')));
             arr.push(colorEntry);
@@ -271,41 +293,6 @@ function _accionHex(q, r, key) {
             hex[capa] = [];
         }
     }
-}
-
-export function aplicarRuidoVisible(color, opacidad, densidad = 0.4) {
-    if (!canvas) return;
-    const W = window.innerWidth * (window.devicePixelRatio || 1);
-    const H = window.innerHeight * (window.devicePixelRatio || 1);
-    const margen = HEX_SIZE * camara.zoom * 2;
-    
-    const cs = [
-        pixelToHex3D(-margen, -margen),     pixelToHex3D(W+margen, -margen),
-        pixelToHex3D(-margen, H+margen),    pixelToHex3D(W+margen, H+margen)
-    ];
-    const qMin = Math.min(...cs.map(c=>c.q))-1, qMax = Math.max(...cs.map(c=>c.q))+1;
-    const rMin = Math.min(...cs.map(c=>c.r))-1, rMax = Math.max(...cs.map(c=>c.r))+1;
-
-    for (let q = qMin; q <= qMax; q++) {
-        for (let r = rMin; r <= rMax; r++) {
-            if (Math.random() > densidad) continue;
-            const key = hexKey(q, r);
-            if (!mapaActual.hexes[key]) mapaActual.hexes[key] = crearHexData();
-            
-            const h = parseInt(color.slice(1,3),16), s = parseInt(color.slice(3,5),16), l = parseInt(color.slice(5,7),16);
-            const v = Math.round((Math.random()-0.5)*40);
-            const clamp = n => Math.max(0,Math.min(255,n));
-            const toHex = n => n.toString(16).padStart(2,'0');
-            const noisyColor = `#${toHex(clamp(h+v))}${toHex(clamp(s+v))}${toHex(clamp(l+v))}`;
-            
-            const colorEntry = `COLOR:${noisyColor}:${opacidad.toFixed(2)}`;
-            let arr = mapaActual.hexes[key][editor.capaActual];
-            arr = arr.filter(e => !(typeof e === 'string' && e.startsWith('COLOR:')));
-            arr.push(colorEntry);
-            mapaActual.hexes[key][editor.capaActual] = arr;
-        }
-    }
-    window.dispatchEvent(new Event('mapaModificado'));
 }
 
 export function centrarCamara() {
