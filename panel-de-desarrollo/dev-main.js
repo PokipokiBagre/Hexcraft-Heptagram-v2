@@ -2,7 +2,7 @@
 // dev-main.js — Controlador de Eventos y Renderizado Global
 // ============================================================
 
-import { hexAuth } from '../hex-auth.js';
+import { hexAuth, supabase } from '../hex-auth.js';
 import { db } from '../hex-db.js';
 
 import { devState, norm, STORAGE_URL } from './dev-state.js';
@@ -35,17 +35,38 @@ window.onload = async () => {
     }
 
     try {
-        // 🌟 1. Descargamos absolutamente toda la BD necesaria
-        const [personajesBD, catalogoObj, invObj, estadosArr] = await Promise.all([
+        // Descargar TODO (Incluyendo nodos de hechizos para calcular los stats de lectura)
+        const [personajesBD, catalogoObj, invObj, estadosArr, {data: hecInv}, {data: hecNodos}] = await Promise.all([
             db.personajes.getAll(),
             db.objetos.getCatalogo(),
             db.objetos.getInventarioCompleto(),
-            db.estadosConfig.getAll()
+            db.estadosConfig.getAll(),
+            supabase.from('hechizos_inventario').select('*'),
+            supabase.from('hechizos_nodos').select('*')
         ]);
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
 
-        // 🌟 2. Parseo especial para el módulo de Estadísticas (De Snake_Case a CamelCase)
+        // 🌟 Calcular las estadísticas de solo-lectura aportadas por hechizos
+        const spellStats = {};
+        if (hecInv && hecNodos) {
+            hecInv.forEach(h => {
+                const pj = h.personaje_nombre.toLowerCase();
+                const node = hecNodos.find(n => n.nombre === h.hechizo_nombre);
+                if (node) {
+                    if (!spellStats[pj]) spellStats[pj] = {};
+                    const props = ['fisica','energetica','espiritual','mando','psiquica','oscura','danoRojo','danoAzul','elimDorada','vidaRojaMaxExtra','vidaAzulExtra','guardaDoradaExtra'];
+                    props.forEach(pr => {
+                        const dbField = pr.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`); // de fisica a fisica, de danoRojo a dano_rojo
+                        if (node[dbField] || node[pr]) {
+                            const val = node[dbField] || node[pr] || 0;
+                            spellStats[pj][pr] = (spellStats[pj][pr] || 0) + val;
+                        }
+                    });
+                }
+            });
+        }
+
         const statsGlobalMock = {};
         personajesBD.forEach(p => {
             statsGlobalMock[p.nombre] = {
@@ -65,7 +86,8 @@ window.onload = async () => {
                 hechizosEfecto: p.hechizos_efecto || {},
                 buffs: p.buffs || {},
                 estados: p.estados || {},
-                iconoOverride: p.icono_override || ''
+                iconoOverride: p.icono_override || '',
+                hechizos: spellStats[p.nombre.toLowerCase()] || {} // Incorporamos los stats calculados
             };
         });
 
@@ -73,7 +95,6 @@ window.onload = async () => {
             id: e.id, nombre: e.nombre, tipo: e.tipo, bg: e.color_bg, border: e.color_border, desc: e.descripcion
         }));
 
-        // 🌟 3. Inicializamos los submódulos
         initObjetosDev(catalogoObj, invObj);
         initStatsDev(statsGlobalMock, estadosListMock);
 
@@ -82,7 +103,6 @@ window.onload = async () => {
 
         renderSelectorPersonajes();
 
-        // 🌟 4. Escuchadores Universales de Eventos
         window.addEventListener('devUIUpdate', () => {
             if (devState.pjSeleccionado) {
                 renderColumnaObjetos(devState.pjSeleccionado);
@@ -134,7 +154,7 @@ function renderSelectorPersonajes() {
     });
 
     if (filtrados.length === 0) {
-        contenedor.innerHTML = `<div style="color:#666; font-style:italic; padding:20px;">No se encontraron personajes en esta categoría.</div>`;
+        contenedor.innerHTML = `<div style="color:#666; font-style:italic; padding:20px;">No se encontraron personajes.</div>`;
         return;
     }
 
@@ -165,7 +185,6 @@ function seleccionarPersonajeDev(nombre) {
 
     document.getElementById('dev-workspace').classList.remove('oculto');
     
-    // Iniciar renders
     renderColumnaObjetos(devState.pjSeleccionado);
     renderColumnaStats(devState.pjSeleccionado);
     
