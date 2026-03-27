@@ -56,6 +56,7 @@ export function actualizarLogGlobal() {
         'baseVidaRojaMax': 'Límite Rojo', 'baseVidaAzul': 'Corazones Azules', 'baseGuardaDorada': 'Guarda Dorada',
         'baseDanoRojo': 'Daño Rojo', 'baseDanoAzul': 'Daño Azul', 'baseElimDorada': 'Eliminación Dorada'
     };
+    const afinCapital = { fisica: 'Física', energetica: 'Energética', espiritual: 'Espiritual', mando: 'Mando', psiquica: 'Psíquica', oscura: 'Oscura' };
 
     for (const pjKey in stState.colaStats) {
         const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey.toLowerCase())?.nombre || pjKey;
@@ -76,25 +77,40 @@ export function actualizarLogGlobal() {
                     const sign = delta > 0 ? '+' : '';
                     let statName = nomLegibles[flatKey] || flatKey;
                     
-                    if (flatKey.includes('afinidadesBase')) statName = `Afinidad Base ${parts[1].charAt(0).toUpperCase() + parts[1].slice(1)}`;
-                    if (flatKey.includes('hechizosEfecto')) statName = `Afinidad Alt. ${parts[1].charAt(0).toUpperCase() + parts[1].slice(1)}`;
-                    if (flatKey.includes('buffs')) statName = `Buff Extra ${parts[1].charAt(0).toUpperCase() + parts[1].slice(1)}`;
+                    if (flatKey.includes('afinidadesBase')) statName = `Afinidad Base ${afinCapital[parts[1]]}`;
+                    if (flatKey.includes('hechizosEfecto')) statName = `Afinidad Alt. ${afinCapital[parts[1]]}`;
+                    if (flatKey.includes('buffs')) statName = `Buff Extra ${afinCapital[parts[1]] || parts[1]}`;
                     
-                    if (flatKey.includes('estados')) {
+                    // 🌟 REGLA ESPECIAL PARA HEX DE ASISTENCIA (1300 -> 300 y 1000)
+                    if (flatKey === 'hex' && delta === 1300 && cambios['asistencia'] === 1 && dbPj['asistencia'] === 7) {
+                        logPorPJ[realPj].push(`HEX +300`);
+                        logPorPJ[realPj].push(`HEX +1000 ¡Extra! (${cantNueva})`);
+                    }
+                    // 🌟 REGLA ESPECIAL PARA ASISTENCIA (Reinicio sin restar)
+                    else if (flatKey === 'asistencia' && delta < 0 && cantNueva === 1) {
+                        logPorPJ[realPj].push(`Asistencia reiniciada (1/7)`);
+                    }
+                    // 🌟 REGLA ESPECIAL ESTADOS NUMÉRICOS
+                    else if (flatKey.includes('estados')) {
                         const eDef = stState.estadosDB.find(e => e.id === parts[1]);
                         const eName = eDef ? eDef.nombre : parts[1];
                         logPorPJ[realPj].push(`${eName} ${sign}${delta} (${cantNueva})`);
-                    } else if (flatKey === 'vidaRojaActual' || flatKey === 'baseVidaRojaMax') {
+                    } 
+                    // 🌟 REGLA VIDA CON TOPE
+                    else if (flatKey === 'vidaRojaActual' || flatKey === 'baseVidaRojaMax') {
                         let maxBase = (flatKey === 'baseVidaRojaMax' ? cantNueva : (dbPj.baseVidaRojaMax||0) + (cambios['baseVidaRojaMax'] !== undefined ? cambios['baseVidaRojaMax'] - (dbPj.baseVidaRojaMax||0) : 0));
                         let extra = (dbPj.buffs?.vidaRojaMaxExtra||0) + (dbPj.hechizosEfecto?.vidaRojaMaxExtra||0) + (dbPj.hechizos?.vidaRojaMaxExtra||0);
                         let finalMax = maxBase + extra;
                         let finalAct = (flatKey === 'vidaRojaActual' ? cantNueva : (dbPj.vidaRojaActual||0) + (cambios['vidaRojaActual'] !== undefined ? cambios['vidaRojaActual'] - (dbPj.vidaRojaActual||0) : 0));
                         logPorPJ[realPj].push(`${statName} ${sign}${delta} (${finalAct}/${finalMax})`);
-                    } else {
+                    } 
+                    else {
                         logPorPJ[realPj].push(`${statName} ${sign}${delta} (${cantNueva})`);
                     }
                 }
-            } else if (typeof cantNueva === 'boolean' && cantNueva !== cantVieja) {
+            } 
+            // 🌟 REGLA ESTADOS BOOLEANOS (adq / rmv)
+            else if (typeof cantNueva === 'boolean' && cantNueva !== cantVieja) {
                 if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
                 const eDef = stState.estadosDB.find(e => e.id === parts[1]);
                 const eName = eDef ? eDef.nombre : parts[1];
@@ -161,7 +177,7 @@ export async function ejecutarGuardadoGlobal() {
             }
         }
 
-        // 🌟 EMPAQUETADO EXACTO EN JSONB
+        // 🌟 MAPEO A COLUMNAS PLANAS PARA SUPABASE
         for (const pjKey in stState.colaStats) {
             const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey.toLowerCase())?.nombre || pjKey;
             const cambios = stState.colaStats[pjKey];
@@ -190,40 +206,36 @@ export async function ejecutarGuardadoGlobal() {
                 base_elim_dorada: updatedPj.baseElimDorada,
                 estados: updatedPj.estados,
                 
-                // Mapeo estructurado como lo necesita Supabase
-                afinidades_base: {
-                    fisica: updatedPj.afinidadesBase.fisica || 0,
-                    energetica: updatedPj.afinidadesBase.energetica || 0,
-                    espiritual: updatedPj.afinidadesBase.espiritual || 0,
-                    mando: updatedPj.afinidadesBase.mando || 0,
-                    psiquica: updatedPj.afinidadesBase.psiquica || 0,
-                    oscura: updatedPj.afinidadesBase.oscura || 0
-                },
-                hechizos_efecto: {
-                    fisica: updatedPj.hechizosEfecto.fisica || 0,
-                    energetica: updatedPj.hechizosEfecto.energetica || 0,
-                    espiritual: updatedPj.hechizosEfecto.espiritual || 0,
-                    mando: updatedPj.hechizosEfecto.mando || 0,
-                    psiquica: updatedPj.hechizosEfecto.psiquica || 0,
-                    oscura: updatedPj.hechizosEfecto.oscura || 0,
-                    dano_rojo: updatedPj.hechizosEfecto.danoRojo || 0,
-                    dano_azul: updatedPj.hechizosEfecto.danoAzul || 0,
-                    elim_dorada: updatedPj.hechizosEfecto.elimDorada || 0
-                },
-                buffs: {
-                    fisica: updatedPj.buffs.fisica || 0,
-                    energetica: updatedPj.buffs.energetica || 0,
-                    espiritual: updatedPj.buffs.espiritual || 0,
-                    mando: updatedPj.buffs.mando || 0,
-                    psiquica: updatedPj.buffs.psiquica || 0,
-                    oscura: updatedPj.buffs.oscura || 0,
-                    dano_rojo: updatedPj.buffs.danoRojo || 0,
-                    dano_azul: updatedPj.buffs.danoAzul || 0,
-                    elim_dorada: updatedPj.buffs.elimDorada || 0,
-                    vida_roja_max_extra: updatedPj.buffs.vidaRojaMaxExtra || 0,
-                    vida_azul_extra: updatedPj.buffs.vidaAzulExtra || 0,
-                    guarda_dorada_extra: updatedPj.buffs.guardaDoradaExtra || 0
-                }
+                // Mapeo plano exacto a la BD
+                fisica: updatedPj.afinidadesBase.fisica || 0,
+                energetica: updatedPj.afinidadesBase.energetica || 0,
+                espiritual: updatedPj.afinidadesBase.espiritual || 0,
+                mando: updatedPj.afinidadesBase.mando || 0,
+                psiquica: updatedPj.afinidadesBase.psiquica || 0,
+                oscura: updatedPj.afinidadesBase.oscura || 0,
+                
+                alt_fisica: updatedPj.hechizosEfecto.fisica || 0,
+                alt_energetica: updatedPj.hechizosEfecto.energetica || 0,
+                alt_espiritual: updatedPj.hechizosEfecto.espiritual || 0,
+                alt_mando: updatedPj.hechizosEfecto.mando || 0,
+                alt_psiquica: updatedPj.hechizosEfecto.psiquica || 0,
+                alt_oscura: updatedPj.hechizosEfecto.oscura || 0,
+                alt_dano_rojo: updatedPj.hechizosEfecto.danoRojo || 0,
+                alt_dano_azul: updatedPj.hechizosEfecto.danoAzul || 0,
+                alt_elim_dorada: updatedPj.hechizosEfecto.elimDorada || 0,
+                
+                ext_fisica: updatedPj.buffs.fisica || 0,
+                ext_energetica: updatedPj.buffs.energetica || 0,
+                ext_espiritual: updatedPj.buffs.espiritual || 0,
+                ext_mando: updatedPj.buffs.mando || 0,
+                ext_psiquica: updatedPj.buffs.psiquica || 0,
+                ext_oscura: updatedPj.buffs.oscura || 0,
+                ext_dano_rojo: updatedPj.buffs.danoRojo || 0,
+                ext_dano_azul: updatedPj.buffs.danoAzul || 0,
+                ext_elim_dorada: updatedPj.buffs.elimDorada || 0,
+                ext_vida_roja_max: updatedPj.buffs.vidaRojaMaxExtra || 0,
+                ext_vida_azul: updatedPj.buffs.vidaAzulExtra || 0,
+                ext_guarda_dorada: updatedPj.buffs.guardaDoradaExtra || 0
             });
         }
 
