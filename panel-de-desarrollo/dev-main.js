@@ -5,15 +5,13 @@
 import { hexAuth } from '../hex-auth.js';
 import { db } from '../hex-db.js';
 
-// Importamos la lógica y UI de la columna de Objetos
 import { initObjetosDev } from './objetos/panel-objetos-logic.js';
 import { renderColumnaObjetos } from './objetos/panel-objetos-ui.js';
 import { objState } from './objetos/panel-objetos-state.js';
 
-// Estado global del Panel de Desarrollo
 let pjSeleccionado = null;
 let listaPersonajes = [];
-let filtroRolActual = 'jugadores'; // 'jugadores' o 'npcs'
+let filtroRolActual = 'jugadores'; 
 let busquedaTexto = '';
 
 const STORAGE_URL = 'https://gkscqurkpyteusqyspsu.supabase.co/storage/v1/object/public/imagenes-hex';
@@ -42,7 +40,6 @@ window.onload = async () => {
 
         listaPersonajes = personajesBD.filter(p => p.is_active);
 
-        // Inicializamos submódulos
         initObjetosDev(catalogoObj, invObj);
 
         document.getElementById('pantalla-carga').classList.add('oculto');
@@ -50,11 +47,14 @@ window.onload = async () => {
 
         renderSelectorPersonajes();
 
-        // 🌟 Escuchar cuando cualquier submódulo pide actualizar la UI o indica que hay cambios
+        // 🌟 EVENTO 1: Re-renderiza todo y muestra botón (Clics fuertes)
         window.addEventListener('devUIUpdate', () => {
-            if (pjSeleccionado) {
-                renderColumnaObjetos(pjSeleccionado);
-            }
+            if (pjSeleccionado) renderColumnaObjetos(pjSeleccionado);
+            revisarCambiosPendientes();
+        });
+
+        // 🌟 EVENTO 2: Anti-Lag. Solo muestra el botón sin re-renderizar (Para teclado)
+        window.addEventListener('devDataChanged', () => {
             revisarCambiosPendientes();
         });
 
@@ -64,10 +64,8 @@ window.onload = async () => {
     }
 };
 
-// 🌟 SISTEMA DE PESTAÑAS (Jugador / NPC)
 window.cambiarFiltroRol = (rol) => {
     filtroRolActual = rol;
-    
     const btnJ = document.getElementById('tab-jugadores');
     const btnN = document.getElementById('tab-npcs');
 
@@ -78,7 +76,6 @@ window.cambiarFiltroRol = (rol) => {
         btnN.style.background = '#4a0000'; btnN.style.borderColor = '#ff4444'; btnN.style.color = 'white';
         btnJ.style.background = '#111'; btnJ.style.borderColor = '#444'; btnJ.style.color = '#888';
     }
-
     renderSelectorPersonajes();
 };
 
@@ -87,7 +84,6 @@ window.filtrarPorNombre = (texto) => {
     renderSelectorPersonajes();
 };
 
-// 🌟 Dibuja los retratos según la pestaña y la búsqueda
 function renderSelectorPersonajes() {
     const contenedor = document.getElementById('dev-character-list');
     if (!contenedor) return;
@@ -109,8 +105,6 @@ function renderSelectorPersonajes() {
         const imgUrl = `${STORAGE_URL}/imgpersonajes/${icono}icon.png`;
         const imgError = `this.onerror=null; this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png'`;
         const borderColor = p.is_player ? '#00e676' : '#ff4444';
-        
-        // Mantener marcado el retrato si el personaje sigue siendo el seleccionado
         const claseActiva = (pjSeleccionado === p.nombre) ? 'active' : '';
 
         html += `
@@ -131,7 +125,6 @@ window.seleccionarPersonajeDev = (nombre) => {
     if (portrait) portrait.classList.add('active');
 
     document.getElementById('dev-workspace').classList.remove('oculto');
-
     renderColumnaObjetos(pjSeleccionado);
     
     const colStats = document.getElementById('content-stats');
@@ -142,70 +135,71 @@ window.seleccionarPersonajeDev = (nombre) => {
 };
 
 // 🌟 SUPERVISOR DE CAMBIOS
-// Verifica si hay algo en las Colas Temporales. Si hay, muestra el Botón de Guardado.
 function revisarCambiosPendientes() {
     const btnSync = document.getElementById('btn-sync-global');
     if (!btnSync) return;
 
     let hayCambios = false;
 
-    // Revisar la cola de Objetos
+    // Revisar todas las colas de Objetos
     if (Object.keys(objState.colaInventario).length > 0) hayCambios = true;
-    
-    // (En el futuro revisaremos las colas de Stats y Hechizos aquí también)
+    if (Object.values(objState.colaNuevosObjetos).some(o => o.nombre.trim() !== '')) hayCambios = true;
+    if (Object.keys(objState.colaEdicionObjetos).length > 0) hayCambios = true;
 
-    if (hayCambios) {
-        btnSync.classList.remove('oculto');
-    } else {
-        btnSync.classList.add('oculto');
-    }
+    if (hayCambios) btnSync.classList.remove('oculto');
+    else btnSync.classList.add('oculto');
 }
 
-// 🌟 EL GRAN BOTÓN DE GUARDADO
+// 🌟 EL GRAN BOTÓN DE GUARDADO (Ahora procesa Forja y Edición)
 window.ejecutarGuardadoGlobal = async () => {
     const btnSync = document.getElementById('btn-sync-global');
-    btnSync.innerText = "⏳ SINCRONIZANDO...";
+    btnSync.innerText = "⏳ SINCRONIZANDO CON LA MATRIZ...";
     btnSync.style.pointerEvents = "none";
 
     try {
-        // --- 1. GUARDADO DE OBJETOS ---
         const invUpserts = [];
-        // Iteramos sobre lo que guardó logic.js en la cola de inventarios
+
+        // 1. Procesar "Forja" (Nuevos Objetos)
+        const nuevosArr = Object.values(objState.colaNuevosObjetos).filter(o => o.nombre.trim() !== '');
+        for (const obj of nuevosArr) {
+            await db.objetos.upsertObjeto({ nombre: obj.nombre, tipo: obj.tipo, material: obj.mat, rareza: obj.rar, efecto: obj.eff });
+            if (obj.cant > 0) invUpserts.push({ personaje_nombre: pjSeleccionado, objeto_nombre: obj.nombre, cantidad: obj.cant });
+        }
+
+        // 2. Procesar "Ediciones"
+        for (const oldName in objState.colaEdicionObjetos) {
+            const dataEdit = objState.colaEdicionObjetos[oldName];
+            if (oldName !== dataEdit.nombre) {
+                // Si le cambió el nombre, la base de datos tratará al nuevo nombre como objeto diferente
+                // Podríamos eliminar el viejo, pero para evitar bugs en inventarios de otros, 
+                // por ahora solo crearemos el nuevo. La lógica avanzada de renombrado requiere backend.
+            }
+            await db.objetos.upsertObjeto({ nombre: dataEdit.nombre, tipo: dataEdit.tipo, material: dataEdit.mat, rareza: dataEdit.rar, efecto: dataEdit.eff });
+        }
+
+        // 3. Procesar "Inventarios (+/-)"
         for (const pj in objState.colaInventario) {
             for (const obj in objState.colaInventario[pj]) {
-                const cantidad = objState.colaInventario[pj][obj];
-                invUpserts.push({ personaje_nombre: pj, objeto_nombre: obj, cantidad: cantidad });
+                invUpserts.push({ personaje_nombre: pj, objeto_nombre: obj, cantidad: objState.colaInventario[pj][obj] });
             }
         }
         
-        // Enviar en batch a la base de datos (usando las funciones unificadas de db.js)
-        if (invUpserts.length > 0) {
-            await db.objetos.sincronizarBatch(invUpserts);
-            // Limpiamos la cola una vez guardado
-            objState.colaInventario = {}; 
-        }
+        // Enviar Inventario Final
+        if (invUpserts.length > 0) await db.objetos.sincronizarBatch(invUpserts);
 
-        // --- 2. GUARDADO DE ESTADÍSTICAS (Próximamente) ---
-        // --- 3. GUARDADO DE HECHIZOS (Próximamente) ---
+        // Limpieza de colas
+        objState.colaInventario = {}; 
+        objState.colaNuevosObjetos = {};
+        objState.colaEdicionObjetos = {};
 
-        // Todo salió bien
         btnSync.innerText = "✅ CAMBIOS APLICADOS";
         btnSync.style.background = "#004a00";
         btnSync.style.borderColor = "#00ff00";
         btnSync.style.color = "white";
 
         setTimeout(() => {
-            btnSync.classList.add('oculto');
-            // Restaurar estilos base del botón
-            btnSync.style.background = "linear-gradient(135deg, #b8860b 0%, #d4af37 100%)";
-            btnSync.style.borderColor = "#fff";
-            btnSync.style.color = "#000";
-            btnSync.style.pointerEvents = "auto";
-            btnSync.innerText = "🔥 GUARDAR TODO AL SERVIDOR 🔥";
-            
-            // Recargar la página limpia tras 1 segundo
             window.location.reload(); 
-        }, 1500);
+        }, 1000);
 
     } catch (e) {
         console.error("Error guardando:", e);
