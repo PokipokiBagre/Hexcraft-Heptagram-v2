@@ -103,6 +103,20 @@ const getVal = (v) => {
     return s;
 };
 
+// Busca el primer valor no-vacío entre múltiples claves posibles del objeto
+const getValKeys = (obj, keys) => {
+    if (!obj) return '';
+    const actualKeys = Object.keys(obj);
+    for (const pk of keys) {
+        const matched = actualKeys.find(k => k.trim().toLowerCase() === pk.toLowerCase());
+        if (matched) {
+            const val = getVal(obj[matched]);
+            if (val) return val;
+        }
+    }
+    return '';
+};
+
 export function calcularConjurosMasivos(pjNombre) {
     let totalCost = 0;
     let logsArr = [];
@@ -128,9 +142,9 @@ export function calcularConjurosMasivos(pjNombre) {
 
             const nc = dado * afin;
             
-            // Extracción directa de variables, como en el script público
-            let efeToPrint = getVal(hechizo.Efecto_desc || hechizo.Efecto || hechizo.efecto || hechizo.Desc || hechizo.desc);
-            const outcastProp = getVal(hechizo.Efecto_overcast || hechizo.Overcast || hechizo.overcast);
+            // Extracción usando claves reales de la DB
+            let efeToPrint = getValKeys(hechizo, ['efecto_desc', 'efecto', 'desc', 'descripcion']);
+            const outcastProp = getValKeys(hechizo, ['overcast 100%', 'overcast', 'efecto_overcast']);
 
             let outcome = "";
 
