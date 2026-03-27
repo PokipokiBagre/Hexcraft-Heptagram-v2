@@ -38,7 +38,6 @@ export function modPjStat(pjNombre, campoRaiz, subCampo, variacion, allowNegativ
     if (!stState.colaStats[pjKey]) stState.colaStats[pjKey] = {};
     stState.colaStats[pjKey][flatKey] = nuevoValor;
 
-    // 🌟 VÍNCULO MÁGICO: Si sube el Límite Rojo, sube la Vida Roja automáticamente
     if (campoRaiz === 'baseVidaRojaMax' && variacion !== 0) {
         const vidaActual = getPjStat(pjNombre, 'vidaRojaActual');
         stState.colaStats[pjKey]['vidaRojaActual'] = Math.max(0, vidaActual + variacion);
@@ -60,25 +59,19 @@ export function setPjStat(pjNombre, campoRaiz, subCampo, valor, reRender = true)
     else window.dispatchEvent(new Event('devDataChanged'));
 }
 
-// 🌟 LÓGICA CORREGIDA DE ASISTENCIA
+// 🌟 REGLA DE ASISTENCIA: Vuelve a 1 y otorga +1000 Extra 🌟
 export function darAsistencia(pjNombre) {
     const asistActual = getPjStat(pjNombre, 'asistencia');
     let nuevaAsist = asistActual + 1;
     let hexBono = 300;
-    let logMsg = `<${pjNombre} | Asistencia | +300 HEX`;
 
     if (nuevaAsist >= 8) {
         nuevaAsist = 1;
         hexBono += 1000;
-        logMsg += ` | +1000 HEX (Bono 7 Días)`;
     }
-    logMsg += `>\n`;
 
     setPjStat(pjNombre, 'asistencia', null, nuevaAsist, false);
-    modPjStat(pjNombre, 'hex', null, hexBono, false, true); // True al final para re-renderizar
-    
-    stState.logAsistencia += logMsg;
-    window.dispatchEvent(new Event('devUIUpdate'));
+    modPjStat(pjNombre, 'hex', null, hexBono, false, true); 
 }
 
 export function limpiarLogAsistencia() {
@@ -91,6 +84,12 @@ function getTotalAfinidad(pj, af) {
            getPjStat(pj, 'hechizos', af) +
            getPjStat(pj, 'hechizosEfecto', af) +
            getPjStat(pj, 'buffs', af);
+}
+
+// 🌟 VEX CALCULADO DE SOLO LECTURA 🌟
+export function getVexMax(pjNombre) {
+    const calcOscT = getTotalAfinidad(pjNombre, 'oscura');
+    return Math.floor((calcOscT * 75) / 50) * 50; 
 }
 
 export function recalcularCorazones(pjNombre) {
