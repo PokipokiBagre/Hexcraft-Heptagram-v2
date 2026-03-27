@@ -53,11 +53,11 @@ export function actualizarLogGlobal() {
         }
     }
 
-    // --- 2. Estadísticas con Formato Elegante ---
+    // --- 2. Estadísticas ---
     const nomLegibles = {
         'hex': 'HEX', 'asistencia': 'Asistencia', 'vidaRojaActual': 'Vida Roja',
         'baseVidaRojaMax': 'Límite Rojo', 'baseVidaAzul': 'Corazones Azules', 'baseGuardaDorada': 'Guarda Dorada',
-        'baseDanoRojo': 'Daño Rojo', 'baseDanoAzul': 'Daño Azul', 'baseElimDorada': 'Eliminación Dorada'
+        'baseDanoRojo': 'Daño Rojo', 'baseDanoAzul': 'Daño Azul', 'baseElimDorada': 'Elim. Dorada'
     };
 
     for (const pjKey in stState.colaStats) {
@@ -88,7 +88,6 @@ export function actualizarLogGlobal() {
                         const eName = eDef ? eDef.nombre : parts[1];
                         logPorPJ[realPj].push(`${eName} ${sign}${delta} (${cantNueva})`);
                     } else if (flatKey === 'vidaRojaActual' || flatKey === 'baseVidaRojaMax') {
-                        // Mostramos el formato 20/20 sumando las auras y los buffs
                         let maxBase = (flatKey === 'baseVidaRojaMax' ? cantNueva : (dbPj.baseVidaRojaMax||0) + (cambios['baseVidaRojaMax'] !== undefined ? cambios['baseVidaRojaMax'] - (dbPj.baseVidaRojaMax||0) : 0));
                         let extra = (dbPj.buffs?.vidaRojaMaxExtra||0) + (dbPj.hechizosEfecto?.vidaRojaMaxExtra||0) + (dbPj.hechizos?.vidaRojaMaxExtra||0);
                         let finalMax = maxBase + extra;
