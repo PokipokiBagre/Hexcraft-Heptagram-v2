@@ -10,6 +10,8 @@ import { initObjetosDev } from './objetos/panel-objetos-logic.js';
 import { renderColumnaObjetos } from './objetos/panel-objetos-ui.js';
 import { initStatsDev } from './estadisticas/panel-stats-logic.js';
 import { renderColumnaStats } from './estadisticas/panel-stats-ui.js';
+import { initHechizosDev } from './hechizos/panel-hechizos-logic.js';
+import { renderColumnaHechizos } from './hechizos/panel-hechizos-ui.js';
 
 window.cambiarFiltroRol = cambiarFiltroRol;
 window.filtrarPorNombre = filtrarPorNombre;
@@ -32,12 +34,14 @@ window.onload = async () => {
     }
 
     try {
-        // EXTRACCIÓN PURA DE SUPABASE
-        const [{data: personajesBD}, catalogoObj, invObj, estadosArr] = await Promise.all([
+        // EXTRACCIÓN PURA DE SUPABASE (Incluye Hechizos)
+        const [{data: personajesBD}, catalogoObj, invObj, estadosArr, {data: catalogoHz}, {data: invHz}] = await Promise.all([
             supabase.from('personajes').select('*'),
             db.objetos.getCatalogo(),
             db.objetos.getInventarioCompleto(),
-            db.estadosConfig.getAll()
+            db.estadosConfig.getAll(),
+            supabase.from('hechizos').select('*'), 
+            supabase.from('personajes_hechizos').select('*') 
         ]);
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
@@ -51,7 +55,7 @@ window.onload = async () => {
                 hex: Number(p.hex) || 0,
                 asistencia: Number(p.asistencia) || 1,
                 
-                // Stats de Vida y Daño (Nombres de DB arreglados)
+                // Stats de Vida y Daño
                 vidaRojaActual: Number(p.vida_roja_actual) || 0,
                 baseVidaRojaMax: Number(p.base_vida_roja_max) || 0,
                 baseVidaAzul: Number(p.base_vida_azul) || 0,
@@ -79,7 +83,6 @@ window.onload = async () => {
                 
                 estados: p.estados || {},
                 iconoOverride: p.icono_override || '',
-                // Leemos hz_* desde personajes (pre-calculado), igual que stats-data.js
                 hechizos: {
                     fisica:            Number(p.hz_fisica)          || 0,
                     energetica:        Number(p.hz_energetica)      || 0,
@@ -103,6 +106,7 @@ window.onload = async () => {
 
         initObjetosDev(catalogoObj, invObj);
         initStatsDev(statsGlobalMock, estadosListMock);
+        initHechizosDev(catalogoHz, invHz); 
 
         document.getElementById('pantalla-carga').classList.add('oculto');
         document.getElementById('interfaz-master').classList.remove('oculto');
@@ -113,6 +117,7 @@ window.onload = async () => {
             if (devState.pjSeleccionado) {
                 renderColumnaObjetos(devState.pjSeleccionado);
                 renderColumnaStats(devState.pjSeleccionado);
+                renderColumnaHechizos(devState.pjSeleccionado); 
             }
             revisarCambiosPendientes();
             actualizarLogGlobal();
@@ -193,9 +198,7 @@ function seleccionarPersonajeDev(nombre) {
     
     renderColumnaObjetos(devState.pjSeleccionado);
     renderColumnaStats(devState.pjSeleccionado);
-    
-    const colSpells = document.getElementById('content-spells');
-    if (colSpells) colSpells.innerHTML = `<div style="color:#666; text-align:center; padding:20px; font-style:italic;">[Módulo Hechizos Pendiente...]</div>`;
+    renderColumnaHechizos(devState.pjSeleccionado); 
 }
 
 function copiarLogGlobal() {
