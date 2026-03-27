@@ -5,20 +5,20 @@
 export const STORAGE_URL = 'https://gkscqurkpyteusqyspsu.supabase.co/storage/v1/object/public/imagenes-hex';
 
 export const objState = {
-    // Datos originales descargados de la BD
     catalogoDB: [], 
     inventariosDB: {}, 
     
     // Estado de la Interfaz
-    vistaActiva: 'inventario', // Opciones: 'inventario', 'forja', 'editar'
+    vistaActiva: 'inventario', // 'inventario', 'forja', 'editar'
     busqueda: "",
+    busquedaEdit: "", // Búsqueda separada para la pestaña Editar
     formulariosCreacion: 1, 
-    objAEditarSeleccionado: "", // Guarda el nombre del objeto que estamos editando
+    objAEditarSeleccionado: "", 
     
     // 🔥 LAS COLAS DE CAMBIOS (Staging) 🔥
-    colaInventario: {},    // { "NombrePJ": { "NombreObjeto": NuevaCantidadFinal } }
-    colaNuevosObjetos: {}, // { "0": { nombre, cant, tipo, mat, rar, eff } }
-    colaEdicionObjetos: {} // { "NombreOriginal": { nombreNuevo, tipo, mat, rar, eff } }
+    colaInventario: {},    
+    colaNuevosObjetos: {}, 
+    colaEdicionObjetos: {} 
 };
 
 export const TIPOS_OBJ = ["Arma", "Armadura", "Accesorio", "Consumible", "Material", "Misión", "Otro"];
