@@ -22,6 +22,7 @@ export function revisarCambiosPendientes() {
     if (Object.keys(stState.colaEstadosConfig).length > 0) hayCambios = true;
     if (stState.colaBorrarEstados.length > 0) hayCambios = true;
     if (Object.keys(hzState.colaAsignaciones).length > 0) hayCambios = true; 
+    if (Object.keys(hzState.colaVisibilidad).length > 0) hayCambios = true; // NUEVO
 
     if (hayCambios) btnSync.classList.remove('oculto');
     else btnSync.classList.add('oculto');
@@ -55,7 +56,6 @@ export function actualizarLogGlobal() {
     }
 
     // --- 2. Estadísticas ---
-
     const nomLegibles = {
         'hex':              'HEX',
         'asistencia':       'Asistencia',
@@ -308,18 +308,25 @@ export async function ejecutarGuardadoGlobal() {
             deletePromises.push(supabase.from('estados_config').delete().in('id', stState.colaBorrarEstados));
         }
 
-        // --- HECHIZOS ---
+        // --- HECHIZOS (INVENTARIO) ---
         for (const pjKey in hzState.colaAsignaciones) {
             const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey)?.nombre || pjKey;
             for (const hzId in hzState.colaAsignaciones[pjKey]) {
                 const agregar = hzState.colaAsignaciones[pjKey][hzId];
                 if (agregar) hzUpserts.push({ personaje_nombre: realPj, hechizo_id: hzId });
-                else deletePromises.push(supabase.from('inventario_hechizos').delete().eq('personaje_nombre', realPj).eq('hechizo_id', hzId)); // ¡Corregido a inventario_hechizos!
+                else deletePromises.push(supabase.from('inventario_hechizos').delete().eq('personaje_nombre', realPj).eq('hechizo_id', hzId)); 
             }
+        }
+        
+        // --- HECHIZOS (VISIBILIDAD GLOBAL) ---
+        const visPromises = [];
+        for (const hzId in hzState.colaVisibilidad) {
+            visPromises.push(supabase.from('hechizos_nodos').update({ es_conocido: hzState.colaVisibilidad[hzId] }).eq('hechizo_id', hzId));
         }
 
         // 🔥 LANZAMIENTO A SUPABASE 🔥
         if (deletePromises.length > 0) await Promise.all(deletePromises);
+        if (visPromises.length > 0) await Promise.all(visPromises); // Se actualizan los estados globales de los nodos
 
         if (catalogUpserts.length > 0) {
             const { error: errCat } = await supabase.from('objetos').upsert(catalogUpserts, { onConflict: 'nombre' });
@@ -338,7 +345,7 @@ export async function ejecutarGuardadoGlobal() {
             if (errEst) throw new Error("Estados: " + errEst.message);
         }
         if (hzUpserts.length > 0) {
-            const { error: errHz } = await supabase.from('inventario_hechizos').upsert(hzUpserts, { onConflict: 'personaje_nombre,hechizo_id' }); // ¡Corregido a inventario_hechizos!
+            const { error: errHz } = await supabase.from('inventario_hechizos').upsert(hzUpserts, { onConflict: 'personaje_nombre,hechizo_id' }); 
             if (errHz) throw new Error("Hechizos: " + errHz.message);
         }
 
