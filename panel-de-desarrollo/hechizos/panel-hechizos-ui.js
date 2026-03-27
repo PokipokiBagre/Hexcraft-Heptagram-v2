@@ -122,7 +122,7 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     const costo = parseInt(hechizo.HEX || hechizo.Hex || hechizo.costo || hechizo.Costo || 0) || 0;
     const efecto = hechizo.Efecto || hechizo.efecto_desc || hechizo.efecto || '-';
     
-    const dbConocido = hechizo.es_conocido !== false && hechizo.es_conocido !== "FALSE" && hechizo.es_conocido !== 0 && hechizo.es_conocido !== "0";
+    const dbConocido = hechizo.es_conocido === true || hechizo.es_conocido === "TRUE" || hechizo.es_conocido === 1 || hechizo.es_conocido === "1";
     const isKnown = hzState.colaVisibilidad[hId] !== undefined ? hzState.colaVisibilidad[hId] : dbConocido;
     const isHidden = !isKnown;
 
