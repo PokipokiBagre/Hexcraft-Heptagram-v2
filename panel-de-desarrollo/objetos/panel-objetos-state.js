@@ -7,6 +7,7 @@ export const STORAGE_URL = 'https://gkscqurkpyteusqyspsu.supabase.co/storage/v1/
 export const objState = {
     catalogoDB: [], 
     inventariosDB: {}, 
+    equipadosDB: {}, // 🌟 NUEVO: Estado guardado de equipación
     
     // Estado de la Interfaz
     vistaActiva: 'inventario', // 'inventario', 'catalogo', 'forja', 'editar'
@@ -18,6 +19,7 @@ export const objState = {
     
     // 🔥 LAS COLAS DE CAMBIOS (Staging) 🔥
     colaInventario: {},    
+    colaEquipados: {}, // 🌟 NUEVO: Cola de cambios de equipación
     colaNuevosObjetos: {}, 
     colaEdicionObjetos: {} 
 };
