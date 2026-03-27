@@ -100,6 +100,8 @@ export function calcularConjurosMasivos(pjNombre) {
     let logsArr = [];
     let validSpells = 0;
 
+    const isValidEfe = (v) => v !== undefined && v !== null && v !== "0" && v !== 0 && String(v).trim() !== "" && String(v).trim().toLowerCase() !== "null" && String(v).trim() !== "-";
+
     for (let i = 0; i < hzState.casteoManual.numFilas; i++) {
         const fila = hzState.casteoManual.filas[i];
         if (!fila.nombre || fila.nombre.trim() === '') continue;
@@ -120,8 +122,8 @@ export function calcularConjurosMasivos(pjNombre) {
 
             const nc = dado * afin;
             let outcome = "";
-            let efeToPrint = hechizo.Efecto || hechizo.efecto_desc || hechizo.efecto || '';
-            const outcastProp = hechizo.Overcast || hechizo.overcast || hechizo.Overcast_desc || '';
+            let efeToPrint = [hechizo.Efecto, hechizo.efecto_desc, hechizo.efecto].find(isValidEfe) || '';
+            const outcastProp = [hechizo.Overcast, hechizo.overcast, hechizo.Overcast_desc, hechizo.overcast_desc].find(isValidEfe) || '';
 
             if (nc < costoU) {
                 outcome = "❌ FALLO";
