@@ -89,7 +89,8 @@ export function copiarPrimerDado() {
         const el = document.getElementById(`dev-dado-${i}`);
         if (el) el.value = dado;
     }
-    navigator.clipboard.writeText(`!r 1d20 + ${fila.afinidad || 0} // ${fila.nombre || '?'}`).then(() => alert(`Dado ${dado} copiado a todas las filas.`));
+    // ✅ FIX: Ahora copia !r 1d100
+    navigator.clipboard.writeText(`!r 1d100 + ${fila.afinidad || 0} // ${fila.nombre || '?'}`).then(() => alert(`Dado ${dado} copiado a todas las filas.`));
 }
 
 export function calcularConjurosMasivos(pjNombre) {
@@ -145,9 +146,10 @@ export function calcularConjurosMasivos(pjNombre) {
         const vexUsado = hzState.vexGastadoPorPj[pjNombre] || 0;
         const vexDisponible = Math.max(0, vexMax - vexUsado);
 
+        // ✅ FIX: Reemplazado "Cobro Casteo" por "Hexcast"
         if (vexDisponible >= totalCost) {
             hzState.vexGastadoPorPj[pjNombre] = vexUsado + totalCost;
-            stringCobro = `Cobro Casteo | -${totalCost} Vex`;
+            stringCobro = `Hexcast | -${totalCost} Vex`;
         } else {
             const hexAFacturar = totalCost - vexDisponible;
             hzState.vexGastadoPorPj[pjNombre] = vexMax; 
@@ -155,7 +157,7 @@ export function calcularConjurosMasivos(pjNombre) {
             
             const hexActual = getPjStat(pjNombre, 'hex'); 
             const textoVex = vexDisponible > 0 ? `-${vexDisponible} Vex y ` : '';
-            stringCobro = `Cobro Casteo | ${textoVex}-${hexAFacturar} Hex (${hexActual})`;
+            stringCobro = `Hexcast | ${textoVex}-${hexAFacturar} Hex (${hexActual})`;
         }
     }
 
@@ -170,12 +172,15 @@ export function calcularConjurosMasivos(pjNombre) {
 export function asignarHechizo(pjNombre, hechizoId) {
     const pjKey = norm(pjNombre);
     const idNorm = norm(hechizoId);
+    
     if (!hzState.colaAsignaciones[pjKey]) hzState.colaAsignaciones[pjKey] = {};
     
-    const yaLoTiene = hzState.colaAsignaciones[pjKey][idNorm] ?? (hzState.inventariosDB[pjKey] || []).includes(idNorm);
+    // ✅ FIX: Validamos usando la ID normalizada, pero GUARDAMOS la hechizoId REAL en la cola 
+    // para que Supabase reciba el texto exacto (ej. DESTEJER en lugar de destejer).
+    const yaLoTiene = hzState.colaAsignaciones[pjKey][hechizoId] ?? (hzState.inventariosDB[pjKey] || []).includes(idNorm);
     const accionDar = !yaLoTiene;
     
-    hzState.colaAsignaciones[pjKey][idNorm] = accionDar;
+    hzState.colaAsignaciones[pjKey][hechizoId] = accionDar;
 
     const hechizo = hzState.catalogoDB.find(h => norm(h.ID || h.id) === idNorm);
     const costo = parseInt(hechizo ? (hechizo.HEX || hechizo.Hex || hechizo.costo || hechizo.Costo || 0) : 0) || 0;
@@ -199,7 +204,6 @@ export function toggleVisibilidad(hechizoId) {
     const dbHech = hzState.catalogoDB.find(h => (h.ID || h.id) === hechizoId);
     if (!dbHech) return;
 
-    // ✅ FIX BUG 2: Validamos "Conocido" usando la misma lógica que la UI
     const isPublicBase = dbHech.Conocido && dbHech.Conocido.toString().trim().toLowerCase() === 'si';
 
     if (currentQ !== undefined) {
