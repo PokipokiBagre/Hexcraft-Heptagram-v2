@@ -287,8 +287,8 @@ export function renderColumnaHechizos(pjSeleccionado) {
                 </div>
             </div>
             <div style="display:flex; justify-content:center; gap:10px;">
-                <label style="color:#ddd; cursor:pointer; font-size:0.9em;"><input type="checkbox" onchange="window.devToggleConfigHz('cobrarAuto', this.checked)" ${hzState.cobrarAuto ? 'checked' : ''}> Cobrar Hex</label>
-                <label style="color:#ddd; cursor:pointer; font-size:0.9em;"><input type="checkbox" onchange="window.devToggleConfigHz('mostrarEfectos', this.checked)" ${hzState.mostrarEfectos ? 'checked' : ''}> Imprimir Efectos</label>
+                <button onclick="window.devToggleConfigHz('cobrarAuto', !${hzState.cobrarAuto}); window.dispatchEvent(new Event('devUIUpdate'));" style="padding:7px 14px; border-radius:6px; cursor:pointer; font-weight:bold; font-family:'Rajdhani'; font-size:0.9em; border:2px solid ${hzState.cobrarAuto ? '#d4af37' : '#444'}; background:${hzState.cobrarAuto ? 'rgba(212,175,55,0.15)' : '#111'}; color:${hzState.cobrarAuto ? '#d4af37' : '#666'}; transition:0.2s;">${hzState.cobrarAuto ? '✅' : '☐'} Cobrar Hex</button>
+                <button onclick="window.devToggleConfigHz('mostrarEfectos', !${hzState.mostrarEfectos}); window.dispatchEvent(new Event('devUIUpdate'));" style="padding:7px 14px; border-radius:6px; cursor:pointer; font-weight:bold; font-family:'Rajdhani'; font-size:0.9em; border:2px solid ${hzState.mostrarEfectos ? '#00e5ff' : '#444'}; background:${hzState.mostrarEfectos ? 'rgba(0,229,255,0.1)' : '#111'}; color:${hzState.mostrarEfectos ? '#00e5ff' : '#666'}; transition:0.2s;">${hzState.mostrarEfectos ? '✅' : '☐'} Imprimir Efectos</button>
             </div>
         </div>
 
@@ -348,11 +348,8 @@ export function renderColumnaHechizos(pjSeleccionado) {
 
     } else {
         html += `
-        <div style="background:#001a00; border:1px solid #00ff00; border-radius:6px; padding:10px; margin-bottom:15px; text-align:center; font-size:0.85em;">
-            <label style="color:#ddd; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
-                <input type="checkbox" onchange="window.devToggleConfigHz('cobrarAlAsignar', this.checked)" ${hzState.cobrarAlAsignar ? 'checked' : ''}> 
-                <span style="font-weight:bold; color:#00ff00;">Cobrar HEX automáticamente al Enseñar</span>
-            </label>
+        <div style="margin-bottom:15px;">
+            <button onclick="window.devToggleConfigHz('cobrarAlAsignar', !${hzState.cobrarAlAsignar}); window.dispatchEvent(new Event('devUIUpdate'));" style="width:100%; padding:10px; border-radius:6px; cursor:pointer; font-weight:bold; font-family:'Cinzel'; font-size:0.9em; border:2px solid ${hzState.cobrarAlAsignar ? '#00ff00' : '#444'}; background:${hzState.cobrarAlAsignar ? 'rgba(0,255,0,0.08)' : '#111'}; color:${hzState.cobrarAlAsignar ? '#00ff00' : '#666'}; transition:0.2s;">${hzState.cobrarAlAsignar ? '✅' : '☐'} Cobrar HEX automáticamente al Enseñar</button>
         </div>
 
         <input type="text" id="dev-search-hz-asig" placeholder="🔍 Buscar nombre o afinidad..." value="${hzState.busquedaAsignar}" oninput="window.devBusquedaHz(this.value)" style="width:100%; box-sizing:border-box; background:#000; color:#00ff00; border:1px solid #00ff00; padding:10px; border-radius:6px; margin-bottom:15px; font-family:'Rajdhani'; outline:none;">`;
