@@ -13,7 +13,8 @@ export function initHechizosDev(catalogo, inventarios_pj) {
     // Failsafe absoluto para que jamás lance "Cannot read properties of undefined"
     (inventarios_pj || []).forEach(item => {
         const pj = norm(item.personaje_nombre || item.Personaje || ""); 
-        const hzId = norm(item.hechizo_id || item.Hechizo || item.ID || item.id);
+        // 🔥 CORRECCIÓN: Priorizamos la columna hechizo_nombre
+        const hzId = norm(item.hechizo_nombre || item.hechizo_id || item.Hechizo || item.ID || item.id);
         
         if (!pj || !hzId) return;
         if (!hzState.inventariosDB[pj]) hzState.inventariosDB[pj] = [];
