@@ -139,7 +139,8 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
         : `<button onclick="window.devAsignarHz('${pjNombre.replace(/'/g, "\\'")}', '${hId}')" style="width:100%; background:rgba(0,255,0,0.05); color:#44ff44; border:1px solid rgba(0,255,0,0.3); border-radius:4px; padding:6px; cursor:pointer; font-weight:bold; font-family:'Cinzel'; transition:0.2s;">➕ ENSEÑAR</button>`;
 
     const btnVisibilidad = `<button onclick="window.devToggleVisibilidadHz('${hId}')" style="background:#111; color:#aaa; border:1px solid #555; border-radius:4px; padding:6px; cursor:pointer; font-size:0.8em; white-space:nowrap;">${isKnown ? '👁️ Ocultar Globalmente' : '🙈 Hacer Público'}</button>`;
-
+    if (hNom === 'HEX') console.log('es_conocido de HEX:', hechizo.es_conocido, typeof hechizo.es_conocido);
+    
     return `
     <div style="background:#0a0a0a; ${cardStyle} border-radius:8px; padding:10px; margin-bottom:10px; display:flex; flex-direction:column; gap:8px; opacity: ${isHidden ? '0.7' : '1'}; transition:0.3s;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
