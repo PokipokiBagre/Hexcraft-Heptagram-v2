@@ -30,7 +30,6 @@
             evolución del sistema en tiempo real.
         </section>
 
-        <!-- ══════════ SISTEMAS ══════════ -->
         <h2 style="margin-top: 40px; margin-bottom: 20px;">Sistemas</h2>
         <div class="main-grid">
             <a href="objetos/index.html" class="grid-item">
@@ -59,11 +58,15 @@
             </a>
             <a href="region/index.html" class="grid-item">
                 <img data-img="region.png" alt="Region">
-                <span>MAPA</span>
-            </a>            
+                <span>MAPA REGIONAL</span>
+            </a>
+            
+            <a href="panel-de-desarrollo/index.html" class="grid-item" id="btn-panel-dev" style="display: none; border-color: #ff00ff; box-shadow: inset 0 0 15px rgba(255,0,255,0.2);">
+                <img data-img="panel-dev.png" alt="Panel de Desarrollo" style="border-color: #ff00ff;">
+                <span style="color: #ffaaff; text-shadow: 0 0 10px rgba(255,0,255,0.8);">PANEL MÁSTER</span>
+            </a>
         </div>
 
-        <!-- ══════════ DASHBOARD ══════════ -->
         <h2 style="margin-top:40px; margin-bottom:15px;">Estado Actual</h2>
         <div id="dashboard" class="dashboard-grid">
             <div class="dash-card" style="grid-column: 1/-1; text-align:center; color:#555; font-family:sans-serif; padding:30px;">
@@ -94,11 +97,20 @@
         const favicon = document.getElementById("dynamic-favicon");
         if (favicon) favicon.href = db.storage.getUrlInterfaz('icon.png');
 
+        // 1. Inicializamos la autenticación
         await hexAuth.init();
 
+        // 2. Mostramos el estado de la sesión (Badge)
         const badge = document.getElementById('hex-session-badge');
         if (badge) badge.innerHTML = hexAuth.renderStatusBadge();
 
+        // 🌟 3. LÓGICA DE SEGURIDAD: Mostramos el Panel de Desarrollo SOLO si es MÁSTER (Admin)
+        if (hexAuth.esAdmin()) {
+            const btnDev = document.getElementById('btn-panel-dev');
+            if (btnDev) btnDev.style.display = 'flex'; // Se usa flex porque así está definido el .grid-item en el CSS
+        }
+
+        // 4. Cargar el resto del contenido
         cargarImagenesNube();
         await cargarDashboard();
     }
@@ -180,7 +192,6 @@
             }).join('') || '<div style="color:#555;font-size:0.85em;font-style:italic;text-align:center;padding:10px;">No hay misiones activas</div>';
 
             dash.innerHTML = `
-            <!-- Fila de stats rápidos -->
             <div class="dash-stat-row">
                 <div class="dash-stat">
                     <div class="dash-stat-num" style="color:#d4af37;">${jugadores.length}</div>
@@ -208,7 +219,6 @@
                 </div>
             </div>
 
-            <!-- Party -->
             <div class="dash-card">
                 <div class="dash-card-title">⚔️ Party Activa</div>
                 <div class="dash-party-grid">
@@ -217,7 +227,6 @@
                 <a href="estadisticas/index.html" class="dash-link">Ver todos →</a>
             </div>
 
-            <!-- Misiones activas -->
             <div class="dash-card">
                 <div class="dash-card-title">📜 Misiones en Curso</div>
                 <div style="display:flex;gap:15px;margin-bottom:12px;">
