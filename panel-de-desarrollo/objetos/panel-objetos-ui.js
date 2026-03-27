@@ -3,7 +3,7 @@
 // ============================================================
 
 import { objState, STORAGE_URL, TIPOS_OBJ, RAREZAS_OBJ, MATERIALES_OBJ } from './panel-objetos-state.js';
-import { getCantidadActual, modificarCantidad, actualizarFormularioNuevo, setCantidadFormularios, setBusquedaObjeto, cambiarVistaObjetos, seleccionarObjetoParaEditar, modificarObjetoEdicion } from './panel-objetos-logic.js';
+import { getCantidadActual, modificarCantidad, actualizarFormularioNuevo, setCantidadFormularios, setBusquedaObjeto, cambiarVistaObjetos, seleccionarObjetoParaEditar, modificarObjetoEdicion, isEquipado, toggleEquipacion } from './panel-objetos-logic.js';
 
 window.devModObjeto = modificarCantidad;
 window.devModFormObj = actualizarFormularioNuevo;
@@ -12,6 +12,7 @@ window.devBusquedaObj = setBusquedaObjeto;
 window.devSetVistaObj = cambiarVistaObjetos;
 window.devSeleccionarObjEdit = seleccionarObjetoParaEditar;
 window.devModFormEdit = modificarObjetoEdicion;
+window.devToggleEqp = toggleEquipacion; // 🌟 NUEVO BOTON
 
 const norm = (str) => str.toString().trim().toLowerCase()
     .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
@@ -43,34 +44,43 @@ function generarTarjetaObjeto(objNombre, pjSeleccionado, colorBordeDestacado = '
     const imgError = `this.onerror=null; this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png'`;
     
     const modificado = (objState.colaInventario[pjSeleccionado.toLowerCase()] && objState.colaInventario[pjSeleccionado.toLowerCase()][objNombre] !== undefined);
-    const borderGlow = modificado ? `border-color:${colorBordeDestacado}; box-shadow:0 0 8px ${colorBordeDestacado}55;` : 'border-color:#333;';
+    
+    // 🌟 ESTILOS DE EQUIPACIÓN
+    const eqp = isEquipado(pjSeleccionado, objNombre);
+    const btnEqpText = eqp ? 'Dsqp.' : 'Eqp.';
+    const btnEqpStyle = eqp ? 'background:var(--gold); color:#000;' : 'background:#222; color:#888; border: 1px solid #444;';
+    const btnEqpShadow = eqp ? 'box-shadow: 0 0 10px rgba(212, 175, 55, 0.4);' : '';
+    
+    const borderGlow = modificado ? `border-color:${colorBordeDestacado}; box-shadow:0 0 8px ${colorBordeDestacado}55;` : (eqp ? 'border-color:var(--gold);' : 'border-color:#333;');
 
-    // Recuperamos el efecto de la Base de Datos o de la cola de edición si lo estás modificando
     const dbObj = objState.catalogoDB.find(o => o.nombre === objNombre);
     const editObj = objState.colaEdicionObjetos[objNombre];
     const efecto = editObj ? editObj.eff : (dbObj ? dbObj.efecto : '');
     const efectoStr = efecto ? efecto.replace(/"/g, '&quot;') : 'Sin efecto detallado';
 
     return `
-    <div style="background:#050505; border:1px solid; ${borderGlow} border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:8px;">
+    <div style="background:#050505; border:1px solid; ${borderGlow} border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:8px; transition:0.2s;">
         <div style="display:flex; align-items:center; gap:10px;">
-            <img src="${imgPath}" onerror="${imgError}" style="width:40px; height:40px; border-radius:4px; border:1px solid #444; object-fit:cover;">
+            <img src="${imgPath}" onerror="${imgError}" style="width:40px; height:40px; border-radius:4px; border:1px solid ${eqp ? 'var(--gold)' : '#444'}; object-fit:cover;">
             <div style="flex:1; line-height:1.2; overflow:hidden;">
-                <div style="color:#eee; font-weight:bold; font-size:0.95em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${objNombre}">${objNombre}</div>
+                <div style="color:${eqp ? 'var(--gold)' : '#eee'}; font-weight:bold; font-size:0.95em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${objNombre}">${objNombre}</div>
                 <div style="display:flex; gap:10px; align-items:baseline; margin-top:2px;">
-                    <div style="color:var(--gold); font-size:0.8em; font-family:'Cinzel';">Stock: ${cant}</div>
+                    <div style="color:var(--cyan-magic); font-size:0.8em; font-family:'Cinzel';">Stock: ${cant}</div>
                 </div>
                 <div style="color:#888; font-size:0.75em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;" title="${efectoStr}">
                     ${efecto || '<i style="opacity:0.5">Sin efecto detallado</i>'}
                 </div>
             </div>
         </div>
-        <div style="display:flex; justify-content:space-between; gap:2px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:2px;">
             <div style="display:flex; gap:2px;">
                 <button onclick="window.devModObjeto('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}', -20)" style="background:#4a0000; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.75em;">-20</button>
                 <button onclick="window.devModObjeto('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}', -5)" style="background:#660000; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.75em;">-5</button>
                 <button onclick="window.devModObjeto('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}', -1)" style="background:#a00000; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.75em;">-1</button>
             </div>
+            
+            <button onclick="window.devToggleEqp('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}')" style="${btnEqpStyle} ${btnEqpShadow} border-radius:3px; padding:4px 12px; cursor:pointer; font-weight:bold; font-size:0.75em; transition:0.2s;">${btnEqpText}</button>
+            
             <div style="display:flex; gap:2px;">
                 <button onclick="window.devModObjeto('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}', 1)" style="background:#006600; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.75em;">+1</button>
                 <button onclick="window.devModObjeto('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}', 5)" style="background:#00a000; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.75em;">+5</button>
@@ -112,7 +122,9 @@ export function renderColumnaObjetos(pjSeleccionado) {
         const pjKey = pjSeleccionado.toLowerCase();
         const itemsBD = objState.inventariosDB[pjKey] ? Object.keys(objState.inventariosDB[pjKey]) : [];
         const itemsCola = objState.colaInventario[pjKey] ? Object.keys(objState.colaInventario[pjKey]) : [];
-        const setUnico = new Set([...itemsBD, ...itemsCola]);
+        const itemsEqpCola = objState.colaEquipados[pjKey] ? Object.keys(objState.colaEquipados[pjKey]) : [];
+        
+        const setUnico = new Set([...itemsBD, ...itemsCola, ...itemsEqpCola]);
         listaMostrar = Array.from(setUnico).filter(obj => getCantidadActual(pjSeleccionado, obj) > 0);
 
         if (objState.busqueda !== "") {
@@ -122,7 +134,14 @@ export function renderColumnaObjetos(pjSeleccionado) {
         if (listaMostrar.length === 0) {
             html += `<div style="text-align:center; color:#555; padding:10px; font-size:0.9em;">Inventario vacío. Ve a Global para darle objetos.</div>`;
         } else {
-            listaMostrar.forEach(objNombre => {
+            // Ordenamos: Equipados primero, luego alfabético
+            listaMostrar.sort((a,b) => {
+                const eqpA = isEquipado(pjSeleccionado, a);
+                const eqpB = isEquipado(pjSeleccionado, b);
+                if (eqpA && !eqpB) return -1;
+                if (!eqpA && eqpB) return 1;
+                return a.localeCompare(b);
+            }).forEach(objNombre => {
                 html += generarTarjetaObjeto(objNombre, pjSeleccionado, 'var(--cyan-magic)');
             });
         }
