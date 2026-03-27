@@ -7,6 +7,7 @@ import { supabase } from '../hex-auth.js';
 import { devState } from './dev-state.js';
 import { objState } from './objetos/panel-objetos-state.js';
 import { stState } from './estadisticas/panel-stats-state.js';
+import { hzState } from './hechizos/panel-hechizos-state.js'; 
 
 export function revisarCambiosPendientes() {
     const btnSync = document.getElementById('btn-sync-global');
@@ -20,6 +21,7 @@ export function revisarCambiosPendientes() {
     if (Object.keys(stState.colaStats).length > 0) hayCambios = true;
     if (Object.keys(stState.colaEstadosConfig).length > 0) hayCambios = true;
     if (stState.colaBorrarEstados.length > 0) hayCambios = true;
+    if (Object.keys(hzState.colaAsignaciones).length > 0) hayCambios = true; 
 
     if (hayCambios) btnSync.classList.remove('oculto');
     else btnSync.classList.add('oculto');
@@ -54,7 +56,6 @@ export function actualizarLogGlobal() {
 
     // --- 2. Estadísticas ---
 
-    // Nombres legibles para flatKeys simples (campoRaiz sin subCampo)
     const nomLegibles = {
         'hex':              'HEX',
         'asistencia':       'Asistencia',
@@ -67,7 +68,6 @@ export function actualizarLogGlobal() {
         'baseElimDorada':   'Elim. Dorada'
     };
 
-    // Nombres legibles para subCampos (buffs, hechizosEfecto, afinidadesBase)
     const subNomLegibles = {
         'fisica':            'Física',
         'energetica':        'Energética',
@@ -88,15 +88,9 @@ export function actualizarLogGlobal() {
         const cambios = stState.colaStats[pjKey];
         const dbPj = stState.statsDB[pjKey] || {};
 
-        // Detectar reinicio de asistencia ANTES del loop para filtrar HEX correctamente
-        // Usamos el flag explícito __esReinicio que pone darAsistencia() en panel-stats-logic.js
-        // Esto evita falsos negativos cuando el valor previo venía de la cola y no de la BD
         const fueReinicioAsistencia = !!cambios['__esReinicio'];
 
         for (const flatKey in cambios) {
-            // BUG FIX: modPjStat llama setPjStat con subCampo=null cuando no hay subcampo,
-            // generando flatKeys como "baseVidaRojaMax.null" — los ignoramos aquí,
-            // el valor ya viene correctamente como "baseVidaRojaMax" en otro entry.
             if (flatKey.endsWith('.null') || flatKey.startsWith('__')) continue;
 
             const cantNueva = cambios[flatKey];
@@ -114,7 +108,6 @@ export function actualizarLogGlobal() {
                 if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
                 const sign = delta > 0 ? '+' : '';
 
-                // ── ASISTENCIA ──
                 if (campoRaiz === 'asistencia') {
                     if (fueReinicioAsistencia) {
                         logPorPJ[realPj].push(`Asistencia reiniciada (1/7)`);
@@ -125,15 +118,11 @@ export function actualizarLogGlobal() {
                         logPorPJ[realPj].push(`Asistencia ${sign}${delta} (${cantNueva}/7)`);
                     }
                 }
-
-                // ── HEX: omitir si el cambio vino del reinicio de asistencia ──
                 else if (campoRaiz === 'hex') {
                     if (!fueReinicioAsistencia) {
                         logPorPJ[realPj].push(`HEX ${sign}${delta} (${cantNueva})`);
                     }
                 }
-
-                // ── VIDA ROJA (muestra actual/max) ──
                 else if (campoRaiz === 'vidaRojaActual' || campoRaiz === 'baseVidaRojaMax') {
                     const maxBase = campoRaiz === 'baseVidaRojaMax'
                         ? cantNueva
@@ -149,30 +138,20 @@ export function actualizarLogGlobal() {
                             ? cambios['vidaRojaActual'] - (dbPj.vidaRojaActual || 0) : 0);
                     logPorPJ[realPj].push(`${nomLegibles[campoRaiz]} ${sign}${delta} (${finalAct}/${finalMax})`);
                 }
-
-                // ── ESTADOS NUMÉRICOS ──
                 else if (campoRaiz === 'estados' && subCampo) {
                     const eDef = stState.estadosDB.find(e => e.id === subCampo);
                     const eName = eDef ? eDef.nombre : subCampo;
                     logPorPJ[realPj].push(`${eName} ${sign}${delta} (${cantNueva})`);
                 }
-
-                // ── AFINIDADES BASE ──
                 else if (campoRaiz === 'afinidadesBase' && subCampo) {
                     logPorPJ[realPj].push(`Af. Base ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
                 }
-
-                // ── ALTERACIONES (hechizosEfecto / ALT) ──
                 else if (campoRaiz === 'hechizosEfecto' && subCampo) {
                     logPorPJ[realPj].push(`Af. Alt. ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
                 }
-
-                // ── BUFFS / EXTRAS ──
                 else if (campoRaiz === 'buffs' && subCampo) {
                     logPorPJ[realPj].push(`Buff ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
                 }
-
-                // ── RESTO (stats simples con nombre legible o el campoRaiz como fallback) ──
                 else {
                     logPorPJ[realPj].push(`${nomLegibles[campoRaiz] || campoRaiz} ${sign}${delta} (${cantNueva})`);
                 }
@@ -199,6 +178,14 @@ export function actualizarLogGlobal() {
         }
     }
 
+    // --- 3. Registro de Casteos Rápidos de Sesión ---
+    if (hzState.logCasteosSession && hzState.logCasteosSession.length > 0) {
+        logText += `\n--- REGISTRO DE HECHIZOS (SESIÓN) ---\n`;
+        hzState.logCasteosSession.forEach(log => {
+            logText += log + '\n';
+        });
+    }
+
     const textarea = document.getElementById('log-global-textarea');
     if (textarea) textarea.value = logText.trim();
 }
@@ -214,6 +201,10 @@ export async function ejecutarGuardadoGlobal() {
         const deletePromises = []; 
         const statsUpserts = [];
         const estadosUpserts = [];
+        
+        // Colas de Hechizos
+        const hzUpserts = [];
+        const hzDeletes = [];
 
         // --- OBJETOS ---
         const nuevosArr = Object.values(objState.colaNuevosObjetos).filter(o => o.nombre.trim() !== '');
@@ -248,17 +239,14 @@ export async function ejecutarGuardadoGlobal() {
             }
         }
 
-        // =========================================================================
-        // ESTADÍSTICAS: MAPEO EXACTO A COLUMNAS DE SUPABASE (af_, ef_, bf_)
-        // Nota: hz_* y hechizo_* son propiedad del módulo Grimorio — no se tocan aquí
-        // =========================================================================
+        // --- ESTADÍSTICAS ---
         for (const pjKey in stState.colaStats) {
             const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey.toLowerCase())?.nombre || pjKey;
             const cambios = stState.colaStats[pjKey];
             let updatedPj = JSON.parse(JSON.stringify(stState.statsDB[pjKey]));
 
             for (const flatKey in cambios) {
-                if (flatKey.endsWith('.null') || flatKey.startsWith('__')) continue; // ignorar keys malformadas
+                if (flatKey.endsWith('.null') || flatKey.startsWith('__')) continue; 
                 const keys = flatKey.split('.');
                 if (keys.length === 1) updatedPj[keys[0]] = cambios[flatKey];
                 else {
@@ -279,16 +267,12 @@ export async function ejecutarGuardadoGlobal() {
                 base_dano_azul: updatedPj.baseDanoAzul,
                 base_elim_dorada: updatedPj.baseElimDorada,
                 estados: updatedPj.estados,
-
-                // Afinidades Base (af_)
                 af_fisica: updatedPj.afinidadesBase.fisica || 0,
                 af_energetica: updatedPj.afinidadesBase.energetica || 0,
                 af_espiritual: updatedPj.afinidadesBase.espiritual || 0,
                 af_mando: updatedPj.afinidadesBase.mando || 0,
                 af_psiquica: updatedPj.afinidadesBase.psiquica || 0,
                 af_oscura: updatedPj.afinidadesBase.oscura || 0,
-
-                // Alteraciones por Hechizos (ef_)
                 ef_fisica: updatedPj.hechizosEfecto.fisica || 0,
                 ef_energetica: updatedPj.hechizosEfecto.energetica || 0,
                 ef_espiritual: updatedPj.hechizosEfecto.espiritual || 0,
@@ -301,8 +285,6 @@ export async function ejecutarGuardadoGlobal() {
                 efecto_vida_roja: updatedPj.hechizosEfecto.vidaRojaMaxExtra || 0,
                 efecto_vida_azul: updatedPj.hechizosEfecto.vidaAzulExtra || 0,
                 efecto_guarda: updatedPj.hechizosEfecto.guardaDoradaExtra || 0,
-
-                // Extras Temporales / Buffs (bf_)
                 bf_fisica: updatedPj.buffs.fisica || 0,
                 bf_energetica: updatedPj.buffs.energetica || 0,
                 bf_espiritual: updatedPj.buffs.espiritual || 0,
@@ -326,6 +308,16 @@ export async function ejecutarGuardadoGlobal() {
             deletePromises.push(supabase.from('estados_config').delete().in('id', stState.colaBorrarEstados));
         }
 
+        // --- HECHIZOS ---
+        for (const pjKey in hzState.colaAsignaciones) {
+            const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey)?.nombre || pjKey;
+            for (const hzId in hzState.colaAsignaciones[pjKey]) {
+                const agregar = hzState.colaAsignaciones[pjKey][hzId];
+                if (agregar) hzUpserts.push({ personaje_nombre: realPj, hechizo_id: hzId });
+                else deletePromises.push(supabase.from('personajes_hechizos').delete().eq('personaje_nombre', realPj).eq('hechizo_id', hzId));
+            }
+        }
+
         // 🔥 LANZAMIENTO A SUPABASE 🔥
         if (deletePromises.length > 0) await Promise.all(deletePromises);
 
@@ -345,7 +337,13 @@ export async function ejecutarGuardadoGlobal() {
             const { error: errEst } = await supabase.from('estados_config').upsert(estadosUpserts, { onConflict: 'id' });
             if (errEst) throw new Error("Estados: " + errEst.message);
         }
+        if (hzUpserts.length > 0) {
+            const { error: errHz } = await supabase.from('personajes_hechizos').upsert(hzUpserts, { onConflict: 'personaje_nombre,hechizo_id' });
+            if (errHz) throw new Error("Hechizos: " + errHz.message);
+        }
 
+        // Nota: Asegúrate de tener los nombres de tabla ('hechizos', 'personajes_hechizos') correctos según tu Supabase
+        
         localStorage.removeItem('hex_obj_v4');
         localStorage.removeItem('hex_stats_v2');
 
