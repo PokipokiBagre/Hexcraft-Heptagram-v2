@@ -4,19 +4,35 @@
 
 import { hzState } from './panel-hechizos-state.js';
 import { getPjStat, modPjStat, getVexMax } from '../estadisticas/panel-stats-logic.js';
-import { norm } from '../dev-state.js'; // Importamos tu normalizador para arreglar las tildes
+import { norm } from '../dev-state.js';
 
 export function initHechizosDev(catalogo, inventarios_pj) {
     hzState.catalogoDB = catalogo || [];
     hzState.inventariosDB = {};
     (inventarios_pj || []).forEach(item => {
-        const pj = norm(item.Personaje || item.personaje_nombre || ""); // Normalizado!
-        const hzId = item.Hechizo || item.hechizo_id || item.ID || item.id;
+        const pj = norm(item.Personaje || item.personaje_nombre || ""); 
+        const hzId = norm(item.Hechizo || item.hechizo_id || item.ID || item.id); // Normalizado para match perfecto
         
         if (!pj || !hzId) return;
         if (!hzState.inventariosDB[pj]) hzState.inventariosDB[pj] = [];
         hzState.inventariosDB[pj].push(hzId);
     });
+}
+
+// ── UTILIDAD: SACAR AFINIDAD TOTAL DEL PJ ──
+function obtenerAfinidadTotal(pjNombre, afNombreRaw) {
+    const af = norm(afNombreRaw || '');
+    const mapa = {
+        'fisica': 'fisica', 'energetica': 'energetica', 'espiritual': 'espiritual',
+        'mando': 'mando', 'psiquica': 'psiquica', 'oscura': 'oscura'
+    };
+    const key = mapa[af];
+    if (!key) return 0;
+    
+    return (getPjStat(pjNombre, 'afinidadesBase', key) || 0) +
+           (getPjStat(pjNombre, 'hechizos', key) || 0) +
+           (getPjStat(pjNombre, 'hechizosEfecto', key) || 0) +
+           (getPjStat(pjNombre, 'buffs', key) || 0);
 }
 
 // ── FORMULARIO DE CASTEO MASIVO ──
@@ -25,9 +41,20 @@ export function setNumFilasCast(num) {
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
-export function modFilaCast(index, campo, valor) {
+export function modFilaCast(index, campo, valor, pjNombre) {
     hzState.casteoManual.filas[index][campo] = valor;
-    // NO disparamos UI Update aquí para no interrumpir tu escritura en el input
+    
+    // Auto-completado de Afinidad al escribir el hechizo
+    if (campo === 'nombre' && pjNombre) {
+        const hechizo = hzState.catalogoDB.find(h => 
+            norm(h.Nombre || h.nombre || '') === norm(valor) || 
+            norm(h.ID || h.id || '') === norm(valor)
+        );
+        if (hechizo) {
+            hzState.casteoManual.filas[index].afinidad = obtenerAfinidadTotal(pjNombre, hechizo.Afinidad);
+            window.dispatchEvent(new Event('devUIUpdate'));
+        }
+    }
 }
 
 export function setModoDatalist(modo) {
@@ -50,14 +77,31 @@ export function calcularConjurosMasivos(pjNombre) {
         );
 
         const cant = parseInt(fila.cant) || 1;
+        const dado = parseInt(fila.dado) || 0;
+        const afin = parseInt(fila.afinidad) || 0;
 
         if (hechizo) {
             const costoU = parseInt(hechizo.Hex || hechizo.costo || hechizo.Costo || 0) || 0;
-            totalCost += costoU * cant;
-            validSpells++;
-            const efecto = hechizo.Efecto || hechizo.efecto_desc || hechizo.efecto || '';
+            totalCost += (costoU * cant);
+            validSpells += cant;
+
+            // MATEMÁTICA EXACTA: NC = Dado x Afinidad
+            const nc = dado * afin;
+            let outcome = "";
+            let efeToPrint = hechizo.Efecto || hechizo.efecto_desc || hechizo.efecto || '';
+
+            if (nc < costoU) {
+                outcome = "❌ FALLO";
+            } else if (hechizo.Overcast && nc >= (costoU * 2)) {
+                outcome = "🌟 OVERCAST";
+                efeToPrint = hechizo.Overcast; // Imprime el efecto de overcast si lo tiene
+            } else {
+                outcome = "✅ ÉXITO";
+            }
+
             const realName = hechizo.Nombre || hechizo.nombre;
-            logsArr.push(` - ${realName} x${cant} ${hzState.mostrarEfectos && efecto ? `\n   ↳ ${efecto}` : ''}`);
+            const resLine = ` - ${realName} x${cant} | NC: ${nc} | ${outcome}`;
+            logsArr.push(resLine + (hzState.mostrarEfectos && efeToPrint && !outcome.includes('FALLO') ? `\n   ↳ ${efeToPrint}` : ''));
         } else {
             logsArr.push(` - [!] Hechizo no encontrado: "${fila.nombre}" x${cant}`);
         }
@@ -87,22 +131,24 @@ export function calcularConjurosMasivos(pjNombre) {
     let mainLog = `[${pjNombre}] Lanza ${validSpells} conjuros simultáneos ${stringCobro}\n` + logsArr.join("\n");
     hzState.logCasteosSession.push(mainLog);
 
-    // Limpiar formulario tras castear
-    hzState.casteoManual.filas = Array.from({ length: 50 }, () => ({ nombre: '', cant: 1 }));
+    // Limpiar formulario
+    hzState.casteoManual.filas = Array.from({ length: 50 }, () => ({ dado: '', nombre: '', afinidad: '', cant: 1 }));
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
 // ── ASIGNACIÓN Y VISIBILIDAD ──
 export function asignarHechizo(pjNombre, hechizoId) {
     const pjKey = norm(pjNombre);
+    const idNorm = norm(hechizoId);
     if (!hzState.colaAsignaciones[pjKey]) hzState.colaAsignaciones[pjKey] = {};
     
-    const yaLoTiene = hzState.colaAsignaciones[pjKey][hechizoId] ?? (hzState.inventariosDB[pjKey] || []).includes(hechizoId);
+    // Verificamos con el array normalizado
+    const yaLoTiene = hzState.colaAsignaciones[pjKey][idNorm] ?? (hzState.inventariosDB[pjKey] || []).includes(idNorm);
     const accionDar = !yaLoTiene;
     
-    hzState.colaAsignaciones[pjKey][hechizoId] = accionDar;
+    hzState.colaAsignaciones[pjKey][idNorm] = accionDar;
 
-    const hechizo = hzState.catalogoDB.find(h => (h.ID || h.id) === hechizoId);
+    const hechizo = hzState.catalogoDB.find(h => norm(h.ID || h.id) === idNorm);
     const costo = parseInt(hechizo ? (hechizo.Hex || hechizo.costo || hechizo.Costo || 0) : 0) || 0;
     const nombreHechizo = hechizo ? (hechizo.Nombre || hechizo.nombre || hechizoId) : hechizoId;
 
@@ -122,28 +168,19 @@ export function toggleVisibilidad(hechizoId) {
     const dbHech = hzState.catalogoDB.find(h => (h.ID || h.id) === hechizoId);
     if (!dbHech) return;
 
-    // Asumimos que la BD guarda true/false, o 1/0, o "TRUE"
-    const isKnownDb = dbHech.es_conocido === true || dbHech.es_conocido === "TRUE" || dbHech.es_conocido === 1;
+    // Si no dice explícitamente "falso", es público.
+    const isKnownDb = dbHech.es_conocido !== false && dbHech.es_conocido !== "FALSE" && dbHech.es_conocido !== 0 && dbHech.es_conocido !== "0";
 
     if (currentQ !== undefined) {
-        delete hzState.colaVisibilidad[hechizoId]; // Revertir a como está en BD
+        delete hzState.colaVisibilidad[hechizoId]; 
     } else {
-        hzState.colaVisibilidad[hechizoId] = !isKnownDb; // Alternar estado
+        hzState.colaVisibilidad[hechizoId] = !isKnownDb; 
     }
     
     window.dispatchEvent(new Event('devDataChanged')); 
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
-// ── CONTROLES UI GENERALES ──
-export function setBusquedaHz(texto) {
-    hzState.busquedaAsignar = texto.toLowerCase();
-    window.dispatchEvent(new Event('devUIUpdate'));
-}
-export function setVistaHz(vista) {
-    hzState.vistaActiva = vista;
-    window.dispatchEvent(new Event('devUIUpdate'));
-}
-export function toggleConfigCasteo(campo, valor) {
-    hzState[campo] = valor;
-}
+export function setBusquedaHz(texto) { hzState.busquedaAsignar = texto.toLowerCase(); window.dispatchEvent(new Event('devUIUpdate')); }
+export function setVistaHz(vista) { hzState.vistaActiva = vista; window.dispatchEvent(new Event('devUIUpdate')); }
+export function toggleConfigCasteo(campo, valor) { hzState[campo] = valor; }
