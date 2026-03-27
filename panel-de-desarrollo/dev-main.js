@@ -34,14 +34,14 @@ window.onload = async () => {
     }
 
     try {
-        // EXTRACCIÓN PURA DE SUPABASE (Incluye Hechizos)
+        // EXTRACCIÓN PURA DE SUPABASE
         const [{data: personajesBD}, catalogoObj, invObj, estadosArr, {data: catalogoHz}, {data: invHz}] = await Promise.all([
             supabase.from('personajes').select('*'),
             db.objetos.getCatalogo(),
             db.objetos.getInventarioCompleto(),
             db.estadosConfig.getAll(),
-            supabase.from('hechizos').select('*'), 
-            supabase.from('personajes_hechizos').select('*') 
+            supabase.from('hechizos').select('*'),
+            supabase.from('inventario_hechizos').select('*') // ¡Corregido a inventario_hechizos!
         ]);
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
