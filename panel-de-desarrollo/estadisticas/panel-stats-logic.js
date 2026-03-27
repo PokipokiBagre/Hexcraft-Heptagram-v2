@@ -149,6 +149,58 @@ export function cargarEstadoParaEditar(id) {
     }
 }
 
+// ── FUNCIONES DE TOTALES (Solo Lectura, espejo de stats-logic.js) ──
+
+export function calcularVidaRojaMaxTotal(pjNombre) {
+    const base   = getPjStat(pjNombre, 'baseVidaRojaMax');
+    const hcz    = getPjStat(pjNombre, 'hechizos', 'vidaRojaMaxExtra');
+    const alt    = getPjStat(pjNombre, 'hechizosEfecto', 'vidaRojaMaxExtra');
+    const ext    = getPjStat(pjNombre, 'buffs', 'vidaRojaMaxExtra');
+    // Bono incremental de física proveniente de hechizos/efectos/buffs
+    const fisBase  = getPjStat(pjNombre, 'afinidadesBase', 'fisica');
+    const fisHcz   = getPjStat(pjNombre, 'hechizos',        'fisica');
+    const fisAlt   = getPjStat(pjNombre, 'hechizosEfecto',  'fisica');
+    const fisExt   = getPjStat(pjNombre, 'buffs',           'fisica');
+    const fisTotal = fisBase + fisHcz + fisAlt + fisExt;
+    const bonusFisica = Math.floor(fisTotal / 2) - Math.floor(fisBase / 2);
+    return base + hcz + alt + ext + bonusFisica;
+}
+
+export function calcularVidaAzulTotal(pjNombre) {
+    return getPjStat(pjNombre, 'baseVidaAzul') +
+           getPjStat(pjNombre, 'hechizos',       'vidaAzulExtra') +
+           getPjStat(pjNombre, 'hechizosEfecto', 'vidaAzulExtra') +
+           getPjStat(pjNombre, 'buffs',          'vidaAzulExtra');
+}
+
+export function calcularGuardaDoradaTotal(pjNombre) {
+    return getPjStat(pjNombre, 'baseGuardaDorada') +
+           getPjStat(pjNombre, 'hechizos',       'guardaDoradaExtra') +
+           getPjStat(pjNombre, 'hechizosEfecto', 'guardaDoradaExtra') +
+           getPjStat(pjNombre, 'buffs',          'guardaDoradaExtra');
+}
+
+export function calcularDanoRojoTotal(pjNombre) {
+    return getPjStat(pjNombre, 'baseDanoRojo') +
+           getPjStat(pjNombre, 'hechizos',       'danoRojo') +
+           getPjStat(pjNombre, 'hechizosEfecto', 'danoRojo') +
+           getPjStat(pjNombre, 'buffs',          'danoRojo');
+}
+
+export function calcularDanoAzulTotal(pjNombre) {
+    return getPjStat(pjNombre, 'baseDanoAzul') +
+           getPjStat(pjNombre, 'hechizos',       'danoAzul') +
+           getPjStat(pjNombre, 'hechizosEfecto', 'danoAzul') +
+           getPjStat(pjNombre, 'buffs',          'danoAzul');
+}
+
+export function calcularElimDoradaTotal(pjNombre) {
+    return getPjStat(pjNombre, 'baseElimDorada') +
+           getPjStat(pjNombre, 'hechizos',       'elimDorada') +
+           getPjStat(pjNombre, 'hechizosEfecto', 'elimDorada') +
+           getPjStat(pjNombre, 'buffs',          'elimDorada');
+}
+
 export function borrarEstadoGlobal(id) {
     if (!confirm("¿Seguro que deseas eliminar este estado PARA SIEMPRE de la base de datos?")) return;
     stState.colaBorrarEstados.push(id);
