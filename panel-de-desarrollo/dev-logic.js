@@ -4,7 +4,7 @@
 
 import { db } from '../hex-db.js';
 import { supabase } from '../hex-auth.js'; 
-import { devState } from './dev-state.js';
+import { devState, norm } from './dev-state.js';
 import { objState } from './objetos/panel-objetos-state.js';
 import { stState } from './estadisticas/panel-stats-state.js';
 import { hzState } from './hechizos/panel-hechizos-state.js'; 
@@ -22,7 +22,7 @@ export function revisarCambiosPendientes() {
     if (Object.keys(stState.colaEstadosConfig).length > 0) hayCambios = true;
     if (stState.colaBorrarEstados.length > 0) hayCambios = true;
     if (Object.keys(hzState.colaAsignaciones).length > 0) hayCambios = true; 
-    if (Object.keys(hzState.colaVisibilidad).length > 0) hayCambios = true; // NUEVO
+    if (Object.keys(hzState.colaVisibilidad).length > 0) hayCambios = true;
 
     if (hayCambios) btnSync.classList.remove('oculto');
     else btnSync.classList.add('oculto');
@@ -33,7 +33,7 @@ export function actualizarLogGlobal() {
 
     // --- 1. Objetos ---
     for (const pjKey in objState.colaInventario) {
-        const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey)?.nombre || pjKey;
+        const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
         for (const objNombre in objState.colaInventario[pjKey]) {
             const cantNueva = objState.colaInventario[pjKey][objNombre];
             const cantVieja = objState.inventariosDB[pjKey]?.[objNombre] || 0;
@@ -84,7 +84,7 @@ export function actualizarLogGlobal() {
     };
 
     for (const pjKey in stState.colaStats) {
-        const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey.toLowerCase())?.nombre || pjKey;
+        const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
         const cambios = stState.colaStats[pjKey];
         const dbPj = stState.statsDB[pjKey] || {};
 
@@ -204,7 +204,6 @@ export async function ejecutarGuardadoGlobal() {
         
         // Colas de Hechizos
         const hzUpserts = [];
-        const hzDeletes = [];
 
         // --- OBJETOS ---
         const nuevosArr = Object.values(objState.colaNuevosObjetos).filter(o => o.nombre.trim() !== '');
@@ -221,7 +220,7 @@ export async function ejecutarGuardadoGlobal() {
             if (oldName !== newName) {
                 Object.keys(objState.inventariosDB).forEach(pjKey => {
                     if (objState.inventariosDB[pjKey][oldName] > 0) {
-                        const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey)?.nombre || pjKey;
+                        const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
                         invUpserts.push({ personaje_nombre: realPj, objeto_nombre: newName, cantidad: objState.inventariosDB[pjKey][oldName] });
                         deletePromises.push(supabase.from('inventario_objetos').delete().eq('personaje_nombre', realPj).eq('objeto_nombre', oldName));
                     }
@@ -231,7 +230,7 @@ export async function ejecutarGuardadoGlobal() {
         }
 
         for (const pjKey in objState.colaInventario) {
-            const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey)?.nombre || pjKey;
+            const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
             for (const obj in objState.colaInventario[pjKey]) {
                 const cantFinal = objState.colaInventario[pjKey][obj];
                 if (cantFinal > 0) invUpserts.push({ personaje_nombre: realPj, objeto_nombre: obj, cantidad: cantFinal });
@@ -241,7 +240,7 @@ export async function ejecutarGuardadoGlobal() {
 
         // --- ESTADÍSTICAS ---
         for (const pjKey in stState.colaStats) {
-            const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey.toLowerCase())?.nombre || pjKey;
+            const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
             const cambios = stState.colaStats[pjKey];
             let updatedPj = JSON.parse(JSON.stringify(stState.statsDB[pjKey]));
 
@@ -300,7 +299,6 @@ export async function ejecutarGuardadoGlobal() {
             });
         }
 
-        // --- ESTADOS GLOBALES ---
         for (const id in stState.colaEstadosConfig) {
             estadosUpserts.push({ id: id, ...stState.colaEstadosConfig[id] });
         }
@@ -309,12 +307,13 @@ export async function ejecutarGuardadoGlobal() {
         }
 
         // --- HECHIZOS (INVENTARIO) ---
+        // 🔥 CORREGIDO: Guardar en la tabla personajes_hechizos como en inventario-data.js
         for (const pjKey in hzState.colaAsignaciones) {
-            const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey)?.nombre || pjKey;
+            const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
             for (const hzId in hzState.colaAsignaciones[pjKey]) {
                 const agregar = hzState.colaAsignaciones[pjKey][hzId];
                 if (agregar) hzUpserts.push({ personaje_nombre: realPj, hechizo_id: hzId });
-                else deletePromises.push(supabase.from('inventario_hechizos').delete().eq('personaje_nombre', realPj).eq('hechizo_id', hzId)); 
+                else deletePromises.push(supabase.from('personajes_hechizos').delete().eq('personaje_nombre', realPj).eq('hechizo_id', hzId)); 
             }
         }
         
@@ -326,7 +325,7 @@ export async function ejecutarGuardadoGlobal() {
 
         // 🔥 LANZAMIENTO A SUPABASE 🔥
         if (deletePromises.length > 0) await Promise.all(deletePromises);
-        if (visPromises.length > 0) await Promise.all(visPromises); // Se actualizan los estados globales de los nodos
+        if (visPromises.length > 0) await Promise.all(visPromises); 
 
         if (catalogUpserts.length > 0) {
             const { error: errCat } = await supabase.from('objetos').upsert(catalogUpserts, { onConflict: 'nombre' });
@@ -345,7 +344,7 @@ export async function ejecutarGuardadoGlobal() {
             if (errEst) throw new Error("Estados: " + errEst.message);
         }
         if (hzUpserts.length > 0) {
-            const { error: errHz } = await supabase.from('inventario_hechizos').upsert(hzUpserts, { onConflict: 'personaje_nombre,hechizo_id' }); 
+            const { error: errHz } = await supabase.from('personajes_hechizos').upsert(hzUpserts, { onConflict: 'personaje_nombre,hechizo_id' }); 
             if (errHz) throw new Error("Hechizos: " + errHz.message);
         }
 
