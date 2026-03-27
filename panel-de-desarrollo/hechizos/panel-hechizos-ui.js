@@ -19,23 +19,22 @@ window.devCalcularConjuros = calcularConjurosMasivos;
 window.devCopiarPrimerDado = copiarPrimerDado;
 window.devCopiarPrimerHechizo = copiarPrimerHechizo;
 
-// ── UTILIDAD PARA LEER TEXTOS DIRECTOS (COMO EN INVENTARIO-UI) ──
-const parseSpellText = (val) => {
-    if (val === undefined || val === null || val === "0" || val === 0 || val === "-") return '';
-    let text = Array.isArray(val) ? val.join(', ') : String(val);
-    text = text.trim();
-    if (!text || text === "0" || text === "-" || text.toLowerCase() === "null") return '';
-    return text;
+// 🌟 UTILIDAD DE EXTRACCIÓN DIRECTA
+const getVal = (v) => {
+    if (v === undefined || v === null) return '';
+    let s = Array.isArray(v) ? v.join(', ') : String(v);
+    s = s.trim();
+    if (s === '0' || s === '-' || s.toLowerCase() === 'null' || s === '') return '';
+    return s;
 };
 
 function getSpellDetailsHTML(dbSpell) {
     if (!dbSpell) return '';
     
-    // 🌟 Uso directo de propiedades y limpiador de basura
-    const efe = parseSpellText(dbSpell.Efecto || dbSpell.Efecto_desc || dbSpell.efecto_desc || dbSpell.efecto);
-    const over = parseSpellText(dbSpell.Overcast || dbSpell.overcast);
-    const under = parseSpellText(dbSpell.Undercast || dbSpell.undercast);
-    const esp = parseSpellText(dbSpell.Especial || dbSpell.especial);
+    const efe = getVal(dbSpell.Efecto_desc || dbSpell.Efecto || dbSpell.efecto || dbSpell.Desc || dbSpell.desc);
+    const over = getVal(dbSpell.Efecto_overcast || dbSpell.Overcast || dbSpell.overcast);
+    const under = getVal(dbSpell.Efecto_undercast || dbSpell.Undercast || dbSpell.undercast);
+    const esp = getVal(dbSpell.Especial || dbSpell.especial);
 
     let dHtml = '';
     if (efe || over || under || esp) {
@@ -173,8 +172,7 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     const hClase = hechizo.Clase || hechizo.clase || '-';
     const costo = parseInt(hechizo.HEX || hechizo.Hex || hechizo.costo || hechizo.Costo || 0) || 0;
     
-    // Limpieza de efecto para la tarjeta de BD
-    const efecto = parseSpellText(hechizo.Efecto || hechizo.efecto_desc || hechizo.efecto) || '-';
+    const efecto = getVal(hechizo.Efecto_desc || hechizo.Efecto || hechizo.efecto || hechizo.Desc || hechizo.desc) || '-';
 
     const isPublicBase = hechizo.Conocido && hechizo.Conocido.toString().trim().toLowerCase() === 'si';
     const isKnown = hzState.colaVisibilidad[hId] !== undefined ? hzState.colaVisibilidad[hId] : isPublicBase;
@@ -214,6 +212,7 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     </div>`;
 }
 
+// ── RENDER PRINCIPAL ──
 export function renderColumnaHechizos(pjSeleccionado) {
     const contenedor = 'content-spells';
     if (!document.getElementById(contenedor)) return;
