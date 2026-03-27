@@ -13,7 +13,10 @@ window.devSetVistaObj = cambiarVistaObjetos;
 window.devSeleccionarObjEdit = seleccionarObjetoParaEditar;
 window.devModFormEdit = modificarObjetoEdicion;
 
-const norm = (str) => str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
+const norm = (str) => str.toString().trim().toLowerCase()
+    .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
+    .replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/ñ/g,'n').replace(/\s+/g,'_')
+    .replace(/[^a-z0-9_]/g,'');
 
 function drawnHEXPreserveFocus(containerId, html) {
     const activeEl = document.activeElement;
