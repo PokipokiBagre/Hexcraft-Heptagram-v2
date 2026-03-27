@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Máster Unificado | HEX</title>
+    <link rel="icon" type="image/png" id="dynamic-favicon">
+    <link rel="stylesheet" href="../stylepanel.css">
+    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="container-hex">
+        <div class="top-nav">
+            <a href="../index.html" class="back-link">⬅ Volver al Inicio</a>
+            <div id="hex-session-badge"></div>
+        </div>
+
+        <header class="panel-header">
+            <h1>PANEL DE DESARROLLO MÁSTER</h1>
+            <p>Gestión unificada de Entidades, Inventarios y Grimorios</p>
+        </header>
+
+        <div id="pantalla-carga" style="text-align: center; padding: 50px; color: var(--gold);">
+            <h2>Conectando a la base de datos...</h2>
+        </div>
+
+        <div id="access-denied" class="oculto" style="text-align: center; padding: 50px; color: #ff4444; border: 1px dashed #ff4444; background: rgba(50,0,0,0.5); border-radius: 12px; max-width: 600px; margin: 0 auto;">
+            <h2>⚠️ ACCESO DENEGADO</h2>
+            <p>Este panel es de uso exclusivo para la administración (OP).</p>
+        </div>
+
+        <div id="interfaz-master" class="oculto">
+            
+            <div class="selector-section">
+                <input type="text" id="dev-search" class="search-bar-dev" placeholder="🔍 Buscar Jugador o Entidad...">
+                <div class="character-selector" id="dev-character-list">
+                    </div>
+            </div>
+
+            <div id="dev-workspace" class="dev-container oculto">
+                
+                <div class="dev-column" id="col-stats">
+                    <div class="dev-column-header">❤️ Estadísticas y Atributos</div>
+                    <div id="content-stats" class="dev-column-content">
+                        </div>
+                </div>
+
+                <div class="dev-column" id="col-items">
+                    <div class="dev-column-header">🎒 Inventario y Objetos</div>
+                    <div id="content-items" class="dev-column-content">
+                        </div>
+                </div>
+
+                <div class="dev-column" id="col-spells">
+                    <div class="dev-column-header">📖 Grimorio y Hechizos</div>
+                    <div id="content-spells" class="dev-column-content">
+                        </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="dev-main.js"></script>
+</body>
+</html>
