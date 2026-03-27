@@ -19,6 +19,39 @@ window.devCalcularConjuros = calcularConjurosMasivos;
 window.devCopiarPrimerDado = copiarPrimerDado;
 window.devCopiarPrimerHechizo = copiarPrimerHechizo;
 
+// ── LÓGICA VISUAL REACTIVA DE HECHIZOS (Buscador) ──
+window.devSpellInputHelper = (row, val, pj) => {
+    // 1. Aplica la lógica normal (Afinidad)
+    window.devModFilaCast(row, 'nombre', val, pj);
+
+    // 2. Extrae e inyecta la información en la tarjeta de detalles sin recargar toda la UI
+    const detailsDiv = document.getElementById(`dev-spell-details-${row}`);
+    if (!detailsDiv) return;
+
+    const dbSpell = hzState.catalogoDB.find(h =>
+        norm(h.Nombre || h.nombre || '') === norm(val) ||
+        norm(h.ID || h.id || '') === norm(val)
+    );
+
+    let dHtml = '';
+    if (dbSpell) {
+        const efe = dbSpell.Efecto || dbSpell.efecto_desc || dbSpell.efecto || '';
+        const over = dbSpell.Overcast || dbSpell.overcast || dbSpell.Overcast_desc || '';
+        const under = dbSpell.Undercast || dbSpell.undercast || dbSpell.Undercast_desc || '';
+        const esp = dbSpell.Especial || dbSpell.especial || dbSpell.Especial_desc || '';
+
+        if (efe || over || under || esp) {
+            dHtml += `<div style="background:#0a0514; border:1px solid #4a1880; border-radius:4px; padding:10px; margin-top:6px; font-size:0.85em; line-height:1.4; box-shadow:inset 0 0 10px rgba(74,24,128,0.2);">`;
+            if (efe) dHtml += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:var(--cyan-magic);">Efecto:</b> ${efe}</div>`;
+            if (over) dHtml += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:var(--gold);">🌟 Overcast:</b> ${over}</div>`;
+            if (under) dHtml += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:#ff4444;">⚠️ Undercast:</b> ${under}</div>`;
+            if (esp) dHtml += `<div style="color:#ddd; margin-bottom:2px;"><b style="color:#00ff88;">✨ Especial:</b> ${esp}</div>`;
+            dHtml += `</div>`;
+        }
+    }
+    detailsDiv.innerHTML = dHtml;
+};
+
 // ── NAVEGACIÓN CON TECLADO ──
 window.devOnGridKeydown = (e, row, col, pjSeleccionado) => {
     const num = hzState.casteoManual.numFilas;
@@ -43,12 +76,14 @@ window.devOnGridKeydown = (e, row, col, pjSeleccionado) => {
                 : hzState.catalogoDB;
                 
             const invNombres = opciones.map(h => h.Nombre || h.nombre || h.ID || h.id).sort((a, b) => a.localeCompare(b));
-            const match = invNombres.find(h => h.toLowerCase().startsWith(val));
+            
+            // 🌟 FIX: Ahora reacciona y autocompleta aunque sea una palabra del medio (ej. "fuego" -> "Bola de Fuego")
+            const match = invNombres.find(h => h.toLowerCase().includes(val));
             
             if (match && match.toLowerCase() !== val) {
                 e.preventDefault();
                 input.value = match;
-                window.devModFilaCast(row, 'nombre', match, pjSeleccionado);
+                window.devSpellInputHelper(row, match, pjSeleccionado); // Aplica tarjeta instantánea
                 
                 const nextSpellInput = document.getElementById(`dev-spell-${row + 1}`);
                 if (nextSpellInput) {
@@ -250,7 +285,7 @@ export function renderColumnaHechizos(pjSeleccionado) {
         for (let i = 0; i < hzState.casteoManual.numFilas; i++) {
             const fila = hzState.casteoManual.filas[i];
 
-            // 🌟 NUEVO: Búsqueda dinámica del hechizo para pintar sus detalles
+            // 🌟 NUEVO: Búsqueda dinámica al recargar para mantener la tarjeta visible si ya hay un hechizo
             let detallesHTML = '';
             if (fila.nombre) {
                 const dbSpell = hzState.catalogoDB.find(h =>
@@ -287,7 +322,7 @@ export function renderColumnaHechizos(pjSeleccionado) {
                     <div style="position:relative; flex:1;">
                         <input type="text" list="dev-spells-list-${pjKey}" id="dev-spell-${i}" placeholder="Nombre Hechizo..." value="${fila.nombre}"
                             autocomplete="off"
-                            oninput="window.devModFilaCast(${i}, 'nombre', this.value, '${escapedPj}')"
+                            oninput="window.devSpellInputHelper(${i}, this.value, '${escapedPj}')"
                             onkeydown="window.devOnGridKeydown(event, ${i}, 1, '${escapedPj}')"
                             style="width:100%; box-sizing:border-box; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; outline:none;">
                     </div>
@@ -301,7 +336,7 @@ export function renderColumnaHechizos(pjSeleccionado) {
                         onkeydown="window.devOnGridKeydown(event, ${i}, 3, '${escapedPj}')"
                         style="width:45px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; text-align:center; outline:none;" title="Cantidad">
                 </div>
-                ${detallesHTML}
+                <div id="dev-spell-details-${i}">${detallesHTML}</div>
             </div>`;
         }
 
