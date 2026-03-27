@@ -9,10 +9,8 @@ export const hzState = {
     vistaActiva: 'castear', 
     busquedaAsignar: "",
     
-    // 🌟 FORMULARIO DE CASTEO EXACTO A TU SISTEMA ORIGINAL 🌟
     casteoManual: {
         numFilas: 3,
-        // Ahora con las 4 propiedades: dado, nombre, afinidad, cant
         filas: Array.from({ length: 50 }, () => ({ dado: '', nombre: '', afinidad: '', cant: 1 })),
         datalistModo: 'local'
     },
