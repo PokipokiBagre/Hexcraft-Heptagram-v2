@@ -19,17 +19,24 @@ window.devCalcularConjuros = calcularConjurosMasivos;
 window.devCopiarPrimerDado = copiarPrimerDado;
 window.devCopiarPrimerHechizo = copiarPrimerHechizo;
 
-// ── UTILIDAD DE RENDERIZADO DE EFECTOS (Filtra "0" y nulos) ──
-function isValidSpellProp(v) {
-    return v !== undefined && v !== null && v !== "0" && v !== 0 && String(v).trim() !== "" && String(v).trim().toLowerCase() !== "null" && String(v).trim() !== "-";
-}
+// ── UTILIDAD PARA LEER ARRAYS/STRINGS DE EFECTOS DE SUPABASE ──
+const extractVal = (v) => {
+    if (!v || v === "0" || v === 0 || v === "-") return '';
+    if (Array.isArray(v)) {
+        const text = v.join(" ");
+        return (text && text !== "0" && text !== "-") ? text : '';
+    }
+    const text = String(v).trim();
+    return (text && text !== "0" && text.toLowerCase() !== "null" && text !== "-") ? text : '';
+};
 
 function findSpellProp(dbSpell, ...names) {
     if (!dbSpell) return '';
     for (const key of Object.keys(dbSpell)) {
         const cleanKey = key.trim().toLowerCase();
         if (names.some(n => n.toLowerCase() === cleanKey)) {
-            if (isValidSpellProp(dbSpell[key])) return dbSpell[key];
+            const val = extractVal(dbSpell[key]);
+            if (val) return val;
         }
     }
     return '';
@@ -38,7 +45,7 @@ function findSpellProp(dbSpell, ...names) {
 function getSpellDetailsHTML(dbSpell) {
     if (!dbSpell) return '';
     
-    // 🌟 Escaneo dinámico insensible a mayúsculas
+    // 🌟 Buscador dinámico e infalible (Maneja Arrays)
     const efe = findSpellProp(dbSpell, 'efecto', 'efecto_desc', 'desc', 'descripcion');
     const over = findSpellProp(dbSpell, 'overcast', 'overcast_desc', 'efecto_overcast');
     const under = findSpellProp(dbSpell, 'undercast', 'undercast_desc', 'efecto_undercast');
@@ -56,7 +63,6 @@ function getSpellDetailsHTML(dbSpell) {
     return dHtml;
 }
 
-// ── LÓGICA VISUAL REACTIVA DE HECHIZOS (Buscador) ──
 window.devSpellInputHelper = (row, val, pj) => {
     window.devModFilaCast(row, 'nombre', val, pj);
 
@@ -71,7 +77,6 @@ window.devSpellInputHelper = (row, val, pj) => {
     detailsDiv.innerHTML = getSpellDetailsHTML(dbSpell);
 };
 
-// ── NAVEGACIÓN CON TECLADO ──
 window.devOnGridKeydown = (e, row, col, pjSeleccionado) => {
     const num = hzState.casteoManual.numFilas;
 
@@ -146,7 +151,6 @@ window.devOnGridKeydown = (e, row, col, pjSeleccionado) => {
     }
 };
 
-// ── UTILIDADES ──
 function drawnHEXPreserveFocus(containerId, html) {
     const activeEl = document.activeElement;
     const activeId = activeEl ? activeEl.id : null;
@@ -176,16 +180,14 @@ function getColorAfinidad(af) {
     return { b: '#555', t: '#aaa' };
 }
 
-// ── TARJETA DE ASIGNACIÓN ──
 function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     const hId = hechizo.ID || hechizo.id;
     const hNom = hechizo.Nombre || hechizo.nombre || 'Hechizo sin nombre';
     const hAf = hechizo.Afinidad || hechizo.afinidad || '-';
     const hClase = hechizo.Clase || hechizo.clase || '-';
+    const costo = parseInt(hechizo.HEX || hechizo.Hex || hechizo.costo || hechizo.Costo || 0) || 0;
     
-    // Búsqueda inteligente de propiedades
-    const costoRaw = findSpellProp(hechizo, 'hex', 'costo');
-    const costo = parseInt(costoRaw) || 0;
+    // 🌟 Uso el nuevo escáner
     const efecto = findSpellProp(hechizo, 'efecto', 'efecto_desc', 'desc', 'descripcion') || '-';
 
     const isPublicBase = hechizo.Conocido && hechizo.Conocido.toString().trim().toLowerCase() === 'si';
@@ -254,9 +256,6 @@ export function renderColumnaHechizos(pjSeleccionado) {
         </div>
     `;
 
-    // ════════════════════════════════════════
-    // VISTA: CASTEAR
-    // ════════════════════════════════════════
     if (v === 'castear') {
         const dMode = hzState.casteoManual.datalistModo;
         const escapedPj = pjSeleccionado.replace(/'/g, "\\'");
@@ -349,9 +348,6 @@ export function renderColumnaHechizos(pjSeleccionado) {
         <button onclick="window.devCalcularConjuros('${escapedPj}')" style="width:100%; margin-top:15px; background:linear-gradient(135deg, #4a004a, #800080); color:white; font-size:1.1em; font-weight:bold; font-family:'Cinzel'; padding:12px; border:1px solid #ff00ff; border-radius:6px; cursor:pointer; text-shadow: 0 0 5px #ff00ff; transition:0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">⚡ CALCULAR CONJUROS ⚡</button>
         `;
 
-    // ════════════════════════════════════════
-    // VISTA: GESTIÓN BD / ASIGNAR
-    // ════════════════════════════════════════
     } else {
         html += `
         <div style="background:#001a00; border:1px solid #00ff00; border-radius:6px; padding:10px; margin-bottom:15px; text-align:center; font-size:0.85em;">
