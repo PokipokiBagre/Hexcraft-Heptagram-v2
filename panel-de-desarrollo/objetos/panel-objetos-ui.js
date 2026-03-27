@@ -2,7 +2,7 @@
 // panel-objetos-ui.js — Renderizado de la Columna de Objetos
 // ============================================================
 
-import { objState, STORAGE_URL, TIPOS_OBJ, RAREZAS_OBJ } from './panel-objetos-state.js';
+import { objState, STORAGE_URL, TIPOS_OBJ, RAREZAS_OBJ, MATERIALES_OBJ } from './panel-objetos-state.js';
 import { getCantidadActual, modificarCantidad, actualizarFormularioNuevo, setCantidadFormularios, setBusquedaObjeto, cambiarVistaObjetos, seleccionarObjetoParaEditar, modificarObjetoEdicion } from './panel-objetos-logic.js';
 
 window.devModObjeto = modificarCantidad;
@@ -34,7 +34,6 @@ function drawnHEXPreserveFocus(containerId, html) {
     }
 }
 
-// 🌟 Función auxiliar para no repetir el HTML de las tarjetas
 function generarTarjetaObjeto(objNombre, pjSeleccionado, colorBordeDestacado = 'var(--cyan-magic)') {
     const cant = getCantidadActual(pjSeleccionado, objNombre);
     const imgPath = `${STORAGE_URL}/imgobjetos/${norm(objNombre)}.png`;
@@ -76,7 +75,6 @@ export function renderColumnaObjetos(pjSeleccionado) {
         return;
     }
 
-    // 1. TABS DE NAVEGACIÓN (AHORA SON 4)
     let html = `
         <div style="display:flex; gap:5px; margin-bottom:15px; flex-wrap:wrap;">
             <button onclick="window.devSetVistaObj('inventario')" style="flex:1; padding:6px; border-radius:4px; border:1px solid #444; background:${objState.vistaActiva==='inventario'?'var(--cyan-magic)':'#111'}; color:${objState.vistaActiva==='inventario'?'#000':'#aaa'}; font-weight:bold; cursor:pointer; font-family:'Cinzel'; transition:0.2s;">🎒 Inv</button>
@@ -87,7 +85,7 @@ export function renderColumnaObjetos(pjSeleccionado) {
     `;
 
     // =========================================================
-    // VISTA 1: INVENTARIO LOCAL (Solo lo que ya tiene)
+    // VISTA 1: INVENTARIO LOCAL
     // =========================================================
     if (objState.vistaActiva === 'inventario') {
         html += `<input type="text" id="dev-search-inv" placeholder="🔍 Buscar en su inventario..." 
@@ -118,7 +116,7 @@ export function renderColumnaObjetos(pjSeleccionado) {
     }
 
     // =========================================================
-    // VISTA 2: CATÁLOGO GLOBAL (Todo lo que existe)
+    // VISTA 2: CATÁLOGO GLOBAL
     // =========================================================
     else if (objState.vistaActiva === 'catalogo') {
         html += `<input type="text" id="dev-search-cat" placeholder="🔍 Buscar en el mundo..." 
@@ -135,7 +133,6 @@ export function renderColumnaObjetos(pjSeleccionado) {
         if (listaMostrar.length === 0) {
             html += `<div style="text-align:center; color:#555; padding:10px; font-size:0.9em;">No existe en la base de datos. ¡Fórjalo!</div>`;
         } else {
-            // Optimización: Mostrar solo los primeros 50 para no laguear si no hay búsqueda
             const topLista = listaMostrar.slice(0, 50);
             topLista.forEach(objNombre => {
                 html += generarTarjetaObjeto(objNombre, pjSeleccionado, '#00ff88');
@@ -163,7 +160,7 @@ export function renderColumnaObjetos(pjSeleccionado) {
         `;
 
         for (let i = 0; i < objState.formulariosCreacion; i++) {
-            const fData = objState.colaNuevosObjetos[i] || { nombre: '', cant: 1, tipo: 'Arma', mat: '-', rar: 'Común', eff: '' };
+            const fData = objState.colaNuevosObjetos[i] || { nombre: '', cant: 1, tipo: 'Consumible', mat: '-', rar: 'Común', eff: '' };
             html += `
                 <div style="background:#0a0514; border:1px solid #4a1880; border-radius:8px; padding:12px; margin-bottom:15px; box-shadow:inset 0 0 10px rgba(74,24,128,0.2);">
                     <input type="text" id="forja-nom-${i}" placeholder="Nombre del Objeto Nuevo" value="${fData.nombre.replace(/"/g, '&quot;')}" 
@@ -178,8 +175,10 @@ export function renderColumnaObjetos(pjSeleccionado) {
                         </div>
                         <div>
                             <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Material</div>
-                            <input type="text" id="forja-mat-${i}" value="${fData.mat}" oninput="window.devModFormObj(${i}, 'mat', this.value, false)"
+                            <select id="forja-mat-${i}" onchange="window.devModFormObj(${i}, 'mat', this.value, true)"
                                    style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:6px; border-radius:4px; outline:none;">
+                                ${MATERIALES_OBJ.map(m => `<option value="${m}" ${fData.mat === m ? 'selected' : ''}>${m}</option>`).join('')}
+                            </select>
                         </div>
                     </div>
 
@@ -279,8 +278,10 @@ export function renderColumnaObjetos(pjSeleccionado) {
                     </div>
                     
                     <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Material</div>
-                    <input type="text" id="edit-mat" value="${eData.mat.replace(/"/g, '&quot;')}" oninput="window.devModFormEdit('mat', this.value, false)"
-                           style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:10px; border-radius:4px; margin-bottom:12px; outline:none;">
+                    <select id="edit-mat" onchange="window.devModFormEdit('mat', this.value, true)"
+                           style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:8px; border-radius:4px; margin-bottom:12px; outline:none;">
+                           ${MATERIALES_OBJ.map(m => `<option value="${m}" ${eData.mat === m ? 'selected' : ''}>${m}</option>`).join('')}
+                    </select>
 
                     <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Efecto / Descripción</div>
                     <textarea id="edit-eff" rows="4" oninput="window.devModFormEdit('eff', this.value, false)"
