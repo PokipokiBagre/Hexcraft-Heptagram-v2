@@ -37,9 +37,10 @@ window.devOnGridKeydown = (e, row, col, pjSeleccionado) => {
                 else hechizosDelPj.delete(norm(id));
             });
             
+            // ✅ FIX BUG 1 (Parte A): Buscar por ID o por Nombre al tabular
             const dMode = hzState.casteoManual.datalistModo;
             const opciones = dMode === 'local'
-                ? hzState.catalogoDB.filter(h => hechizosDelPj.has(norm(h.ID || h.id)))
+                ? hzState.catalogoDB.filter(h => hechizosDelPj.has(norm(h.ID || h.id)) || hechizosDelPj.has(norm(h.Nombre || h.nombre)))
                 : hzState.catalogoDB;
                 
             const invNombres = opciones.map(h => h.Nombre || h.nombre || h.ID || h.id).sort((a, b) => a.localeCompare(b));
@@ -118,7 +119,6 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     const costo = parseInt(hechizo.HEX || hechizo.Hex || hechizo.costo || hechizo.Costo || 0) || 0;
     const efecto = hechizo.Efecto || hechizo.efecto_desc || hechizo.efecto || '-';
 
-    // ✅ FIX BUG 1: Validar "Conocido === 'si'" tal como lo hace el inventario público
     const isPublicBase = hechizo.Conocido && hechizo.Conocido.toString().trim().toLowerCase() === 'si';
     const isKnown = hzState.colaVisibilidad[hId] !== undefined ? hzState.colaVisibilidad[hId] : isPublicBase;
     const isHidden = !isKnown;
@@ -192,9 +192,9 @@ export function renderColumnaHechizos(pjSeleccionado) {
         const dMode = hzState.casteoManual.datalistModo;
         const escapedPj = pjSeleccionado.replace(/'/g, "\\'");
 
-        // ✅ FIX BUG 2: Implementación de <datalist> nativo en lugar del div personalizado
+        // ✅ FIX BUG 1 (Parte B): Construir el datalist buscando por Nombre O por ID en el Grimorio
         const fuenteDatalist = dMode === 'local' 
-            ? hzState.catalogoDB.filter(h => hechizosDelPj.has(norm(h.ID || h.id)))
+            ? hzState.catalogoDB.filter(h => hechizosDelPj.has(norm(h.ID || h.id)) || hechizosDelPj.has(norm(h.Nombre || h.nombre)))
             : hzState.catalogoDB;
 
         let datalistOptions = '';
@@ -207,7 +207,6 @@ export function renderColumnaHechizos(pjSeleccionado) {
             datalistOptions += `<option value="${n.replace(/"/g, '&quot;')}">`;
         });
 
-        // Inyectamos el datalist de HTML5
         html += `<datalist id="dev-spells-list-${pjKey}">${datalistOptions}</datalist>`;
 
         html += `
