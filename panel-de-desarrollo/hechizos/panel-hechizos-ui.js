@@ -19,12 +19,34 @@ window.devCalcularConjuros = calcularConjurosMasivos;
 window.devCopiarPrimerDado = copiarPrimerDado;
 window.devCopiarPrimerHechizo = copiarPrimerHechizo;
 
+// ── UTILIDAD DE RENDERIZADO DE EFECTOS (Filtra "0" y nulos) ──
+function getSpellDetailsHTML(dbSpell) {
+    if (!dbSpell) return '';
+    
+    // Función estricta para saber si un texto es real o basura de la BD
+    const isValid = (v) => v !== undefined && v !== null && v !== "0" && v !== 0 && String(v).trim() !== "" && String(v).trim().toLowerCase() !== "null" && String(v).trim() !== "-";
+
+    const efe = [dbSpell.Efecto, dbSpell.efecto_desc, dbSpell.efecto].find(isValid) || '';
+    const over = [dbSpell.Overcast, dbSpell.overcast, dbSpell.Overcast_desc, dbSpell.overcast_desc].find(isValid) || '';
+    const under = [dbSpell.Undercast, dbSpell.undercast, dbSpell.Undercast_desc, dbSpell.undercast_desc].find(isValid) || '';
+    const esp = [dbSpell.Especial, dbSpell.especial, dbSpell.Especial_desc, dbSpell.especial_desc].find(isValid) || '';
+
+    let dHtml = '';
+    if (efe || over || under || esp) {
+        dHtml += `<div style="background:#0a0514; border:1px solid #4a1880; border-radius:4px; padding:10px; margin-top:6px; font-size:0.85em; line-height:1.4; box-shadow:inset 0 0 10px rgba(74,24,128,0.2);">`;
+        if (efe) dHtml += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:var(--cyan-magic);">Efecto:</b> ${efe}</div>`;
+        if (over) dHtml += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:var(--gold);">🌟 Overcast:</b> ${over}</div>`;
+        if (under) dHtml += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:#ff4444;">⚠️ Undercast:</b> ${under}</div>`;
+        if (esp) dHtml += `<div style="color:#ddd; margin-bottom:2px;"><b style="color:#00ff88;">✨ Especial:</b> ${esp}</div>`;
+        dHtml += `</div>`;
+    }
+    return dHtml;
+}
+
 // ── LÓGICA VISUAL REACTIVA DE HECHIZOS (Buscador) ──
 window.devSpellInputHelper = (row, val, pj) => {
-    // 1. Aplica la lógica normal (Afinidad)
     window.devModFilaCast(row, 'nombre', val, pj);
 
-    // 2. Extrae e inyecta la información en la tarjeta de detalles sin recargar toda la UI
     const detailsDiv = document.getElementById(`dev-spell-details-${row}`);
     if (!detailsDiv) return;
 
@@ -33,23 +55,7 @@ window.devSpellInputHelper = (row, val, pj) => {
         norm(h.ID || h.id || '') === norm(val)
     );
 
-    let dHtml = '';
-    if (dbSpell) {
-        const efe = dbSpell.Efecto || dbSpell.efecto_desc || dbSpell.efecto || '';
-        const over = dbSpell.Overcast || dbSpell.overcast || dbSpell.Overcast_desc || '';
-        const under = dbSpell.Undercast || dbSpell.undercast || dbSpell.Undercast_desc || '';
-        const esp = dbSpell.Especial || dbSpell.especial || dbSpell.Especial_desc || '';
-
-        if (efe || over || under || esp) {
-            dHtml += `<div style="background:#0a0514; border:1px solid #4a1880; border-radius:4px; padding:10px; margin-top:6px; font-size:0.85em; line-height:1.4; box-shadow:inset 0 0 10px rgba(74,24,128,0.2);">`;
-            if (efe) dHtml += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:var(--cyan-magic);">Efecto:</b> ${efe}</div>`;
-            if (over) dHtml += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:var(--gold);">🌟 Overcast:</b> ${over}</div>`;
-            if (under) dHtml += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:#ff4444;">⚠️ Undercast:</b> ${under}</div>`;
-            if (esp) dHtml += `<div style="color:#ddd; margin-bottom:2px;"><b style="color:#00ff88;">✨ Especial:</b> ${esp}</div>`;
-            dHtml += `</div>`;
-        }
-    }
-    detailsDiv.innerHTML = dHtml;
+    detailsDiv.innerHTML = getSpellDetailsHTML(dbSpell);
 };
 
 // ── NAVEGACIÓN CON TECLADO ──
@@ -76,14 +82,12 @@ window.devOnGridKeydown = (e, row, col, pjSeleccionado) => {
                 : hzState.catalogoDB;
                 
             const invNombres = opciones.map(h => h.Nombre || h.nombre || h.ID || h.id).sort((a, b) => a.localeCompare(b));
-            
-            // 🌟 FIX: Ahora reacciona y autocompleta aunque sea una palabra del medio (ej. "fuego" -> "Bola de Fuego")
             const match = invNombres.find(h => h.toLowerCase().includes(val));
             
             if (match && match.toLowerCase() !== val) {
                 e.preventDefault();
                 input.value = match;
-                window.devSpellInputHelper(row, match, pjSeleccionado); // Aplica tarjeta instantánea
+                window.devSpellInputHelper(row, match, pjSeleccionado); 
                 
                 const nextSpellInput = document.getElementById(`dev-spell-${row + 1}`);
                 if (nextSpellInput) {
@@ -285,29 +289,13 @@ export function renderColumnaHechizos(pjSeleccionado) {
         for (let i = 0; i < hzState.casteoManual.numFilas; i++) {
             const fila = hzState.casteoManual.filas[i];
 
-            // 🌟 NUEVO: Búsqueda dinámica al recargar para mantener la tarjeta visible si ya hay un hechizo
             let detallesHTML = '';
             if (fila.nombre) {
                 const dbSpell = hzState.catalogoDB.find(h =>
                     norm(h.Nombre || h.nombre || '') === norm(fila.nombre) ||
                     norm(h.ID || h.id || '') === norm(fila.nombre)
                 );
-
-                if (dbSpell) {
-                    const efe = dbSpell.Efecto || dbSpell.efecto_desc || dbSpell.efecto || '';
-                    const over = dbSpell.Overcast || dbSpell.overcast || dbSpell.Overcast_desc || '';
-                    const under = dbSpell.Undercast || dbSpell.undercast || dbSpell.Undercast_desc || '';
-                    const esp = dbSpell.Especial || dbSpell.especial || dbSpell.Especial_desc || '';
-
-                    if (efe || over || under || esp) {
-                        detallesHTML += `<div style="background:#0a0514; border:1px solid #4a1880; border-radius:4px; padding:10px; margin-top:6px; font-size:0.85em; line-height:1.4; box-shadow:inset 0 0 10px rgba(74,24,128,0.2);">`;
-                        if (efe) detallesHTML += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:var(--cyan-magic);">Efecto:</b> ${efe}</div>`;
-                        if (over) detallesHTML += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:var(--gold);">🌟 Overcast:</b> ${over}</div>`;
-                        if (under) detallesHTML += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:#ff4444;">⚠️ Undercast:</b> ${under}</div>`;
-                        if (esp) detallesHTML += `<div style="color:#ddd; margin-bottom:2px;"><b style="color:#00ff88;">✨ Especial:</b> ${esp}</div>`;
-                        detallesHTML += `</div>`;
-                    }
-                }
+                detallesHTML = getSpellDetailsHTML(dbSpell);
             }
 
             html += `
