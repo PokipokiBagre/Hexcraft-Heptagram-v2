@@ -19,37 +19,23 @@ window.devCalcularConjuros = calcularConjurosMasivos;
 window.devCopiarPrimerDado = copiarPrimerDado;
 window.devCopiarPrimerHechizo = copiarPrimerHechizo;
 
-// ── UTILIDAD PARA LEER ARRAYS/STRINGS DE EFECTOS DE SUPABASE ──
-const extractVal = (v) => {
-    if (!v || v === "0" || v === 0 || v === "-") return '';
-    if (Array.isArray(v)) {
-        const text = v.join(" ");
-        return (text && text !== "0" && text !== "-") ? text : '';
-    }
-    const text = String(v).trim();
-    return (text && text !== "0" && text.toLowerCase() !== "null" && text !== "-") ? text : '';
+// ── UTILIDAD PARA LEER TEXTOS DIRECTOS (COMO EN INVENTARIO-UI) ──
+const parseSpellText = (val) => {
+    if (val === undefined || val === null || val === "0" || val === 0 || val === "-") return '';
+    let text = Array.isArray(val) ? val.join(', ') : String(val);
+    text = text.trim();
+    if (!text || text === "0" || text === "-" || text.toLowerCase() === "null") return '';
+    return text;
 };
-
-function findSpellProp(dbSpell, ...names) {
-    if (!dbSpell) return '';
-    for (const key of Object.keys(dbSpell)) {
-        const cleanKey = key.trim().toLowerCase();
-        if (names.some(n => n.toLowerCase() === cleanKey)) {
-            const val = extractVal(dbSpell[key]);
-            if (val) return val;
-        }
-    }
-    return '';
-}
 
 function getSpellDetailsHTML(dbSpell) {
     if (!dbSpell) return '';
     
-    // 🌟 Buscador dinámico e infalible (Maneja Arrays)
-    const efe = findSpellProp(dbSpell, 'efecto', 'efecto_desc', 'desc', 'descripcion');
-    const over = findSpellProp(dbSpell, 'overcast', 'overcast_desc', 'efecto_overcast');
-    const under = findSpellProp(dbSpell, 'undercast', 'undercast_desc', 'efecto_undercast');
-    const esp = findSpellProp(dbSpell, 'especial', 'especial_desc', 'efecto_especial');
+    // 🌟 Uso directo de propiedades y limpiador de basura
+    const efe = parseSpellText(dbSpell.Efecto || dbSpell.Efecto_desc || dbSpell.efecto_desc || dbSpell.efecto);
+    const over = parseSpellText(dbSpell.Overcast || dbSpell.overcast);
+    const under = parseSpellText(dbSpell.Undercast || dbSpell.undercast);
+    const esp = parseSpellText(dbSpell.Especial || dbSpell.especial);
 
     let dHtml = '';
     if (efe || over || under || esp) {
@@ -187,8 +173,8 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     const hClase = hechizo.Clase || hechizo.clase || '-';
     const costo = parseInt(hechizo.HEX || hechizo.Hex || hechizo.costo || hechizo.Costo || 0) || 0;
     
-    // 🌟 Uso el nuevo escáner
-    const efecto = findSpellProp(hechizo, 'efecto', 'efecto_desc', 'desc', 'descripcion') || '-';
+    // Limpieza de efecto para la tarjeta de BD
+    const efecto = parseSpellText(hechizo.Efecto || hechizo.efecto_desc || hechizo.efecto) || '-';
 
     const isPublicBase = hechizo.Conocido && hechizo.Conocido.toString().trim().toLowerCase() === 'si';
     const isKnown = hzState.colaVisibilidad[hId] !== undefined ? hzState.colaVisibilidad[hId] : isPublicBase;
@@ -228,7 +214,6 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     </div>`;
 }
 
-// ── RENDER PRINCIPAL ──
 export function renderColumnaHechizos(pjSeleccionado) {
     const contenedor = 'content-spells';
     if (!document.getElementById(contenedor)) return;
