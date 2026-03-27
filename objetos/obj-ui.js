@@ -137,7 +137,6 @@ export function dibujarResumenVisual() {
         let frozenKeys = estadoUI.cachedInvOrders[j] || [];
         Object.keys(invGlobal[j]).forEach(k => { if (invGlobal[j][k] > 0 && !frozenKeys.includes(k)) frozenKeys.push(k); });
 
-        // 🌟 Ordenar los equipados primero en el resumen de party
         frozenKeys.sort((a,b) => {
             const eqpA = eqpGlobal[j]?.[a] || false;
             const eqpB = eqpGlobal[j]?.[b] || false;
@@ -154,8 +153,8 @@ export function dibujarResumenVisual() {
                 const isEqp = eqpGlobal[j]?.[o] || false;
                 const tooltipText = `<span>${o}</span>Tipo: ${info.tipo}<br>Rareza: ${info.rar}<br><br>${info.eff}`;
                 
-                // 🌟 Estilos si está equipado
-                const eqpBadge = isEqp ? `<div style="position:absolute; top:-5px; right:-5px; background:var(--gold); color:#000; font-size:0.6em; padding:2px 4px; border-radius:4px; font-weight:bold; z-index:10;">EQP</div>` : '';
+                // 🌟 Estilos de equipo corregidos para no cortar bordes
+                const eqpBadge = isEqp ? `<div style="position:absolute; top:0; right:0; background:var(--gold); color:#000; font-size:0.6em; padding:2px 4px; border-radius:0 4px 0 6px; font-weight:bold; z-index:10;">EQP</div>` : '';
                 const imgBorder = isEqp ? 'border:2px solid var(--gold); box-shadow:0 0 8px var(--gold);' : '';
 
                 let badgeHTML = '';
@@ -173,7 +172,7 @@ export function dibujarResumenVisual() {
                 itemsHtml += `
                 <div class="hex-tooltip img-stack" style="position:relative;" onclick="window.verImagen('${db.storage.urlBase}/imgobjetos/${imgFile}.png')">
                     ${eqpBadge}
-                    <img src="${db.storage.urlBase}/imgobjetos/${imgFile}.png" style="${imgBorder}" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'" alt="${o}">
+                    <img src="${db.storage.urlBase}/imgobjetos/${imgFile}.png" style="${imgBorder} border-radius:4px; overflow:hidden;" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'" alt="${o}">
                     ${badgeHTML}
                     <div class="tooltiptext">${tooltipText}</div>
                 </div>`;
@@ -226,7 +225,6 @@ export function dibujarInventarios() {
     let frozenKeys = estadoUI.cachedInvOrders[j] || [];
     Object.keys(invGlobal[j]).forEach(k => { if (invGlobal[j][k] > 0 && !frozenKeys.includes(k)) frozenKeys.push(k); });
 
-    // 🌟 Ordenar para inventario: Equipados siempre de primero
     frozenKeys.sort((a,b) => {
         const eqpA = eqpGlobal[j]?.[a] || false;
         const eqpB = eqpGlobal[j]?.[b] || false;
@@ -252,11 +250,13 @@ export function dibujarInventarios() {
             const imgFile = normalizarNombre(o);
             const rarClase = objGlobal[o]?.rar === 'Raro' ? 'rarity-raro' : (objGlobal[o]?.rar === 'Legendario' ? 'rarity-legendario' : '');
             const isEqp = eqpGlobal[j]?.[o] || false;
+            
+            // 🌟 Posición interior ajustada para Top 5
+            const eqpBadge = isEqp ? `<div style="position:absolute; top:0; right:0; background:var(--gold); color:#000; font-size:0.55em; padding:2px 4px; border-radius:0 6px 0 4px; font-weight:bold; z-index:10;">EQP</div>` : '';
             const imgBorder = isEqp ? 'border:2px solid var(--gold); box-shadow:0 0 10px var(--gold);' : '';
-            const eqpBadge = isEqp ? `<div style="position:absolute; top:-5px; right:-5px; background:var(--gold); color:#000; font-size:0.6em; padding:2px 4px; border-radius:4px; font-weight:bold; z-index:10;">EQP</div>` : '';
             
             html += `
-            <div class="top-item-card ${rarClase}" style="position:relative;">
+            <div class="top-item-card ${rarClase}" style="position:relative; overflow:hidden;">
                 ${eqpBadge}
                 <img src="${db.storage.urlBase}/imgobjetos/${imgFile}.png" style="${imgBorder}" onclick="window.verImagen(this.src)" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'">
                 <span style="font-size:0.65em; display:block; height:2.4em; overflow:hidden; color:${isEqp ? 'var(--gold)' : '#d4af37'};" title="${o}">${o}</span>
@@ -301,7 +301,6 @@ export function dibujarInventarios() {
     });
     html += `</table></div>`;
 
-    // ── Propuestas pendientes para este personaje ──────────────
     const propuestasPJ = estadoUI._propuestasCache || [];
     if (propuestasPJ.length > 0) {
         html += `
@@ -455,9 +454,9 @@ export function dibujarControl() {
             const c = invGlobal[j][o] || 0;
             const oSafe = o.replace(/'/g, "\\'");
             
-            // 🌟 Eqp Modificaciones para Panel Control
             const isEqp = eqpGlobal[j]?.[o] || false;
-            const eqpBadge = isEqp ? `<div style="position:absolute; top:-5px; right:-5px; background:var(--gold); color:#000; font-size:0.65em; font-weight:bold; padding:2px 6px; border-radius:4px; z-index:10; box-shadow:0 0 5px var(--gold);">EQP</div>` : '';
+            // 🌟 Posición interior ajustada para Panel de Control
+            const eqpBadge = isEqp ? `<div style="position:absolute; top:0; right:0; background:var(--gold); color:#000; font-size:0.65em; font-weight:bold; padding:2px 6px; border-radius:0 8px 0 6px; z-index:10; box-shadow:-2px 2px 5px rgba(0,0,0,0.5);">EQP</div>` : '';
             const btnEqpText = isEqp ? 'Dsqp.' : 'Eqp.';
             const btnEqpCss = isEqp ? 'background:var(--gold); color:#000; box-shadow:0 0 5px var(--gold); border:none;' : 'background:#222; color:#888; border:1px solid #444;';
             const imgBorder = isEqp ? `border:2px solid var(--gold); box-shadow:0 0 10px var(--gold);` : `border:2px solid ${actionColor}; box-shadow:0 0 10px ${actionColor};`;
@@ -525,9 +524,9 @@ export function dibujarTransferencia() {
                     const cantToPass = estadoUI.transMult === 'TODO' ? c : estadoUI.transMult;
                     const oSafe = o.replace(/'/g, "\\'");
                     
-                    // 🌟 Mostrar si lo está transfiriendo puesto
                     const isEqp = eqpGlobal[j]?.[o] || false;
-                    const eqpBadge = isEqp ? `<div style="position:absolute; top:-5px; right:-5px; background:var(--gold); color:#000; font-size:0.65em; font-weight:bold; padding:2px 6px; border-radius:4px; z-index:10;">EQP</div>` : '';
+                    // 🌟 Posición interior ajustada para Panel de Transferencias
+                    const eqpBadge = isEqp ? `<div style="position:absolute; top:0; right:0; background:var(--gold); color:#000; font-size:0.65em; font-weight:bold; padding:2px 6px; border-radius:0 8px 0 6px; z-index:10; box-shadow:-2px 2px 5px rgba(0,0,0,0.5);">EQP</div>` : '';
                     
                     html += `<div class="control-card item-con-stock" style="position:relative;">
                                 ${eqpBadge}
