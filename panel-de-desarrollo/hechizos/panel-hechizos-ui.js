@@ -49,15 +49,32 @@ window.devOnGridKeydown = (e, row, col, pjSeleccionado) => {
                 e.preventDefault();
                 input.value = match;
                 window.devModFilaCast(row, 'nombre', match, pjSeleccionado);
-                document.getElementById(`dev-afinidad-${row}`)?.focus();
+                
+                // ✅ FIX: Al hacer Tab, salta al hechizo de la siguiente fila (si existe)
+                const nextSpellInput = document.getElementById(`dev-spell-${row + 1}`);
+                if (nextSpellInput) {
+                    nextSpellInput.focus();
+                } else {
+                    document.getElementById(`dev-afinidad-${row}`)?.focus();
+                }
                 return;
             }
         }
     }
 
-    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    if (e.key === 'ArrowUp') {
         e.preventDefault();
-        let nextRow = e.key === 'ArrowUp' ? Math.max(0, row - 1) : Math.min(num - 1, row + 1);
+        // ✅ FIX: Si estamos en la primera fila, subir a la casilla de "FILAS"
+        if (row === 0) {
+            document.getElementById('dev-cast-num')?.focus();
+        } else {
+            const mapCol = { 0: 'dev-dado', 1: 'dev-spell', 2: 'dev-afinidad', 3: 'dev-cant' };
+            document.getElementById(`${mapCol[col]}-${row - 1}`)?.focus();
+        }
+    }
+    else if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        let nextRow = Math.min(num - 1, row + 1);
         const mapCol = { 0: 'dev-dado', 1: 'dev-spell', 2: 'dev-afinidad', 3: 'dev-cant' };
         document.getElementById(`${mapCol[col]}-${nextRow}`)?.focus();
     }
@@ -212,7 +229,7 @@ export function renderColumnaHechizos(pjSeleccionado) {
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                 <label style="color:var(--gold); font-weight:bold; font-size: 0.9em;">
                     FILAS: 
-                    <input type="number" id="dev-cast-num" value="${hzState.casteoManual.numFilas}" min="1" max="50" onchange="window.devSetNumFilasCast(this.value)" style="width:50px; background:#000; color:#fff; border:1px solid var(--gold); border-radius:4px; padding:4px; text-align:center; font-weight:bold; outline:none;">
+                    <input type="number" id="dev-cast-num" value="${hzState.casteoManual.numFilas}" min="1" max="50" onchange="window.devSetNumFilasCast(this.value)" onkeydown="if(event.key === 'ArrowDown'){ event.preventDefault(); document.getElementById('dev-spell-0')?.focus(); }" style="width:50px; background:#000; color:#fff; border:1px solid var(--gold); border-radius:4px; padding:4px; text-align:center; font-weight:bold; outline:none;">
                 </label>
                 <div style="display:flex; gap:5px;">
                     <button onclick="window.devCopiarPrimerHechizo()" style="background:#333; color:#fff; border:1px solid #555; border-radius:4px; padding:4px 8px; cursor:pointer; font-size:0.8em;">📋 1er Hechizo</button>
