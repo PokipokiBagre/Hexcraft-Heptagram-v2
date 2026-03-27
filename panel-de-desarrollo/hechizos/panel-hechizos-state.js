@@ -6,20 +6,24 @@ export const hzState = {
     catalogoDB: [], 
     inventariosDB: {}, 
     
-    // UI State: 'castear' o 'asignar'
     vistaActiva: 'castear', 
-    busquedaCastear: "",
     busquedaAsignar: "",
     
-    // Toggles de Casteo Rápido 
+    // 🌟 ESTADO DEL FORMULARIO DE CASTEO MULTIPLE 🌟
+    casteoManual: {
+        numFilas: 3,
+        filas: Array.from({ length: 50 }, () => ({ nombre: '', cant: 1 })),
+        datalistModo: 'local' // 'local' (Grimorio) o 'global' (Todos)
+    },
+    
     cobrarAuto: false,
     mostrarEfectos: true,
     cobrarAlAsignar: false,
     
-    // Memoria Volátil de Sesión (Para calcular el consumo VEX -> HEX)
     vexGastadoPorPj: {}, 
 
     // 🔥 COLAS DE CAMBIOS (Staging) 🔥
     colaAsignaciones: {}, 
+    colaVisibilidad: {}, // Para Ocultar/Hacer Público
     logCasteosSession: [] 
 };
