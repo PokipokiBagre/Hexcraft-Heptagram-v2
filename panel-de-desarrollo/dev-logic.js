@@ -8,6 +8,7 @@ import { devState, norm } from './dev-state.js';
 import { objState } from './objetos/panel-objetos-state.js';
 import { stState } from './estadisticas/panel-stats-state.js';
 import { hzState } from './hechizos/panel-hechizos-state.js'; 
+import { getPjStat, calcularVidaRojaMaxTotal } from './estadisticas/panel-stats-logic.js';
 
 export function revisarCambiosPendientes() {
     const btnSync = document.getElementById('btn-sync-global');
@@ -123,20 +124,17 @@ export function actualizarLogGlobal() {
                         logPorPJ[realPj].push(`HEX ${sign}${delta} (${cantNueva})`);
                     }
                 }
-                else if (campoRaiz === 'vidaRojaActual' || campoRaiz === 'baseVidaRojaMax') {
-                    const maxBase = campoRaiz === 'baseVidaRojaMax'
-                        ? cantNueva
-                        : (dbPj.baseVidaRojaMax || 0) + (cambios['baseVidaRojaMax'] !== undefined
-                            ? cambios['baseVidaRojaMax'] - (dbPj.baseVidaRojaMax || 0) : 0);
-                    const extraVida = (dbPj.buffs?.vidaRojaMaxExtra || 0)
-                        + (dbPj.hechizosEfecto?.vidaRojaMaxExtra || 0)
-                        + (dbPj.hechizos?.vidaRojaMaxExtra || 0);
-                    const finalMax = maxBase + extraVida;
-                    const finalAct = campoRaiz === 'vidaRojaActual'
-                        ? cantNueva
-                        : (dbPj.vidaRojaActual || 0) + (cambios['vidaRojaActual'] !== undefined
-                            ? cambios['vidaRojaActual'] - (dbPj.vidaRojaActual || 0) : 0);
-                    logPorPJ[realPj].push(`${nomLegibles[campoRaiz]} ${sign}${delta} (${finalAct}/${finalMax})`);
+                // ✅ FIX: Vida Roja (Actual, Base, Extra/Buff) consolidada y corregida
+                else if (campoRaiz === 'vidaRojaActual' || campoRaiz === 'baseVidaRojaMax' || subCampo === 'vidaRojaMaxExtra') {
+                    const finalAct = getPjStat(pjKey, 'vidaRojaActual');
+                    const finalMax = calcularVidaRojaMaxTotal(pjKey);
+                    
+                    let prefijo = nomLegibles[campoRaiz] || campoRaiz;
+                    if (campoRaiz === 'buffs') prefijo = "Buff " + (subNomLegibles[subCampo] || subCampo);
+                    else if (campoRaiz === 'hechizos') prefijo = "Hcz " + (subNomLegibles[subCampo] || subCampo);
+                    else if (campoRaiz === 'hechizosEfecto') prefijo = "Alt " + (subNomLegibles[subCampo] || subCampo);
+
+                    logPorPJ[realPj].push(`${prefijo} ${sign}${delta} (${finalAct}/${finalMax})`);
                 }
                 else if (campoRaiz === 'estados' && subCampo) {
                     const eDef = stState.estadosDB.find(e => e.id === subCampo);
