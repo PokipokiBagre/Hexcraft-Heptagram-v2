@@ -42,6 +42,7 @@ export function setNumFilasCast(num) {
 }
 
 export function modFilaCast(index, campo, valor, pjNombre) {
+    const oldValue = hzState.casteoManual.filas[index][campo];
     hzState.casteoManual.filas[index][campo] = valor;
     
     if (campo === 'nombre' && pjNombre) {
@@ -50,15 +51,15 @@ export function modFilaCast(index, campo, valor, pjNombre) {
             norm(h.ID || h.id || '') === norm(valor)
         );
         
-        let nuevaAfinidad = '';
         if (hechizo) {
-            nuevaAfinidad = obtenerAfinidadTotal(pjNombre, hechizo.Afinidad);
+            hzState.casteoManual.filas[index].afinidad = obtenerAfinidadTotal(pjNombre, hechizo.Afinidad);
+            // 🌟 Disparamos actualización para mostrar la tarjeta de información del hechizo instantáneamente
+            window.dispatchEvent(new Event('devUIUpdate'));
+        } else if (oldValue && !hechizo) {
+            hzState.casteoManual.filas[index].afinidad = '';
+            // 🌟 Disparamos actualización para ocultar la tarjeta si el texto ya no coincide
+            window.dispatchEvent(new Event('devUIUpdate'));
         }
-        
-        hzState.casteoManual.filas[index].afinidad = nuevaAfinidad;
-        
-        const afInput = document.getElementById(`dev-afinidad-${index}`);
-        if (afInput) afInput.value = nuevaAfinidad;
     }
 }
 
@@ -77,6 +78,7 @@ export function copiarPrimerHechizo() {
         if (elAf) elAf.value = fila.afinidad;
     }
     navigator.clipboard.writeText(`Casteando: ${fila.nombre}`).then(() => alert(`"${fila.nombre}" copiado a todas las filas.`));
+    window.dispatchEvent(new Event('devUIUpdate')); // Refrescar para pintar las tarjetas de abajo
 }
 
 export function copiarPrimerDado() {
@@ -89,7 +91,6 @@ export function copiarPrimerDado() {
         const el = document.getElementById(`dev-dado-${i}`);
         if (el) el.value = dado;
     }
-    // ✅ FIX: Ahora copia !r 1d100
     navigator.clipboard.writeText(`!r 1d100 + ${fila.afinidad || 0} // ${fila.nombre || '?'}`).then(() => alert(`Dado ${dado} copiado a todas las filas.`));
 }
 
@@ -146,7 +147,6 @@ export function calcularConjurosMasivos(pjNombre) {
         const vexUsado = hzState.vexGastadoPorPj[pjNombre] || 0;
         const vexDisponible = Math.max(0, vexMax - vexUsado);
 
-        // ✅ FIX: Reemplazado "Cobro Casteo" por "Hexcast"
         if (vexDisponible >= totalCost) {
             hzState.vexGastadoPorPj[pjNombre] = vexUsado + totalCost;
             stringCobro = `Hexcast | -${totalCost} Vex`;
@@ -175,8 +175,6 @@ export function asignarHechizo(pjNombre, hechizoId) {
     
     if (!hzState.colaAsignaciones[pjKey]) hzState.colaAsignaciones[pjKey] = {};
     
-    // ✅ FIX: Validamos usando la ID normalizada, pero GUARDAMOS la hechizoId REAL en la cola 
-    // para que Supabase reciba el texto exacto (ej. DESTEJER en lugar de destejer).
     const yaLoTiene = hzState.colaAsignaciones[pjKey][hechizoId] ?? (hzState.inventariosDB[pjKey] || []).includes(idNorm);
     const accionDar = !yaLoTiene;
     
