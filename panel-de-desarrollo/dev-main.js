@@ -35,14 +35,12 @@ window.onload = async () => {
 
     try {
         // EXTRACCIÓN PURA DE SUPABASE
-        // 🔥 CORRECCIÓN: Ahora descargamos explícitamente el inventario de hechizos también
-        const [{data: personajesBD}, catalogoObj, invObj, estadosArr, hechizosData, {data: invHz}] = await Promise.all([
+        const [{data: personajesBD}, catalogoObj, invObj, estadosArr, hechizosData] = await Promise.all([
             supabase.from('personajes').select('*'),
             db.objetos.getCatalogo(),
             db.objetos.getInventarioCompleto(),
             db.estadosConfig.getAll(),
-            db.hechizos.getDataCompleta(),
-            supabase.from('inventario_hechizos').select('*') 
+            db.hechizos.getDataCompleta() // <-- AQUÍ ESTÁ TODO (Nodos e Inventario)
         ]);
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
@@ -104,12 +102,11 @@ window.onload = async () => {
         }));
 
         const catalogoHz = [...(hechizosData.nodos || []), ...(hechizosData.nodosOcultos || [])];
+        const inventarioHz = hechizosData.inventario || []; // 🌟 AQUÍ ESTÁ EL INVENTARIO REAL
 
         initObjetosDev(catalogoObj, invObj);
         initStatsDev(statsGlobalMock, estadosListMock);
-        
-        // ¡Enviamos el inventario real (invHz) al módulo!
-        initHechizosDev(catalogoHz, invHz || []); 
+        initHechizosDev(catalogoHz, inventarioHz); 
 
         document.getElementById('pantalla-carga').classList.add('oculto');
         document.getElementById('interfaz-master').classList.remove('oculto');
