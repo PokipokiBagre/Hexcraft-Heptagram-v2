@@ -35,17 +35,19 @@ window.onload = async () => {
 
     try {
         // EXTRACCIÓN PURA DE SUPABASE
-        const [{data: personajesBD}, catalogoObj, invObj, estadosArr, hechizosData] = await Promise.all([
+        // 🔥 CORRECCIÓN: Ahora descargamos explícitamente el inventario de hechizos también
+        const [{data: personajesBD}, catalogoObj, invObj, estadosArr, hechizosData, {data: invHz}] = await Promise.all([
             supabase.from('personajes').select('*'),
             db.objetos.getCatalogo(),
             db.objetos.getInventarioCompleto(),
             db.estadosConfig.getAll(),
-            db.hechizos.getDataCompleta() 
+            db.hechizos.getDataCompleta(),
+            supabase.from('inventario_hechizos').select('*') 
         ]);
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
 
-        // MAPEO PLANO DIRECTO A LA MEMORIA (RESTAURADO COMPLETO)
+        // MAPEO PLANO DIRECTO A LA MEMORIA
         const statsGlobalMock = {};
         personajesBD.forEach(p => {
             statsGlobalMock[p.nombre] = {
@@ -66,7 +68,6 @@ window.onload = async () => {
                     fisica: Number(p.af_fisica) || 0, energetica: Number(p.af_energetica) || 0, espiritual: Number(p.af_espiritual) || 0,
                     mando: Number(p.af_mando) || 0, psiquica: Number(p.af_psiquica) || 0, oscura: Number(p.af_oscura) || 0
                 },
-                // ¡AQUÍ ESTÁ EL BLOQUE QUE HABÍA BORRADO POR ERROR!
                 hechizos: {
                     fisica:            Number(p.hz_fisica)          || 0,
                     energetica:        Number(p.hz_energetica)      || 0,
@@ -102,13 +103,13 @@ window.onload = async () => {
             id: e.id, nombre: e.nombre, tipo: e.tipo, bg: e.color_bg, border: e.color_border, desc: e.descripcion
         }));
 
-        // Fusionamos Nodos y Nodos Ocultos para el catálogo dev
         const catalogoHz = [...(hechizosData.nodos || []), ...(hechizosData.nodosOcultos || [])];
-        const invHz = hechizosData.inventario || [];
 
         initObjetosDev(catalogoObj, invObj);
         initStatsDev(statsGlobalMock, estadosListMock);
-        initHechizosDev(catalogoHz, invHz); 
+        
+        // ¡Enviamos el inventario real (invHz) al módulo!
+        initHechizosDev(catalogoHz, invHz || []); 
 
         document.getElementById('pantalla-carga').classList.add('oculto');
         document.getElementById('interfaz-master').classList.remove('oculto');
