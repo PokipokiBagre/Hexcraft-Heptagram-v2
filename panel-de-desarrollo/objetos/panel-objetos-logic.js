@@ -7,10 +7,15 @@ import { objState } from './panel-objetos-state.js';
 export function initObjetosDev(catalogo, inventarios) {
     objState.catalogoDB = catalogo || [];
     objState.inventariosDB = {};
+    objState.equipadosDB = {}; // 🌟 Inicializar BD Equipados
     (inventarios || []).forEach(item => {
         const pj = item.personaje_nombre.toLowerCase();
-        if (!objState.inventariosDB[pj]) objState.inventariosDB[pj] = {};
+        if (!objState.inventariosDB[pj]) {
+            objState.inventariosDB[pj] = {};
+            objState.equipadosDB[pj] = {};
+        }
         objState.inventariosDB[pj][item.objeto_nombre] = item.cantidad;
+        objState.equipadosDB[pj][item.objeto_nombre] = item.equipado || false;
     });
 }
 
@@ -35,6 +40,36 @@ export function modificarCantidad(pjNombre, objNombre, variacion) {
     
     if (!objState.colaInventario[pjKey]) objState.colaInventario[pjKey] = {};
     objState.colaInventario[pjKey][objNombre] = nuevaCant;
+
+    // Si la cantidad llega a 0, lo desequipamos automáticamente
+    if (nuevaCant === 0) {
+        if (!objState.colaEquipados[pjKey]) objState.colaEquipados[pjKey] = {};
+        objState.colaEquipados[pjKey][objNombre] = false;
+    }
+
+    window.dispatchEvent(new Event('devUIUpdate'));
+}
+
+// 🌟 LÓGICA DE EQUIPACIÓN 🌟
+export function isEquipado(pjNombre, objNombre) {
+    if (!pjNombre) return false;
+    const pjKey = pjNombre.toLowerCase();
+    if (objState.colaEquipados[pjKey] && objState.colaEquipados[pjKey][objNombre] !== undefined) {
+        return objState.colaEquipados[pjKey][objNombre];
+    }
+    if (objState.equipadosDB[pjKey] && objState.equipadosDB[pjKey][objNombre]) {
+        return objState.equipadosDB[pjKey][objNombre];
+    }
+    return false;
+}
+
+export function toggleEquipacion(pjNombre, objNombre) {
+    if (!pjNombre) return;
+    const pjKey = pjNombre.toLowerCase();
+    const actual = isEquipado(pjNombre, objNombre);
+    
+    if (!objState.colaEquipados[pjKey]) objState.colaEquipados[pjKey] = {};
+    objState.colaEquipados[pjKey][objNombre] = !actual;
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
