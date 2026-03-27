@@ -15,9 +15,9 @@ export const hzState = {
         datalistModo: 'local'
     },
     
-    cobrarAuto: true,
-    mostrarEfectos: true,
-    cobrarAlAsignar: true,
+    cobrarAuto: false,     // 🌟 Modificado: Por defecto en false
+    mostrarEfectos: false, // 🌟 Modificado: Por defecto en false
+    cobrarAlAsignar: false,
     
     vexGastadoPorPj: {}, 
 
