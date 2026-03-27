@@ -28,13 +28,27 @@ const getVal = (v) => {
     return s;
 };
 
+// Busca el primer valor no-vacío entre múltiples claves posibles del objeto
+const getValKeys = (obj, keys) => {
+    if (!obj) return '';
+    const actualKeys = Object.keys(obj);
+    for (const pk of keys) {
+        const matched = actualKeys.find(k => k.trim().toLowerCase() === pk.toLowerCase());
+        if (matched) {
+            const val = getVal(obj[matched]);
+            if (val) return val;
+        }
+    }
+    return '';
+};
+
 function getSpellDetailsHTML(dbSpell) {
     if (!dbSpell) return '';
     
-    const efe = getVal(dbSpell.Efecto_desc || dbSpell.Efecto || dbSpell.efecto || dbSpell.Desc || dbSpell.desc);
-    const over = getVal(dbSpell.Efecto_overcast || dbSpell.Overcast || dbSpell.overcast);
-    const under = getVal(dbSpell.Efecto_undercast || dbSpell.Undercast || dbSpell.undercast);
-    const esp = getVal(dbSpell.Especial || dbSpell.especial);
+    const efe   = getValKeys(dbSpell, ['efecto_desc', 'efecto', 'desc', 'descripcion']);
+    const over  = getValKeys(dbSpell, ['overcast 100%', 'overcast', 'efecto_overcast']);
+    const under = getValKeys(dbSpell, ['undercast 50%', 'undercast', 'efecto_undercast']);
+    const esp   = getValKeys(dbSpell, ['especial', 'especiales']);
 
     let dHtml = '';
     if (efe || over || under || esp) {
@@ -172,7 +186,7 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     const hClase = hechizo.Clase || hechizo.clase || '-';
     const costo = parseInt(hechizo.HEX || hechizo.Hex || hechizo.costo || hechizo.Costo || 0) || 0;
     
-    const efecto = getVal(hechizo.Efecto_desc || hechizo.Efecto || hechizo.efecto || hechizo.Desc || hechizo.desc) || '-';
+    const efecto = getValKeys(hechizo, ['efecto_desc', 'efecto', 'desc', 'descripcion']) || '-';
 
     const isPublicBase = hechizo.Conocido && hechizo.Conocido.toString().trim().toLowerCase() === 'si';
     const isKnown = hzState.colaVisibilidad[hId] !== undefined ? hzState.colaVisibilidad[hId] : isPublicBase;
