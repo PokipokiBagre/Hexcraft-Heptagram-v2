@@ -12,7 +12,7 @@ window.devBusquedaObj = setBusquedaObjeto;
 window.devSetVistaObj = cambiarVistaObjetos;
 window.devSeleccionarObjEdit = seleccionarObjetoParaEditar;
 window.devModFormEdit = modificarObjetoEdicion;
-window.devToggleEqp = toggleEquipacion; // 🌟 NUEVO BOTON
+window.devToggleEqp = toggleEquipacion; // 🌟 BOTON
 
 const norm = (str) => str.toString().trim().toLowerCase()
     .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
@@ -28,12 +28,10 @@ function drawnHEXPreserveFocus(containerId, html) {
     const container = document.getElementById(containerId);
     if (container) {
         container.innerHTML = html;
-        if (activeId) {
+        if (activeId && document.getElementById(activeId)) {
             const newEl = document.getElementById(activeId);
-            if (newEl) {
-                newEl.focus();
-                if (start !== null && newEl.setSelectionRange) newEl.setSelectionRange(start, end);
-            }
+            newEl.focus();
+            if (start !== null && newEl.setSelectionRange) newEl.setSelectionRange(start, end);
         }
     }
 }
@@ -45,7 +43,6 @@ function generarTarjetaObjeto(objNombre, pjSeleccionado, colorBordeDestacado = '
     
     const modificado = (objState.colaInventario[pjSeleccionado.toLowerCase()] && objState.colaInventario[pjSeleccionado.toLowerCase()][objNombre] !== undefined);
     
-    // 🌟 ESTILOS DE EQUIPACIÓN
     const eqp = isEquipado(pjSeleccionado, objNombre);
     const btnEqpText = eqp ? 'Dsqp.' : 'Eqp.';
     const btnEqpStyle = eqp ? 'background:var(--gold); color:#000;' : 'background:#222; color:#888; border: 1px solid #444;';
@@ -108,146 +105,74 @@ export function renderColumnaObjetos(pjSeleccionado) {
         </div>
     `;
 
-    // =========================================================
-    // VISTA 1: INVENTARIO LOCAL
-    // =========================================================
     if (objState.vistaActiva === 'inventario') {
-        html += `<input type="text" id="dev-search-inv" placeholder="🔍 Buscar en su inventario..." 
-                       value="${objState.busqueda}" 
-                       oninput="window.devBusquedaObj(this.value, 'inv')" 
-                       style="width:100%; box-sizing:border-box; background:#000; color:var(--cyan-magic); border:1px solid var(--cyan-magic); padding:10px; border-radius:6px; margin-bottom:15px; font-family:'Rajdhani'; outline:none;">
+        html += `<input type="text" id="dev-search-inv" placeholder="🔍 Buscar en su inventario..." value="${objState.busqueda}" oninput="window.devBusquedaObj(this.value, 'inv')" style="width:100%; box-sizing:border-box; background:#000; color:var(--cyan-magic); border:1px solid var(--cyan-magic); padding:10px; border-radius:6px; margin-bottom:15px; font-family:'Rajdhani'; outline:none;">
                  <div style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; padding-right:5px;">`;
 
-        let listaMostrar = [];
         const pjKey = pjSeleccionado.toLowerCase();
         const itemsBD = objState.inventariosDB[pjKey] ? Object.keys(objState.inventariosDB[pjKey]) : [];
         const itemsCola = objState.colaInventario[pjKey] ? Object.keys(objState.colaInventario[pjKey]) : [];
         const itemsEqpCola = objState.colaEquipados[pjKey] ? Object.keys(objState.colaEquipados[pjKey]) : [];
         
         const setUnico = new Set([...itemsBD, ...itemsCola, ...itemsEqpCola]);
-        listaMostrar = Array.from(setUnico).filter(obj => getCantidadActual(pjSeleccionado, obj) > 0);
+        let listaMostrar = Array.from(setUnico).filter(obj => getCantidadActual(pjSeleccionado, obj) > 0);
 
-        if (objState.busqueda !== "") {
-            listaMostrar = listaMostrar.filter(nom => nom.toLowerCase().includes(objState.busqueda));
-        }
+        if (objState.busqueda !== "") listaMostrar = listaMostrar.filter(nom => nom.toLowerCase().includes(objState.busqueda));
 
         if (listaMostrar.length === 0) {
-            html += `<div style="text-align:center; color:#555; padding:10px; font-size:0.9em;">Inventario vacío. Ve a Global para darle objetos.</div>`;
+            html += `<div style="text-align:center; color:#555; padding:10px; font-size:0.9em;">Inventario vacío.</div>`;
         } else {
-            // Ordenamos: Equipados primero, luego alfabético
             listaMostrar.sort((a,b) => {
-                const eqpA = isEquipado(pjSeleccionado, a);
-                const eqpB = isEquipado(pjSeleccionado, b);
-                if (eqpA && !eqpB) return -1;
-                if (!eqpA && eqpB) return 1;
-                return a.localeCompare(b);
-            }).forEach(objNombre => {
-                html += generarTarjetaObjeto(objNombre, pjSeleccionado, 'var(--cyan-magic)');
-            });
+                const eqpA = isEquipado(pjSeleccionado, a); const eqpB = isEquipado(pjSeleccionado, b);
+                if (eqpA && !eqpB) return -1; if (!eqpA && eqpB) return 1; return a.localeCompare(b);
+            }).forEach(objNombre => { html += generarTarjetaObjeto(objNombre, pjSeleccionado, 'var(--cyan-magic)'); });
         }
         html += `</div>`;
     }
-
-    // =========================================================
-    // VISTA 2: CATÁLOGO GLOBAL
-    // =========================================================
     else if (objState.vistaActiva === 'catalogo') {
-        html += `<input type="text" id="dev-search-cat" placeholder="🔍 Buscar en el mundo..." 
-                       value="${objState.busquedaCat}" 
-                       oninput="window.devBusquedaObj(this.value, 'cat')" 
-                       style="width:100%; box-sizing:border-box; background:#000; color:#00ff88; border:1px solid #00ff88; padding:10px; border-radius:6px; margin-bottom:15px; font-family:'Rajdhani'; outline:none;">
+        html += `<input type="text" id="dev-search-cat" placeholder="🔍 Buscar en el mundo..." value="${objState.busquedaCat}" oninput="window.devBusquedaObj(this.value, 'cat')" style="width:100%; box-sizing:border-box; background:#000; color:#00ff88; border:1px solid #00ff88; padding:10px; border-radius:6px; margin-bottom:15px; font-family:'Rajdhani'; outline:none;">
                  <div style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; padding-right:5px;">`;
 
         let listaMostrar = objState.catalogoDB.map(o => o.nombre);
-        if (objState.busquedaCat !== "") {
-            listaMostrar = listaMostrar.filter(nom => nom.toLowerCase().includes(objState.busquedaCat));
-        }
+        if (objState.busquedaCat !== "") listaMostrar = listaMostrar.filter(nom => nom.toLowerCase().includes(objState.busquedaCat));
 
-        if (listaMostrar.length === 0) {
-            html += `<div style="text-align:center; color:#555; padding:10px; font-size:0.9em;">No existe en la base de datos. ¡Fórjalo!</div>`;
-        } else {
-            const topLista = listaMostrar.slice(0, 50);
-            topLista.forEach(objNombre => {
-                html += generarTarjetaObjeto(objNombre, pjSeleccionado, '#00ff88');
-            });
-            if (listaMostrar.length > 50) {
-                html += `<div style="text-align:center; color:#666; font-size:0.8em; padding:5px;">Mostrando 50 de ${listaMostrar.length}. Usa el buscador.</div>`;
-            }
+        if (listaMostrar.length === 0) html += `<div style="text-align:center; color:#555; padding:10px; font-size:0.9em;">No existe en la base de datos. ¡Fórjalo!</div>`;
+        else {
+            listaMostrar.slice(0, 50).forEach(objNombre => { html += generarTarjetaObjeto(objNombre, pjSeleccionado, '#00ff88'); });
+            if (listaMostrar.length > 50) html += `<div style="text-align:center; color:#666; font-size:0.8em; padding:5px;">Mostrando 50 resultados.</div>`;
         }
         html += `</div>`;
     }
-
-    // =========================================================
-    // VISTA 3: FORJAR NUEVO OBJETO
-    // =========================================================
     else if (objState.vistaActiva === 'forja') {
         html += `
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px;">
                 <h4 style="color:var(--gold); margin:0; font-family:'Cinzel';">🛠️ Modelos a Crear</h4>
-                <div style="display:flex; align-items:center; gap:5px;">
-                    <input type="number" min="1" max="10" value="${objState.formulariosCreacion}" onchange="window.devSetFormCount(this.value)" 
-                           style="width:50px; background:#000; color:#fff; border:1px solid var(--gold); border-radius:4px; text-align:center; outline:none; font-family:'Rajdhani'; font-weight:bold;">
-                </div>
+                <input type="number" min="1" max="10" value="${objState.formulariosCreacion}" onchange="window.devSetFormCount(this.value)" style="width:50px; background:#000; color:#fff; border:1px solid var(--gold); border-radius:4px; text-align:center; outline:none; font-family:'Rajdhani'; font-weight:bold;">
             </div>
-            <div style="overflow-y:auto; padding-right:5px;">
-        `;
+            <div style="overflow-y:auto; padding-right:5px;">`;
 
         for (let i = 0; i < objState.formulariosCreacion; i++) {
             const fData = objState.colaNuevosObjetos[i] || { nombre: '', cant: 1, tipo: 'Consumible', mat: '-', rar: 'Común', eff: '' };
             html += `
                 <div style="background:#0a0514; border:1px solid #4a1880; border-radius:8px; padding:12px; margin-bottom:15px; box-shadow:inset 0 0 10px rgba(74,24,128,0.2);">
-                    <input type="text" id="forja-nom-${i}" placeholder="Nombre del Objeto Nuevo" value="${fData.nombre.replace(/"/g, '&quot;')}" 
-                           oninput="window.devModFormObj(${i}, 'nombre', this.value, false)"
-                           style="width:100%; box-sizing:border-box; background:#000; color:var(--cyan-magic); border:1px solid #4a1880; padding:8px; border-radius:4px; font-weight:bold; margin-bottom:8px; outline:none;">
-                    
+                    <input type="text" id="forja-nom-${i}" placeholder="Nombre del Objeto Nuevo" value="${fData.nombre.replace(/"/g, '&quot;')}" oninput="window.devModFormObj(${i}, 'nombre', this.value, false)" style="width:100%; box-sizing:border-box; background:#000; color:var(--cyan-magic); border:1px solid #4a1880; padding:8px; border-radius:4px; font-weight:bold; margin-bottom:8px; outline:none;">
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-bottom:8px;">
-                        <div>
-                            <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Dar a ${pjSeleccionado}</div>
-                            <input type="number" id="forja-cant-${i}" min="1" value="${fData.cant}" oninput="window.devModFormObj(${i}, 'cant', parseInt(this.value)||0, false)"
-                                   style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:6px; border-radius:4px; outline:none;">
-                        </div>
-                        <div>
-                            <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Material</div>
-                            <select id="forja-mat-${i}" onchange="window.devModFormObj(${i}, 'mat', this.value, true)"
-                                   style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:6px; border-radius:4px; outline:none;">
-                                ${MATERIALES_OBJ.map(m => `<option value="${m}" ${fData.mat === m ? 'selected' : ''}>${m}</option>`).join('')}
-                            </select>
-                        </div>
+                        <div><div style="color:#888; font-size:0.7em; margin-bottom:2px;">Dar a ${pjSeleccionado}</div><input type="number" id="forja-cant-${i}" min="1" value="${fData.cant}" oninput="window.devModFormObj(${i}, 'cant', parseInt(this.value)||0, false)" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:6px; border-radius:4px; outline:none;"></div>
+                        <div><div style="color:#888; font-size:0.7em; margin-bottom:2px;">Material</div><select id="forja-mat-${i}" onchange="window.devModFormObj(${i}, 'mat', this.value, true)" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:6px; border-radius:4px; outline:none;">${MATERIALES_OBJ.map(m => `<option value="${m}" ${fData.mat === m ? 'selected' : ''}>${m}</option>`).join('')}</select></div>
                     </div>
-
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:8px; margin-bottom:8px;">
-                        <div>
-                            <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Tipo</div>
-                            <select onchange="window.devModFormObj(${i}, 'tipo', this.value, true)" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:6px; border-radius:4px; outline:none;">
-                                ${TIPOS_OBJ.map(t => `<option value="${t}" ${fData.tipo === t ? 'selected' : ''}>${t}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div>
-                            <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Rareza</div>
-                            <select onchange="window.devModFormObj(${i}, 'rar', this.value, true)" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:6px; border-radius:4px; outline:none;">
-                                ${RAREZAS_OBJ.map(r => `<option value="${r}" ${fData.rar === r ? 'selected' : ''}>${r}</option>`).join('')}
-                            </select>
-                        </div>
+                        <div><div style="color:#888; font-size:0.7em; margin-bottom:2px;">Tipo</div><select onchange="window.devModFormObj(${i}, 'tipo', this.value, true)" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:6px; border-radius:4px; outline:none;">${TIPOS_OBJ.map(t => `<option value="${t}" ${fData.tipo === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+                        <div><div style="color:#888; font-size:0.7em; margin-bottom:2px;">Rareza</div><select onchange="window.devModFormObj(${i}, 'rar', this.value, true)" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:6px; border-radius:4px; outline:none;">${RAREZAS_OBJ.map(r => `<option value="${r}" ${fData.rar === r ? 'selected' : ''}>${r}</option>`).join('')}</select></div>
                     </div>
-
                     <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Efecto / Descripción</div>
-                    <textarea id="forja-eff-${i}" rows="2" placeholder="Describe el efecto..." oninput="window.devModFormObj(${i}, 'eff', this.value, false)"
-                              style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:8px; border-radius:4px; outline:none; resize:vertical;">${fData.eff}</textarea>
-                </div>
-            `;
+                    <textarea id="forja-eff-${i}" rows="2" placeholder="Describe el efecto..." oninput="window.devModFormObj(${i}, 'eff', this.value, false)" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:8px; border-radius:4px; outline:none; resize:vertical;">${fData.eff}</textarea>
+                </div>`;
         }
         html += `</div>`;
     }
-
-    // =========================================================
-    // VISTA 4: EDITAR OBJETO EXISTENTE
-    // =========================================================
     else if (objState.vistaActiva === 'editar') {
         if (!objState.objAEditarSeleccionado) {
-            html += `<input type="text" id="dev-search-edit" placeholder="🔍 Buscar en inventario para editar..." 
-                           value="${objState.busquedaEdit}" 
-                           oninput="window.devBusquedaObj(this.value, 'edit')" 
-                           style="width:100%; box-sizing:border-box; background:#000; color:#ff4444; border:1px solid #ff4444; padding:10px; border-radius:6px; margin-bottom:15px; font-family:'Rajdhani'; outline:none;">
+            html += `<input type="text" id="dev-search-edit" placeholder="🔍 Buscar en inventario para editar..." value="${objState.busquedaEdit}" oninput="window.devBusquedaObj(this.value, 'edit')" style="width:100%; box-sizing:border-box; background:#000; color:#ff4444; border:1px solid #ff4444; padding:10px; border-radius:6px; margin-bottom:15px; font-family:'Rajdhani'; outline:none;">
                      <div style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; padding-right:5px;">`;
 
             let listaMostrar = [];
@@ -261,9 +186,8 @@ export function renderColumnaObjetos(pjSeleccionado) {
                 listaMostrar = objState.catalogoDB.map(o => o.nombre).filter(nom => nom.toLowerCase().includes(objState.busquedaEdit));
             }
 
-            if (listaMostrar.length === 0) {
-                html += `<div style="text-align:center; color:#555; padding:10px; font-size:0.9em;">No se encontraron objetos para editar.</div>`;
-            } else {
+            if (listaMostrar.length === 0) html += `<div style="text-align:center; color:#555; padding:10px; font-size:0.9em;">No se encontraron objetos para editar.</div>`;
+            else {
                 listaMostrar.forEach(objNombre => {
                     const imgPath = `${STORAGE_URL}/imgobjetos/${norm(objNombre)}.png`;
                     const imgError = `this.onerror=null; this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png'`;
@@ -291,34 +215,18 @@ export function renderColumnaObjetos(pjSeleccionado) {
                     <div style="color:#ffaa00; font-size:0.8em; margin-bottom:15px; font-style:italic;">⚠️ Modificar estos datos afectará a TODOS los jugadores que posean este objeto.</div>
                     
                     <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Renombrar Objeto</div>
-                    <input type="text" id="edit-nom" value="${eData.nombre.replace(/"/g, '&quot;')}" 
-                           oninput="window.devModFormEdit('nombre', this.value, false)"
-                           style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #800000; padding:10px; border-radius:4px; font-weight:bold; margin-bottom:12px; outline:none;">
+                    <input type="text" id="edit-nom" value="${eData.nombre.replace(/"/g, '&quot;')}" oninput="window.devModFormEdit('nombre', this.value, false)" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #800000; padding:10px; border-radius:4px; font-weight:bold; margin-bottom:12px; outline:none;">
                     
                     <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-bottom:12px;">
-                        <div>
-                            <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Tipo</div>
-                            <select onchange="window.devModFormEdit('tipo', this.value, true)" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:8px; border-radius:4px; outline:none;">
-                                ${TIPOS_OBJ.map(t => `<option value="${t}" ${eData.tipo === t ? 'selected' : ''}>${t}</option>`).join('')}
-                            </select>
-                        </div>
-                        <div>
-                            <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Rareza</div>
-                            <select onchange="window.devModFormEdit('rar', this.value, true)" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:8px; border-radius:4px; outline:none;">
-                                ${RAREZAS_OBJ.map(r => `<option value="${r}" ${eData.rar === r ? 'selected' : ''}>${r}</option>`).join('')}
-                            </select>
-                        </div>
+                        <div><div style="color:#888; font-size:0.7em; margin-bottom:2px;">Tipo</div><select onchange="window.devModFormEdit('tipo', this.value, true)" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:8px; border-radius:4px; outline:none;">${TIPOS_OBJ.map(t => `<option value="${t}" ${eData.tipo === t ? 'selected' : ''}>${t}</option>`).join('')}</select></div>
+                        <div><div style="color:#888; font-size:0.7em; margin-bottom:2px;">Rareza</div><select onchange="window.devModFormEdit('rar', this.value, true)" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:8px; border-radius:4px; outline:none;">${RAREZAS_OBJ.map(r => `<option value="${r}" ${eData.rar === r ? 'selected' : ''}>${r}</option>`).join('')}</select></div>
                     </div>
                     
                     <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Material</div>
-                    <select id="edit-mat" onchange="window.devModFormEdit('mat', this.value, true)"
-                           style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:8px; border-radius:4px; margin-bottom:12px; outline:none;">
-                           ${MATERIALES_OBJ.map(m => `<option value="${m}" ${eData.mat === m ? 'selected' : ''}>${m}</option>`).join('')}
-                    </select>
+                    <select id="edit-mat" onchange="window.devModFormEdit('mat', this.value, true)" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:8px; border-radius:4px; margin-bottom:12px; outline:none;">${MATERIALES_OBJ.map(m => `<option value="${m}" ${eData.mat === m ? 'selected' : ''}>${m}</option>`).join('')}</select>
 
                     <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Efecto / Descripción</div>
-                    <textarea id="edit-eff" rows="4" oninput="window.devModFormEdit('eff', this.value, false)"
-                              style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:10px; border-radius:4px; outline:none; resize:vertical;">${eData.eff}</textarea>
+                    <textarea id="edit-eff" rows="4" oninput="window.devModFormEdit('eff', this.value, false)" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:10px; border-radius:4px; outline:none; resize:vertical;">${eData.eff}</textarea>
                 </div>`;
             }
         }
