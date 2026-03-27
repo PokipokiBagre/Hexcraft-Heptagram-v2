@@ -44,7 +44,6 @@ export function setNumFilasCast(num) {
 export function modFilaCast(index, campo, valor, pjNombre) {
     hzState.casteoManual.filas[index][campo] = valor;
     
-    // 🔥 CORRECCIÓN: Actualizamos DOM directo para no destruir el dropdown de autocompletado
     if (campo === 'nombre' && pjNombre) {
         const hechizo = hzState.catalogoDB.find(h => 
             norm(h.Nombre || h.nombre || '') === norm(valor) || 
@@ -200,10 +199,14 @@ export function toggleVisibilidad(hechizoId) {
     const dbHech = hzState.catalogoDB.find(h => (h.ID || h.id) === hechizoId);
     if (!dbHech) return;
 
-    const isKnownDb = dbHech.es_conocido !== false && dbHech.es_conocido !== "FALSE" && dbHech.es_conocido !== 0 && dbHech.es_conocido !== "0";
+    // ✅ FIX BUG 2: Validamos "Conocido" usando la misma lógica que la UI
+    const isPublicBase = dbHech.Conocido && dbHech.Conocido.toString().trim().toLowerCase() === 'si';
 
-    if (currentQ !== undefined) delete hzState.colaVisibilidad[hechizoId]; 
-    else hzState.colaVisibilidad[hechizoId] = !isKnownDb; 
+    if (currentQ !== undefined) {
+        delete hzState.colaVisibilidad[hechizoId]; 
+    } else {
+        hzState.colaVisibilidad[hechizoId] = !isPublicBase; 
+    }
     
     window.dispatchEvent(new Event('devDataChanged')); 
     window.dispatchEvent(new Event('devUIUpdate'));
