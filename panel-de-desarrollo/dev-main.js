@@ -47,15 +47,17 @@ window.onload = async () => {
 
         renderSelectorPersonajes();
 
-        // 🌟 EVENTO 1: Re-renderiza todo y muestra botón (Clics fuertes)
+        // Escucha actualizaciones fuertes (clics de botones)
         window.addEventListener('devUIUpdate', () => {
             if (pjSeleccionado) renderColumnaObjetos(pjSeleccionado);
             revisarCambiosPendientes();
+            actualizarLogGlobal(); // 🌟 Actualiza portapapeles
         });
 
-        // 🌟 EVENTO 2: Anti-Lag. Solo muestra el botón sin re-renderizar (Para teclado)
+        // Escucha actualizaciones sutiles (escribir en input)
         window.addEventListener('devDataChanged', () => {
             revisarCambiosPendientes();
+            actualizarLogGlobal(); // 🌟 Actualiza portapapeles
         });
 
     } catch (error) {
@@ -134,14 +136,86 @@ window.seleccionarPersonajeDev = (nombre) => {
     if (colSpells) colSpells.innerHTML = `<div style="color:#666; text-align:center; padding:20px; font-style:italic;">[Módulo Hechizos Pendiente...]</div>`;
 };
 
-// 🌟 SUPERVISOR DE CAMBIOS
+
+// =========================================================
+// 🌟 GENERADOR INTELIGENTE DEL PORTAPAPELES (LOG)
+// =========================================================
+function actualizarLogGlobal() {
+    const logPorPJ = {};
+
+    // 1. Rastreo matemático de Inventario (Suma/Resta neta)
+    for (const pjKey in objState.colaInventario) {
+        // Buscar el nombre real (Capitalizado) en la base de datos
+        const realPj = listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey)?.nombre || pjKey;
+
+        for (const objNombre in objState.colaInventario[pjKey]) {
+            const cantNueva = objState.colaInventario[pjKey][objNombre];
+            const cantVieja = objState.inventariosDB[pjKey]?.[objNombre] || 0;
+            const delta = cantNueva - cantVieja; // Aquí ocurre la magia de la agregación
+
+            if (delta !== 0) {
+                if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
+                
+                // Extraer el efecto/descripción del catálogo de la BD
+                const catObj = objState.catalogoDB.find(o => o.nombre === objNombre);
+                const eff = catObj && catObj.efecto ? catObj.efecto.replace(/\r?\n/g, ' ').trim() : '';
+                const effStr = eff ? ` | ${eff}` : '';
+
+                if (delta > 0) {
+                    logPorPJ[realPj].push(`OO: ${objNombre} x${delta}${effStr}`);
+                } else {
+                    logPorPJ[realPj].push(`OO Removido: ${objNombre} x${Math.abs(delta)}`);
+                }
+            }
+        }
+    }
+
+    // 2. Rastreo de Forja (Nuevos Objetos)
+    // Se asocian al personaje que estuviera seleccionado al momento de escribir
+    const pjActual = pjSeleccionado || "SIN_ASIGNAR";
+    const nuevosArr = Object.values(objState.colaNuevosObjetos).filter(o => o.nombre.trim() !== '');
+    
+    for (const obj of nuevosArr) {
+        if (obj.cant > 0) {
+            if (!logPorPJ[pjActual]) logPorPJ[pjActual] = [];
+            const eff = obj.eff ? obj.eff.replace(/\r?\n/g, ' ').trim() : '';
+            const effStr = eff ? ` | ${eff}` : '';
+            logPorPJ[pjActual].push(`OO: ${obj.nombre} x${obj.cant}${effStr}`);
+        }
+    }
+
+    // 3. Formateo y Ensamblaje del Texto
+    let logText = "";
+    for (const pj in logPorPJ) {
+        if (logPorPJ[pj].length > 0) {
+            logText += `${pj}\n`;
+            logPorPJ[pj].forEach(line => {
+                logText += `${line}\n`;
+            });
+            logText += `\n`;
+        }
+    }
+
+    const textarea = document.getElementById('log-global-textarea');
+    if (textarea) textarea.value = logText.trim();
+}
+
+window.copiarLogGlobal = () => {
+    const textarea = document.getElementById('log-global-textarea');
+    if (!textarea || !textarea.value) return;
+    
+    navigator.clipboard.writeText(textarea.value).then(() => {
+        alert('¡Log copiado al portapapeles!');
+    });
+};
+
+
 function revisarCambiosPendientes() {
     const btnSync = document.getElementById('btn-sync-global');
     if (!btnSync) return;
 
     let hayCambios = false;
 
-    // Revisar todas las colas de Objetos
     if (Object.keys(objState.colaInventario).length > 0) hayCambios = true;
     if (Object.values(objState.colaNuevosObjetos).some(o => o.nombre.trim() !== '')) hayCambios = true;
     if (Object.keys(objState.colaEdicionObjetos).length > 0) hayCambios = true;
@@ -150,7 +224,6 @@ function revisarCambiosPendientes() {
     else btnSync.classList.add('oculto');
 }
 
-// 🌟 EL GRAN BOTÓN DE GUARDADO (Ahora procesa Forja y Edición)
 window.ejecutarGuardadoGlobal = async () => {
     const btnSync = document.getElementById('btn-sync-global');
     btnSync.innerText = "⏳ SINCRONIZANDO CON LA MATRIZ...";
@@ -159,35 +232,28 @@ window.ejecutarGuardadoGlobal = async () => {
     try {
         const invUpserts = [];
 
-        // 1. Procesar "Forja" (Nuevos Objetos)
+        // 1. Forja
         const nuevosArr = Object.values(objState.colaNuevosObjetos).filter(o => o.nombre.trim() !== '');
         for (const obj of nuevosArr) {
             await db.objetos.upsertObjeto({ nombre: obj.nombre, tipo: obj.tipo, material: obj.mat, rareza: obj.rar, efecto: obj.eff });
             if (obj.cant > 0) invUpserts.push({ personaje_nombre: pjSeleccionado, objeto_nombre: obj.nombre, cantidad: obj.cant });
         }
 
-        // 2. Procesar "Ediciones"
+        // 2. Ediciones
         for (const oldName in objState.colaEdicionObjetos) {
             const dataEdit = objState.colaEdicionObjetos[oldName];
-            if (oldName !== dataEdit.nombre) {
-                // Si le cambió el nombre, la base de datos tratará al nuevo nombre como objeto diferente
-                // Podríamos eliminar el viejo, pero para evitar bugs en inventarios de otros, 
-                // por ahora solo crearemos el nuevo. La lógica avanzada de renombrado requiere backend.
-            }
             await db.objetos.upsertObjeto({ nombre: dataEdit.nombre, tipo: dataEdit.tipo, material: dataEdit.mat, rareza: dataEdit.rar, efecto: dataEdit.eff });
         }
 
-        // 3. Procesar "Inventarios (+/-)"
+        // 3. Inventarios (+/-)
         for (const pj in objState.colaInventario) {
             for (const obj in objState.colaInventario[pj]) {
                 invUpserts.push({ personaje_nombre: pj, objeto_nombre: obj, cantidad: objState.colaInventario[pj][obj] });
             }
         }
         
-        // Enviar Inventario Final
         if (invUpserts.length > 0) await db.objetos.sincronizarBatch(invUpserts);
 
-        // Limpieza de colas
         objState.colaInventario = {}; 
         objState.colaNuevosObjetos = {};
         objState.colaEdicionObjetos = {};
