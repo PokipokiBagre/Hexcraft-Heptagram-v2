@@ -10,13 +10,15 @@ export const objState = {
     inventariosDB: {}, 
     
     // Estado de la Interfaz
+    vistaActiva: 'inventario', // Opciones: 'inventario', 'forja', 'editar'
     busqueda: "",
-    formulariosCreacion: 1, // Cuántos objetos nuevos estás creando a la vez
+    formulariosCreacion: 1, 
+    objAEditarSeleccionado: "", // Guarda el nombre del objeto que estamos editando
     
-    // 🔥 LA COLA DE CAMBIOS (Staging) 🔥
-    // Aquí se guardan las modificaciones antes de presionar "Guardar Todo"
-    colaInventario: {}, // Formato: { "NombrePJ": { "NombreObjeto": NuevaCantidadFinal } }
-    colaNuevosObjetos: {} // Formato: { "0": { nombre, cant, tipo, mat, rar, eff } }
+    // 🔥 LAS COLAS DE CAMBIOS (Staging) 🔥
+    colaInventario: {},    // { "NombrePJ": { "NombreObjeto": NuevaCantidadFinal } }
+    colaNuevosObjetos: {}, // { "0": { nombre, cant, tipo, mat, rar, eff } }
+    colaEdicionObjetos: {} // { "NombreOriginal": { nombreNuevo, tipo, mat, rar, eff } }
 };
 
 export const TIPOS_OBJ = ["Arma", "Armadura", "Accesorio", "Consumible", "Material", "Misión", "Otro"];
