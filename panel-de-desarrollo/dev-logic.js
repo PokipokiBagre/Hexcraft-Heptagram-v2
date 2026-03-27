@@ -169,6 +169,16 @@ export function actualizarLogGlobal() {
         }
     }
 
+    // --- 3. Hechizos (Integrado bajo el nombre de cada PJ) ---
+    if (hzState.logCasteosSession && hzState.logCasteosSession.length > 0) {
+        hzState.logCasteosSession.forEach(item => {
+            const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(item.pj))?.nombre || item.pj;
+            if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
+            logPorPJ[realPj].push(item.msg);
+        });
+    }
+
+    // --- 4. Ensamblaje Final del Log ---
     let logText = "";
     for (const pj in logPorPJ) {
         if (logPorPJ[pj].length > 0) {
@@ -178,15 +188,9 @@ export function actualizarLogGlobal() {
         }
     }
 
-    // Se eliminó el título "--- REGISTRO DE HECHIZOS ---"
-    if (hzState.logCasteosSession && hzState.logCasteosSession.length > 0) {
-        hzState.logCasteosSession.forEach(log => {
-            logText += log + '\n';
-        });
-    }
-
     const textarea = document.getElementById('log-global-textarea');
     if (textarea) textarea.value = logText.trim();
+}
 
 export async function ejecutarGuardadoGlobal() {
     const btnSync = document.getElementById('btn-sync-global');
@@ -304,7 +308,6 @@ export async function ejecutarGuardadoGlobal() {
         }
 
         // --- HECHIZOS (INVENTARIO) ---
-        // 🔥 CORRECCIÓN: Tabla hechizos_inventario y columna hechizo_nombre
         for (const pjKey in hzState.colaAsignaciones) {
             const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
             for (const hzId in hzState.colaAsignaciones[pjKey]) {
@@ -341,7 +344,6 @@ export async function ejecutarGuardadoGlobal() {
             if (errEst) throw new Error("Estados: " + errEst.message);
         }
         if (hzUpserts.length > 0) {
-            // 🔥 CORRECCIÓN: Configuración onConflict ajustada a las columnas de la BD antigua
             const { error: errHz } = await supabase.from('hechizos_inventario').upsert(hzUpserts, { onConflict: 'personaje_nombre,hechizo_nombre' }); 
             if (errHz) throw new Error("Hechizos: " + errHz.message);
         }
