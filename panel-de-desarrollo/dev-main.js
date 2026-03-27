@@ -35,13 +35,13 @@ window.onload = async () => {
 
     try {
         // EXTRACCIÓN PURA DE SUPABASE
-        const [{data: personajesBD}, catalogoObj, invObj, estadosArr, {data: catalogoHz}, {data: invHz}] = await Promise.all([
+        // Usamos getDataCompleta() para respetar tu estructura de Nodos y Nodos Ocultos
+        const [{data: personajesBD}, catalogoObj, invObj, estadosArr, hechizosData] = await Promise.all([
             supabase.from('personajes').select('*'),
             db.objetos.getCatalogo(),
             db.objetos.getInventarioCompleto(),
             db.estadosConfig.getAll(),
-            supabase.from('hechizos').select('*'),
-            supabase.from('inventario_hechizos').select('*') // ¡Corregido a inventario_hechizos!
+            db.hechizos.getDataCompleta() 
         ]);
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
@@ -55,7 +55,6 @@ window.onload = async () => {
                 hex: Number(p.hex) || 0,
                 asistencia: Number(p.asistencia) || 1,
                 
-                // Stats de Vida y Daño
                 vidaRojaActual: Number(p.vida_roja_actual) || 0,
                 baseVidaRojaMax: Number(p.base_vida_roja_max) || 0,
                 baseVidaAzul: Number(p.base_vida_azul) || 0,
@@ -80,29 +79,18 @@ window.onload = async () => {
                     danoRojo: Number(p.buff_dano_rojo) || 0, danoAzul: Number(p.buff_dano_azul) || 0, elimDorada: Number(p.buff_elim) || 0,
                     vidaRojaMaxExtra: Number(p.buff_vida_roja) || 0, vidaAzulExtra: Number(p.buff_vida_azul) || 0, guardaDoradaExtra: Number(p.buff_guarda) || 0
                 },
-                
                 estados: p.estados || {},
-                iconoOverride: p.icono_override || '',
-                hechizos: {
-                    fisica:            Number(p.hz_fisica)          || 0,
-                    energetica:        Number(p.hz_energetica)      || 0,
-                    espiritual:        Number(p.hz_espiritual)      || 0,
-                    mando:             Number(p.hz_mando)           || 0,
-                    psiquica:          Number(p.hz_psiquica)        || 0,
-                    oscura:            Number(p.hz_oscura)          || 0,
-                    danoRojo:          Number(p.hechizo_dano_rojo)  || 0,
-                    danoAzul:          Number(p.hechizo_dano_azul)  || 0,
-                    elimDorada:        Number(p.hechizo_elim)       || 0,
-                    vidaRojaMaxExtra:  Number(p.hechizo_vida_roja)  || 0,
-                    vidaAzulExtra:     Number(p.hechizo_vida_azul)  || 0,
-                    guardaDoradaExtra: Number(p.hechizo_guarda)     || 0
-                }
+                iconoOverride: p.icono_override || ''
             };
         });
 
         const estadosListMock = estadosArr.map(e => ({
             id: e.id, nombre: e.nombre, tipo: e.tipo, bg: e.color_bg, border: e.color_border, desc: e.descripcion
         }));
+
+        // Fusionamos Nodos y Nodos Ocultos para el catálogo dev
+        const catalogoHz = [...(hechizosData.nodos || []), ...(hechizosData.nodosOcultos || [])];
+        const invHz = hechizosData.inventario || [];
 
         initObjetosDev(catalogoObj, invObj);
         initStatsDev(statsGlobalMock, estadosListMock);
