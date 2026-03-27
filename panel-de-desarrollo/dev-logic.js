@@ -8,7 +8,8 @@ import { devState, norm } from './dev-state.js';
 import { objState } from './objetos/panel-objetos-state.js';
 import { stState } from './estadisticas/panel-stats-state.js';
 import { hzState } from './hechizos/panel-hechizos-state.js'; 
-import { getPjStat, calcularVidaRojaMaxTotal } from './estadisticas/panel-stats-logic.js';
+// 🔥 IMPORTAMOS TODAS LAS FUNCIONES MATEMÁTICAS DE ESTADÍSTICAS
+import { getPjStat, calcularVidaRojaMaxTotal, calcularVidaAzulTotal, calcularGuardaDoradaTotal, calcularDanoRojoTotal, calcularDanoAzulTotal, calcularElimDoradaTotal } from './estadisticas/panel-stats-logic.js';
 
 export function revisarCambiosPendientes() {
     const btnSync = document.getElementById('btn-sync-global');
@@ -124,34 +125,55 @@ export function actualizarLogGlobal() {
                         logPorPJ[realPj].push(`HEX ${sign}${delta} (${cantNueva})`);
                     }
                 }
-                // ✅ FIX: Vida Roja (Actual, Base, Extra/Buff) consolidada y corregida
-                else if (campoRaiz === 'vidaRojaActual' || campoRaiz === 'baseVidaRojaMax' || subCampo === 'vidaRojaMaxExtra') {
-                    const finalAct = getPjStat(pjKey, 'vidaRojaActual');
-                    const finalMax = calcularVidaRojaMaxTotal(pjKey);
-                    
-                    let prefijo = nomLegibles[campoRaiz] || campoRaiz;
-                    if (campoRaiz === 'buffs') prefijo = "Buff " + (subNomLegibles[subCampo] || subCampo);
-                    else if (campoRaiz === 'hechizos') prefijo = "Hcz " + (subNomLegibles[subCampo] || subCampo);
-                    else if (campoRaiz === 'hechizosEfecto') prefijo = "Alt " + (subNomLegibles[subCampo] || subCampo);
-
-                    logPorPJ[realPj].push(`${prefijo} ${sign}${delta} (${finalAct}/${finalMax})`);
-                }
-                else if (campoRaiz === 'estados' && subCampo) {
-                    const eDef = stState.estadosDB.find(e => e.id === subCampo);
-                    const eName = eDef ? eDef.nombre : subCampo;
-                    logPorPJ[realPj].push(`${eName} ${sign}${delta} (${cantNueva})`);
-                }
-                else if (campoRaiz === 'afinidadesBase' && subCampo) {
-                    logPorPJ[realPj].push(`Af. Base ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
-                }
-                else if (campoRaiz === 'hechizosEfecto' && subCampo) {
-                    logPorPJ[realPj].push(`Af. Alt. ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
-                }
-                else if (campoRaiz === 'buffs' && subCampo) {
-                    logPorPJ[realPj].push(`Buff ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
-                }
                 else {
-                    logPorPJ[realPj].push(`${nomLegibles[campoRaiz] || campoRaiz} ${sign}${delta} (${cantNueva})`);
+                    // 🔥 FIX: Validar las 6 estadísticas compuestas de golpe
+                    const isVidaRoja = campoRaiz === 'vidaRojaActual' || campoRaiz === 'baseVidaRojaMax' || subCampo === 'vidaRojaMaxExtra';
+                    const isVidaAzul = campoRaiz === 'baseVidaAzul' || subCampo === 'vidaAzulExtra';
+                    const isGuarda   = campoRaiz === 'baseGuardaDorada' || subCampo === 'guardaDoradaExtra';
+                    const isDRojo    = campoRaiz === 'baseDanoRojo' || subCampo === 'danoRojo';
+                    const isDAzul    = campoRaiz === 'baseDanoAzul' || subCampo === 'danoAzul';
+                    const isElim     = campoRaiz === 'baseElimDorada' || subCampo === 'elimDorada';
+
+                    if (isVidaRoja || isVidaAzul || isGuarda || isDRojo || isDAzul || isElim) {
+                        let finalTot = '';
+                        if (isVidaRoja) {
+                            finalTot = `${getPjStat(pjKey, 'vidaRojaActual')}/${calcularVidaRojaMaxTotal(pjKey)}`;
+                        } else if (isVidaAzul) {
+                            finalTot = calcularVidaAzulTotal(pjKey);
+                        } else if (isGuarda) {
+                            finalTot = calcularGuardaDoradaTotal(pjKey);
+                        } else if (isDRojo) {
+                            finalTot = calcularDanoRojoTotal(pjKey);
+                        } else if (isDAzul) {
+                            finalTot = calcularDanoAzulTotal(pjKey);
+                        } else if (isElim) {
+                            finalTot = calcularElimDoradaTotal(pjKey);
+                        }
+
+                        let prefijo = nomLegibles[campoRaiz] || campoRaiz;
+                        if (campoRaiz === 'buffs') prefijo = "Buff " + (subNomLegibles[subCampo] || subCampo);
+                        else if (campoRaiz === 'hechizos') prefijo = "Hcz " + (subNomLegibles[subCampo] || subCampo);
+                        else if (campoRaiz === 'hechizosEfecto') prefijo = "Alt " + (subNomLegibles[subCampo] || subCampo);
+
+                        logPorPJ[realPj].push(`${prefijo} ${sign}${delta} (${finalTot})`);
+                    }
+                    else if (campoRaiz === 'estados' && subCampo) {
+                        const eDef = stState.estadosDB.find(e => e.id === subCampo);
+                        const eName = eDef ? eDef.nombre : subCampo;
+                        logPorPJ[realPj].push(`${eName} ${sign}${delta} (${cantNueva})`);
+                    }
+                    else if (campoRaiz === 'afinidadesBase' && subCampo) {
+                        logPorPJ[realPj].push(`Af. Base ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
+                    }
+                    else if (campoRaiz === 'hechizosEfecto' && subCampo) {
+                        logPorPJ[realPj].push(`Af. Alt. ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
+                    }
+                    else if (campoRaiz === 'buffs' && subCampo) {
+                        logPorPJ[realPj].push(`Buff ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
+                    }
+                    else {
+                        logPorPJ[realPj].push(`${nomLegibles[campoRaiz] || campoRaiz} ${sign}${delta} (${cantNueva})`);
+                    }
                 }
 
             } else if (typeof cantNueva === 'boolean') {
