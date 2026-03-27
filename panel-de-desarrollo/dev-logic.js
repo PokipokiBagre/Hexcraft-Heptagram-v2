@@ -178,7 +178,6 @@ export function actualizarLogGlobal() {
         }
     }
 
-    // --- 3. Registro de Casteos Rápidos de Sesión ---
     if (hzState.logCasteosSession && hzState.logCasteosSession.length > 0) {
         logText += `\n--- REGISTRO DE HECHIZOS (SESIÓN) ---\n`;
         hzState.logCasteosSession.forEach(log => {
@@ -202,7 +201,6 @@ export async function ejecutarGuardadoGlobal() {
         const statsUpserts = [];
         const estadosUpserts = [];
         
-        // Colas de Hechizos
         const hzUpserts = [];
 
         // --- OBJETOS ---
@@ -307,13 +305,12 @@ export async function ejecutarGuardadoGlobal() {
         }
 
         // --- HECHIZOS (INVENTARIO) ---
-        // 🔥 CORREGIDO: Guardar en la tabla personajes_hechizos como en inventario-data.js
         for (const pjKey in hzState.colaAsignaciones) {
             const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
             for (const hzId in hzState.colaAsignaciones[pjKey]) {
                 const agregar = hzState.colaAsignaciones[pjKey][hzId];
                 if (agregar) hzUpserts.push({ personaje_nombre: realPj, hechizo_id: hzId });
-                else deletePromises.push(supabase.from('personajes_hechizos').delete().eq('personaje_nombre', realPj).eq('hechizo_id', hzId)); 
+                else deletePromises.push(supabase.from('inventario_hechizos').delete().eq('personaje_nombre', realPj).eq('hechizo_id', hzId)); 
             }
         }
         
@@ -344,7 +341,7 @@ export async function ejecutarGuardadoGlobal() {
             if (errEst) throw new Error("Estados: " + errEst.message);
         }
         if (hzUpserts.length > 0) {
-            const { error: errHz } = await supabase.from('personajes_hechizos').upsert(hzUpserts, { onConflict: 'personaje_nombre,hechizo_id' }); 
+            const { error: errHz } = await supabase.from('inventario_hechizos').upsert(hzUpserts, { onConflict: 'personaje_nombre,hechizo_id' }); 
             if (errHz) throw new Error("Hechizos: " + errHz.message);
         }
 
