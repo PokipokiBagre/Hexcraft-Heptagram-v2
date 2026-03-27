@@ -10,9 +10,9 @@ export const objState = {
     
     // Estado de la Interfaz
     vistaActiva: 'inventario', // 'inventario', 'catalogo', 'forja', 'editar'
-    busqueda: "",       // Buscador de inventario
-    busquedaCat: "",    // Buscador global
-    busquedaEdit: "",   // Buscador de edición
+    busqueda: "",
+    busquedaCat: "",
+    busquedaEdit: "",
     formulariosCreacion: 1, 
     objAEditarSeleccionado: "", 
     
@@ -22,5 +22,7 @@ export const objState = {
     colaEdicionObjetos: {} 
 };
 
-export const TIPOS_OBJ = ["Arma", "Armadura", "Accesorio", "Consumible", "Material", "Misión", "Otro"];
-export const RAREZAS_OBJ = ["Común", "Raro", "Legendario"];
+// 🌟 LISTAS OFICIALES CORREGIDAS SEGÚN TU SISTEMA 🌟
+export const TIPOS_OBJ = ["Consumible", "Herramienta", "Accesorio", "Equipamiento", "-"];
+export const MATERIALES_OBJ = ["Cristal", "Metal", "Orgánico", "Sagrado", "-"];
+export const RAREZAS_OBJ = ["Común", "Raro", "Legendario", "-"];
