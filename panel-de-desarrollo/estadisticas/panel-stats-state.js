@@ -1,18 +1,18 @@
 // ============================================================
-// panel-stats-state.js — Estado local y Cola de Cambios (Stats)
+// panel-stats-state.js — Estado local y Cola de Cambios
 // ============================================================
 
 export const stState = {
-    statsDB: {},      // Copia de statsGlobal
-    estadosDB: [],    // Copia de listaEstados
+    statsDB: {},      
+    estadosDB: [],    
     
-    // Estado de la Interfaz
-    vistaActiva: 'hex', // 'hex', 'vida', 'afinidades', 'estados'
+    vistaActiva: 'hex', 
     logAsistencia: "",
     
-    // 🔥 LAS COLAS DE CAMBIOS (Staging) 🔥
-    colaStats: {},         // Ej: { "Gnoma": { "hex": 1200, "afinidadesBase.fisica": 10 } }
-    colaEstadosConfig: {}  // Ej: { "nuevo_veneno": { nombre, tipo, color_bg, color_border, descripcion } }
+    // 🔥 COLAS DE CAMBIOS (Staging) 🔥
+    colaStats: {},         
+    colaEstadosConfig: {}, 
+    colaBorrarEstados: []  // 🌟 NUEVO: Estados que serán borrados de la BD
 };
 
 export const AFINIDADES_LISTA = ["fisica", "energetica", "espiritual", "mando", "psiquica", "oscura"];
