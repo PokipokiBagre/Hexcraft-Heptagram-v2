@@ -50,7 +50,6 @@ window.devOnGridKeydown = (e, row, col, pjSeleccionado) => {
                 input.value = match;
                 window.devModFilaCast(row, 'nombre', match, pjSeleccionado);
                 
-                // ✅ FIX: Al hacer Tab, salta al hechizo de la siguiente fila (si existe)
                 const nextSpellInput = document.getElementById(`dev-spell-${row + 1}`);
                 if (nextSpellInput) {
                     nextSpellInput.focus();
@@ -64,7 +63,6 @@ window.devOnGridKeydown = (e, row, col, pjSeleccionado) => {
 
     if (e.key === 'ArrowUp') {
         e.preventDefault();
-        // ✅ FIX: Si estamos en la primera fila, subir a la casilla de "FILAS"
         if (row === 0) {
             document.getElementById('dev-cast-num')?.focus();
         } else {
@@ -252,30 +250,58 @@ export function renderColumnaHechizos(pjSeleccionado) {
         for (let i = 0; i < hzState.casteoManual.numFilas; i++) {
             const fila = hzState.casteoManual.filas[i];
 
+            // 🌟 NUEVO: Búsqueda dinámica del hechizo para pintar sus detalles
+            let detallesHTML = '';
+            if (fila.nombre) {
+                const dbSpell = hzState.catalogoDB.find(h =>
+                    norm(h.Nombre || h.nombre || '') === norm(fila.nombre) ||
+                    norm(h.ID || h.id || '') === norm(fila.nombre)
+                );
+
+                if (dbSpell) {
+                    const efe = dbSpell.Efecto || dbSpell.efecto_desc || dbSpell.efecto || '';
+                    const over = dbSpell.Overcast || dbSpell.overcast || dbSpell.Overcast_desc || '';
+                    const under = dbSpell.Undercast || dbSpell.undercast || dbSpell.Undercast_desc || '';
+                    const esp = dbSpell.Especial || dbSpell.especial || dbSpell.Especial_desc || '';
+
+                    if (efe || over || under || esp) {
+                        detallesHTML += `<div style="background:#0a0514; border:1px solid #4a1880; border-radius:4px; padding:10px; margin-top:6px; font-size:0.85em; line-height:1.4; box-shadow:inset 0 0 10px rgba(74,24,128,0.2);">`;
+                        if (efe) detallesHTML += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:var(--cyan-magic);">Efecto:</b> ${efe}</div>`;
+                        if (over) detallesHTML += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:var(--gold);">🌟 Overcast:</b> ${over}</div>`;
+                        if (under) detallesHTML += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:#ff4444;">⚠️ Undercast:</b> ${under}</div>`;
+                        if (esp) detallesHTML += `<div style="color:#ddd; margin-bottom:2px;"><b style="color:#00ff88;">✨ Especial:</b> ${esp}</div>`;
+                        detallesHTML += `</div>`;
+                    }
+                }
+            }
+
             html += `
-            <div style="display:flex; gap:5px; margin-bottom:5px; align-items:center;">
-                <button onclick="const d=Math.floor(Math.random()*100)+1; document.getElementById('dev-dado-${i}').value=d; window.devModFilaCast(${i}, 'dado', d, '${escapedPj}')" style="background:#333; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; cursor:pointer;" title="Aleatorio">🎲</button>
-                <input type="number" id="dev-dado-${i}" placeholder="Dado" value="${fila.dado}"
-                    oninput="window.devModFilaCast(${i}, 'dado', this.value, '${escapedPj}')"
-                    onkeydown="window.devOnGridKeydown(event, ${i}, 0, '${escapedPj}')"
-                    style="width:50px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; text-align:center; outline:none;" title="NC Base (Dado)">
+            <div style="margin-bottom:12px; border-bottom:1px solid #222; padding-bottom:12px;">
+                <div style="display:flex; gap:5px; align-items:center;">
+                    <button onclick="const d=Math.floor(Math.random()*100)+1; document.getElementById('dev-dado-${i}').value=d; window.devModFilaCast(${i}, 'dado', d, '${escapedPj}')" style="background:#333; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; cursor:pointer;" title="Aleatorio">🎲</button>
+                    <input type="number" id="dev-dado-${i}" placeholder="Dado" value="${fila.dado}"
+                        oninput="window.devModFilaCast(${i}, 'dado', this.value, '${escapedPj}')"
+                        onkeydown="window.devOnGridKeydown(event, ${i}, 0, '${escapedPj}')"
+                        style="width:50px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; text-align:center; outline:none;" title="NC Base (Dado)">
 
-                <div style="position:relative; flex:1;">
-                    <input type="text" list="dev-spells-list-${pjKey}" id="dev-spell-${i}" placeholder="Nombre Hechizo..." value="${fila.nombre}"
-                        autocomplete="off"
-                        oninput="window.devModFilaCast(${i}, 'nombre', this.value, '${escapedPj}')"
-                        onkeydown="window.devOnGridKeydown(event, ${i}, 1, '${escapedPj}')"
-                        style="width:100%; box-sizing:border-box; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; outline:none;">
+                    <div style="position:relative; flex:1;">
+                        <input type="text" list="dev-spells-list-${pjKey}" id="dev-spell-${i}" placeholder="Nombre Hechizo..." value="${fila.nombre}"
+                            autocomplete="off"
+                            oninput="window.devModFilaCast(${i}, 'nombre', this.value, '${escapedPj}')"
+                            onkeydown="window.devOnGridKeydown(event, ${i}, 1, '${escapedPj}')"
+                            style="width:100%; box-sizing:border-box; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; outline:none;">
+                    </div>
+
+                    <input type="number" id="dev-afinidad-${i}" placeholder="Af.Total" value="${fila.afinidad}"
+                        oninput="window.devModFilaCast(${i}, 'afinidad', this.value, '${escapedPj}')"
+                        onkeydown="window.devOnGridKeydown(event, ${i}, 2, '${escapedPj}')"
+                        style="width:65px; background:#111; color:var(--gold); border:1px solid var(--gold); border-radius:4px; padding:8px; text-align:center; outline:none;" title="Afinidad Total">
+                    <input type="number" id="dev-cant-${i}" placeholder="Cant" value="${fila.cant}" min="1"
+                        oninput="window.devModFilaCast(${i}, 'cant', this.value, '${escapedPj}')"
+                        onkeydown="window.devOnGridKeydown(event, ${i}, 3, '${escapedPj}')"
+                        style="width:45px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; text-align:center; outline:none;" title="Cantidad">
                 </div>
-
-                <input type="number" id="dev-afinidad-${i}" placeholder="Af.Total" value="${fila.afinidad}"
-                    oninput="window.devModFilaCast(${i}, 'afinidad', this.value, '${escapedPj}')"
-                    onkeydown="window.devOnGridKeydown(event, ${i}, 2, '${escapedPj}')"
-                    style="width:65px; background:#111; color:var(--gold); border:1px solid var(--gold); border-radius:4px; padding:8px; text-align:center; outline:none;" title="Afinidad Total">
-                <input type="number" id="dev-cant-${i}" placeholder="Cant" value="${fila.cant}" min="1"
-                    oninput="window.devModFilaCast(${i}, 'cant', this.value, '${escapedPj}')"
-                    onkeydown="window.devOnGridKeydown(event, ${i}, 3, '${escapedPj}')"
-                    style="width:45px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; text-align:center; outline:none;" title="Cantidad">
+                ${detallesHTML}
             </div>`;
         }
 
