@@ -4,13 +4,10 @@
 
 import { hexAuth, supabase } from '../hex-auth.js';
 import { db } from '../hex-db.js';
-
 import { devState, norm, STORAGE_URL } from './dev-state.js';
 import { revisarCambiosPendientes, actualizarLogGlobal, ejecutarGuardadoGlobal } from './dev-logic.js';
-
 import { initObjetosDev } from './objetos/panel-objetos-logic.js';
 import { renderColumnaObjetos } from './objetos/panel-objetos-ui.js';
-
 import { initStatsDev } from './estadisticas/panel-stats-logic.js';
 import { renderColumnaStats } from './estadisticas/panel-stats-ui.js';
 
@@ -35,7 +32,7 @@ window.onload = async () => {
     }
 
     try {
-        // Descargar TODO (Incluyendo nodos de hechizos para calcular los stats de lectura)
+        // 🌟 Descargamos TODO (Incluyendo el grimorio)
         const [personajesBD, catalogoObj, invObj, estadosArr, {data: hecInv}, {data: hecNodos}] = await Promise.all([
             db.personajes.getAll(),
             db.objetos.getCatalogo(),
@@ -47,7 +44,7 @@ window.onload = async () => {
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
 
-        // 🌟 Calcular las estadísticas de solo-lectura aportadas por hechizos
+        // 🌟 Sumatoria Matemática de los atributos otorgados por los Hechizos
         const spellStats = {};
         if (hecInv && hecNodos) {
             hecInv.forEach(h => {
@@ -55,18 +52,18 @@ window.onload = async () => {
                 const node = hecNodos.find(n => n.nombre === h.hechizo_nombre);
                 if (node) {
                     if (!spellStats[pj]) spellStats[pj] = {};
-                    const props = ['fisica','energetica','espiritual','mando','psiquica','oscura','danoRojo','danoAzul','elimDorada','vidaRojaMaxExtra','vidaAzulExtra','guardaDoradaExtra'];
+                    const props = ['fisica','energetica','espiritual','mando','psiquica','oscura','dano_rojo','dano_azul','elim_dorada','vida_roja_max_extra','vida_azul_extra','guarda_dorada_extra'];
                     props.forEach(pr => {
-                        const dbField = pr.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`); // de fisica a fisica, de danoRojo a dano_rojo
-                        if (node[dbField] || node[pr]) {
-                            const val = node[dbField] || node[pr] || 0;
-                            spellStats[pj][pr] = (spellStats[pj][pr] || 0) + val;
-                        }
+                        const val = node[pr] || 0;
+                        // Transformamos el nombre de la columna (dano_rojo) a camelCase (danoRojo) para el Frontend
+                        const camel = pr.replace(/_([a-z])/g, g => g[1].toUpperCase()); 
+                        spellStats[pj][camel] = (spellStats[pj][camel] || 0) + val;
                     });
                 }
             });
         }
 
+        // 🌟 MAPEO EXPLÍCITO DE COLUMNAS PLANAS DE SUPABASE
         const statsGlobalMock = {};
         personajesBD.forEach(p => {
             statsGlobalMock[p.nombre] = {
@@ -82,12 +79,14 @@ window.onload = async () => {
                 baseDanoRojo: p.base_dano_rojo || 0,
                 baseDanoAzul: p.base_dano_azul || 0,
                 baseElimDorada: p.base_elim_dorada || 0,
-                afinidadesBase: p.afinidades_base || {},
-                hechizosEfecto: p.hechizos_efecto || {},
-                buffs: p.buffs || {},
+                
+                afinidadesBase: { fisica: p.fisica||0, energetica: p.energetica||0, espiritual: p.espiritual||0, mando: p.mando||0, psiquica: p.psiquica||0, oscura: p.oscura||0 },
+                hechizosEfecto: { fisica: p.alt_fisica||0, energetica: p.alt_energetica||0, espiritual: p.alt_espiritual||0, mando: p.alt_mando||0, psiquica: p.alt_psiquica||0, oscura: p.alt_oscura||0, danoRojo: p.alt_dano_rojo||0, danoAzul: p.alt_dano_azul||0, elimDorada: p.alt_elim_dorada||0 },
+                buffs: { fisica: p.ext_fisica||0, energetica: p.ext_energetica||0, espiritual: p.ext_espiritual||0, mando: p.ext_mando||0, psiquica: p.ext_psiquica||0, oscura: p.ext_oscura||0, danoRojo: p.ext_dano_rojo||0, danoAzul: p.ext_dano_azul||0, elimDorada: p.ext_elim_dorada||0, vidaRojaMaxExtra: p.ext_vida_roja_max||0, vidaAzulExtra: p.ext_vida_azul||0, guardaDoradaExtra: p.ext_guarda_dorada||0 },
+                
                 estados: p.estados || {},
                 iconoOverride: p.icono_override || '',
-                hechizos: spellStats[p.nombre.toLowerCase()] || {} // Incorporamos los stats calculados
+                hechizos: spellStats[p.nombre.toLowerCase()] || {} 
             };
         });
 
