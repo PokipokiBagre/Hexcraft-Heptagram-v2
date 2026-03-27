@@ -38,7 +38,6 @@ function drawnHEXPreserveFocus(containerId, html) {
     }
 }
 
-// Emula los colores de tu archivo inventario-ui.js
 function getColorAfinidad(af) {
     if(af === 'Física')     return { b: '#b36a2f', t: '#e2a673' };
     if(af === 'Energética') return { b: '#bba71b', t: '#f3e57a' };
@@ -54,7 +53,9 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     const hNom = hechizo.Nombre || hechizo.nombre || 'Hechizo sin nombre';
     const hAf = hechizo.Afinidad || hechizo.afinidad || '-';
     const hClase = hechizo.Clase || hechizo.clase || '-';
-    const costo = hechizo.Hex || hechizo.costo || hechizo.Costo || 0;
+    
+    // 🔥 CORRECCIÓN CRÍTICA: Se añade hechizo.HEX en mayúsculas
+    const costo = parseInt(hechizo.HEX || hechizo.Hex || hechizo.costo || hechizo.Costo || 0) || 0;
     const efecto = hechizo.Efecto || hechizo.efecto_desc || hechizo.efecto || '-';
     
     const dbConocido = hechizo.es_conocido !== false && hechizo.es_conocido !== "FALSE" && hechizo.es_conocido !== 0 && hechizo.es_conocido !== "0";
@@ -65,14 +66,19 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     const borderColor = isHidden ? '#333' : col.b;
     const titleColor = isHidden ? '#666' : col.t;
 
+    // 🔥 CORRECCIÓN VISUAL: Más limpio. Sombra interior tenue si lo tiene, en vez de chocar con un borde verde sólido.
+    const cardStyle = loTiene 
+        ? `border: 1px solid #003300; border-top: 3px solid ${borderColor}; box-shadow: inset 0 0 15px rgba(0,255,0,0.08);` 
+        : `border: 1px solid #222; border-top: 3px solid ${borderColor};`;
+
     const btnAsignar = loTiene 
-        ? `<button onclick="window.devAsignarHz('${pjNombre.replace(/'/g, "\\'")}', '${hId}')" style="width:100%; background:#4a0000; color:#ff4444; border:1px solid #ff4444; border-radius:4px; padding:6px; cursor:pointer; font-weight:bold; font-family:'Cinzel'; transition:0.2s;">❌ DEASIGNAR</button>`
-        : `<button onclick="window.devAsignarHz('${pjNombre.replace(/'/g, "\\'")}', '${hId}')" style="width:100%; background:#004a00; color:#00ff00; border:1px solid #00ff00; border-radius:4px; padding:6px; cursor:pointer; font-weight:bold; font-family:'Cinzel'; transition:0.2s;">➕ ENSEÑAR</button>`;
+        ? `<button onclick="window.devAsignarHz('${pjNombre.replace(/'/g, "\\'")}', '${hId}')" style="width:100%; background:rgba(255,0,0,0.1); color:#ff5555; border:1px solid rgba(255,0,0,0.3); border-radius:4px; padding:6px; cursor:pointer; font-weight:bold; font-family:'Cinzel'; transition:0.2s;">❌ DEASIGNAR</button>`
+        : `<button onclick="window.devAsignarHz('${pjNombre.replace(/'/g, "\\'")}', '${hId}')" style="width:100%; background:rgba(0,255,0,0.05); color:#44ff44; border:1px solid rgba(0,255,0,0.3); border-radius:4px; padding:6px; cursor:pointer; font-weight:bold; font-family:'Cinzel'; transition:0.2s;">➕ ENSEÑAR</button>`;
 
     const btnVisibilidad = `<button onclick="window.devToggleVisibilidadHz('${hId}')" style="background:#111; color:#aaa; border:1px solid #555; border-radius:4px; padding:6px; cursor:pointer; font-size:0.8em; white-space:nowrap;">${isKnown ? '👁️ Ocultar Globalmente' : '🙈 Hacer Público'}</button>`;
 
     return `
-    <div style="background:#050505; border:1px solid ${loTiene ? '#00ff00' : '#222'}; border-top: 3px solid ${borderColor}; border-radius:8px; padding:10px; margin-bottom:10px; display:flex; flex-direction:column; gap:8px; opacity: ${isHidden ? '0.7' : '1'};">
+    <div style="background:#0a0a0a; ${cardStyle} border-radius:8px; padding:10px; margin-bottom:10px; display:flex; flex-direction:column; gap:8px; opacity: ${isHidden ? '0.7' : '1'}; transition:0.3s;">
         <div style="display:flex; justify-content:space-between; align-items:flex-start;">
             <div>
                 <h3 style="color:${titleColor}; margin:0 0 6px 0; font-family:'Cinzel', serif;">${hNom}</h3>
@@ -195,7 +201,6 @@ export function renderColumnaHechizos(pjSeleccionado) {
 
         html += `<div style="overflow-y:auto; padding-right:5px; max-height: 550px;">`;
         const top = mostrar.slice(0, 50); 
-        // 🔥 CORRECCIÓN: Revisamos si el Set tiene el ID normalizado o el Nombre normalizado
         top.forEach(h => { 
             const loTiene = hechizosDelPj.has(norm(h.ID || h.id)) || hechizosDelPj.has(norm(h.Nombre || h.nombre));
             html += generarTarjetaAsignar(h, pjSeleccionado, loTiene); 
