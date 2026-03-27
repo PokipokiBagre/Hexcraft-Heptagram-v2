@@ -28,7 +28,6 @@ export function revisarCambiosPendientes() {
 export function actualizarLogGlobal() {
     const logPorPJ = {};
 
-    // --- 1. Objetos ---
     for (const pjKey in objState.colaInventario) {
         const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey)?.nombre || pjKey;
         for (const objNombre in objState.colaInventario[pjKey]) {
@@ -52,9 +51,8 @@ export function actualizarLogGlobal() {
         }
     }
 
-    // --- 2. Estadísticas ---
     const nomLegibles = {
-        'hex': 'HEX', 'asistencia': 'Asistencia', 'vidaRojaActual': 'Vida Roja',
+        'hex': 'HEX', 'vidaRojaActual': 'Vida Roja',
         'baseVidaRojaMax': 'Límite Rojo', 'baseVidaAzul': 'Corazones Azules', 'baseGuardaDorada': 'Guarda Dorada',
         'baseDanoRojo': 'Daño Rojo', 'baseDanoAzul': 'Daño Azul', 'baseElimDorada': 'Eliminación Dorada'
     };
@@ -83,14 +81,32 @@ export function actualizarLogGlobal() {
                     if (flatKey.includes('hechizosEfecto')) statName = `Afinidad Alt. ${afinCapital[parts[1]]}`;
                     if (flatKey.includes('buffs')) statName = `Buff Extra ${afinCapital[parts[1]] || parts[1]}`;
                     
-                    // 🌟 DIVISION DEL HEX POR BONO DE ASISTENCIA 🌟
-                    if (flatKey === 'hex' && delta >= 1300) {
-                        let extra = delta - 300;
-                        logPorPJ[realPj].push(`HEX +300`);
-                        logPorPJ[realPj].push(`HEX +${extra} ¡Extra! (${cantNueva})`);
+                    // 🌟 REGLA DE ASISTENCIA Y EL BONO (BIFURCACIÓN CORRECTA) 🌟
+                    if (flatKey === 'asistencia') {
+                        if (delta < 0 && cantNueva === 1) {
+                            // Cuando la asistencia resetea de 7 a 1, disparamos aquí mismo el log del extra
+                            logPorPJ[realPj].push(`Asistencia reiniciada (1/7)`);
+                            
+                            // Obtenemos de la cola o de la base el HEX total para imprimirlo
+                            const hexFinal = cambios['hex'] !== undefined ? cambios['hex'] : dbPj['hex'];
+                            logPorPJ[realPj].push(`HEX +300`);
+                            logPorPJ[realPj].push(`HEX +1000 ¡Extra! (${hexFinal})`);
+                        } else {
+                            // Asistencia normal +1 (4/7)
+                            logPorPJ[realPj].push(`Asistencia ${sign}${delta} (${cantNueva}/7)`);
+                        }
                     }
-                    else if (flatKey === 'asistencia' && delta < 0 && cantNueva === 1) {
-                        logPorPJ[realPj].push(`Asistencia reiniciada (1/7)`);
+                    // Omitimos imprimir el log del HEX si la asistencia ya se encargó de hacer la bifurcación 
+                    // (para que no salga repetido el +1300)
+                    else if (flatKey === 'hex') {
+                        const asistNueva = cambios['asistencia'];
+                        const asistVieja = dbPj['asistencia'];
+                        const fueReinicioAsistencia = (asistVieja === 7 && asistNueva === 1);
+                        
+                        // Solo imprimimos el cambio de HEX normal si NO provino del botón "Reiniciar Asistencia (Bono)"
+                        if (!fueReinicioAsistencia) {
+                            logPorPJ[realPj].push(`${statName} ${sign}${delta} (${cantNueva})`);
+                        }
                     }
                     else if (flatKey.includes('estados')) {
                         const eDef = stState.estadosDB.find(e => e.id === parts[1]);
@@ -179,7 +195,6 @@ export async function ejecutarGuardadoGlobal() {
 
         // =========================================================================
         // ESTADÍSTICAS: MAPEO EXACTO A COLUMNAS DE SUPABASE (af_, ef_, bf_)
-        // Nota: hz_* y hechizo_* son propiedad del módulo Grimorio — no se tocan aquí
         // =========================================================================
         for (const pjKey in stState.colaStats) {
             const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey.toLowerCase())?.nombre || pjKey;
@@ -208,7 +223,6 @@ export async function ejecutarGuardadoGlobal() {
                 base_elim_dorada: updatedPj.baseElimDorada,
                 estados: updatedPj.estados,
 
-                // Afinidades Base (af_)
                 af_fisica: updatedPj.afinidadesBase.fisica || 0,
                 af_energetica: updatedPj.afinidadesBase.energetica || 0,
                 af_espiritual: updatedPj.afinidadesBase.espiritual || 0,
@@ -216,7 +230,6 @@ export async function ejecutarGuardadoGlobal() {
                 af_psiquica: updatedPj.afinidadesBase.psiquica || 0,
                 af_oscura: updatedPj.afinidadesBase.oscura || 0,
 
-                // Alteraciones por Hechizos (ef_)
                 ef_fisica: updatedPj.hechizosEfecto.fisica || 0,
                 ef_energetica: updatedPj.hechizosEfecto.energetica || 0,
                 ef_espiritual: updatedPj.hechizosEfecto.espiritual || 0,
@@ -230,7 +243,6 @@ export async function ejecutarGuardadoGlobal() {
                 efecto_vida_azul: updatedPj.hechizosEfecto.vidaAzulExtra || 0,
                 efecto_guarda: updatedPj.hechizosEfecto.guardaDoradaExtra || 0,
 
-                // Extras Temporales / Buffs (bf_)
                 bf_fisica: updatedPj.buffs.fisica || 0,
                 bf_energetica: updatedPj.buffs.energetica || 0,
                 bf_espiritual: updatedPj.buffs.espiritual || 0,
