@@ -35,7 +35,6 @@ window.onload = async () => {
 
     try {
         // EXTRACCIÓN PURA DE SUPABASE
-        // ¡Esta es la línea clave que estaba causando el error!
         const [{data: personajesBD}, catalogoObj, invObj, estadosArr, hechizosData] = await Promise.all([
             supabase.from('personajes').select('*'),
             db.objetos.getCatalogo(),
@@ -46,7 +45,7 @@ window.onload = async () => {
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
 
-        // MAPEO PLANO DIRECTO A LA MEMORIA
+        // MAPEO PLANO DIRECTO A LA MEMORIA (RESTAURADO COMPLETO)
         const statsGlobalMock = {};
         personajesBD.forEach(p => {
             statsGlobalMock[p.nombre] = {
@@ -66,6 +65,21 @@ window.onload = async () => {
                 afinidadesBase: {
                     fisica: Number(p.af_fisica) || 0, energetica: Number(p.af_energetica) || 0, espiritual: Number(p.af_espiritual) || 0,
                     mando: Number(p.af_mando) || 0, psiquica: Number(p.af_psiquica) || 0, oscura: Number(p.af_oscura) || 0
+                },
+                // ¡AQUÍ ESTÁ EL BLOQUE QUE HABÍA BORRADO POR ERROR!
+                hechizos: {
+                    fisica:            Number(p.hz_fisica)          || 0,
+                    energetica:        Number(p.hz_energetica)      || 0,
+                    espiritual:        Number(p.hz_espiritual)      || 0,
+                    mando:             Number(p.hz_mando)           || 0,
+                    psiquica:          Number(p.hz_psiquica)        || 0,
+                    oscura:            Number(p.hz_oscura)          || 0,
+                    danoRojo:          Number(p.hechizo_dano_rojo)  || 0,
+                    danoAzul:          Number(p.hechizo_dano_azul)  || 0,
+                    elimDorada:        Number(p.hechizo_elim)       || 0,
+                    vidaRojaMaxExtra:  Number(p.hechizo_vida_roja)  || 0,
+                    vidaAzulExtra:     Number(p.hechizo_vida_azul)  || 0,
+                    guardaDoradaExtra: Number(p.hechizo_guarda)     || 0
                 },
                 hechizosEfecto: {
                     fisica: Number(p.ef_fisica) || 0, energetica: Number(p.ef_energetica) || 0, espiritual: Number(p.ef_espiritual) || 0,
