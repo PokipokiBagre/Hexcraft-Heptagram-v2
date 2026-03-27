@@ -59,7 +59,7 @@ export function setCantidadFormularios(num) {
 
 export function actualizarFormularioNuevo(index, campo, valor, reRender = true) {
     if (!objState.colaNuevosObjetos[index]) {
-        objState.colaNuevosObjetos[index] = { nombre: '', cant: 1, tipo: 'Arma', mat: '-', rar: 'Común', eff: '' };
+        objState.colaNuevosObjetos[index] = { nombre: '', cant: 1, tipo: 'Consumible', mat: '-', rar: 'Común', eff: '' };
     }
     objState.colaNuevosObjetos[index][campo] = valor;
     
@@ -76,7 +76,7 @@ export function seleccionarObjetoParaEditar(nombreObj) {
         if (dbObj) {
             objState.colaEdicionObjetos[nombreObj] = {
                 nombre: dbObj.nombre,
-                tipo: dbObj.tipo || 'Otro',
+                tipo: dbObj.tipo || 'Consumible',
                 mat: dbObj.material || '-',
                 rar: dbObj.rareza || 'Común',
                 eff: dbObj.efecto || ''
