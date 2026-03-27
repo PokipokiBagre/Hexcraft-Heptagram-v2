@@ -40,6 +40,7 @@ export function modificarCantidad(pjNombre, objNombre, variacion) {
 
 export function setBusquedaObjeto(texto, tipo = 'inv') {
     if (tipo === 'edit') objState.busquedaEdit = texto.toLowerCase();
+    else if (tipo === 'cat') objState.busquedaCat = texto.toLowerCase();
     else objState.busqueda = texto.toLowerCase();
     window.dispatchEvent(new Event('devUIUpdate'));
 }
@@ -47,7 +48,7 @@ export function setBusquedaObjeto(texto, tipo = 'inv') {
 // ── LÓGICA DE INTERFAZ Y FORJA ──
 export function cambiarVistaObjetos(vista) {
     objState.vistaActiva = vista;
-    objState.objAEditarSeleccionado = ""; // Resetear selección al cambiar de pestaña
+    objState.objAEditarSeleccionado = ""; 
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
@@ -62,7 +63,6 @@ export function actualizarFormularioNuevo(index, campo, valor, reRender = true) 
     }
     objState.colaNuevosObjetos[index][campo] = valor;
     
-    // Si estamos escribiendo texto, NO re-renderizamos para evitar LAG. Solo mostramos el botón de Guardar.
     if (reRender) window.dispatchEvent(new Event('devUIUpdate'));
     else window.dispatchEvent(new Event('devDataChanged')); 
 }
