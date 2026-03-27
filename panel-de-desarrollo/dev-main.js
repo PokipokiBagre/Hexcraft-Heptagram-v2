@@ -60,7 +60,7 @@ window.onload = async () => {
             });
         }
 
-        // 🌟 LECTURA CORREGIDA: Se extrae desde los JSON `afinidades_base`, `buffs`, etc.
+        // 🌟 LECTURA PLANA IDÉNTICA A STATS-DATA.JS 🌟
         const statsGlobalMock = {};
         personajesBD.forEach(p => {
             statsGlobalMock[p.nombre] = {
@@ -78,37 +78,37 @@ window.onload = async () => {
                 baseElimDorada: Number(p.base_elim_dorada) || 0,
                 
                 afinidadesBase: {
-                    fisica: p.afinidades_base?.fisica || 0,
-                    energetica: p.afinidades_base?.energetica || 0,
-                    espiritual: p.afinidades_base?.espiritual || 0,
-                    mando: p.afinidades_base?.mando || 0,
-                    psiquica: p.afinidades_base?.psiquica || 0,
-                    oscura: p.afinidades_base?.oscura || 0
+                    fisica: Number(p.fisica) || 0,
+                    energetica: Number(p.energetica) || 0,
+                    espiritual: Number(p.espiritual) || 0,
+                    mando: Number(p.mando) || 0,
+                    psiquica: Number(p.psiquica) || 0,
+                    oscura: Number(p.oscura) || 0
                 },
                 hechizosEfecto: {
-                    fisica: p.hechizos_efecto?.fisica || 0,
-                    energetica: p.hechizos_efecto?.energetica || 0,
-                    espiritual: p.hechizos_efecto?.espiritual || 0,
-                    mando: p.hechizos_efecto?.mando || 0,
-                    psiquica: p.hechizos_efecto?.psiquica || 0,
-                    oscura: p.hechizos_efecto?.oscura || 0,
-                    danoRojo: p.hechizos_efecto?.dano_rojo || 0,
-                    danoAzul: p.hechizos_efecto?.dano_azul || 0,
-                    elimDorada: p.hechizos_efecto?.elim_dorada || 0
+                    fisica: Number(p.alt_fisica) || 0,
+                    energetica: Number(p.alt_energetica) || 0,
+                    espiritual: Number(p.alt_espiritual) || 0,
+                    mando: Number(p.alt_mando) || 0,
+                    psiquica: Number(p.alt_psiquica) || 0,
+                    oscura: Number(p.alt_oscura) || 0,
+                    danoRojo: Number(p.alt_dano_rojo) || 0,
+                    danoAzul: Number(p.alt_dano_azul) || 0,
+                    elimDorada: Number(p.alt_elim_dorada) || 0
                 },
                 buffs: {
-                    fisica: p.buffs?.fisica || 0,
-                    energetica: p.buffs?.energetica || 0,
-                    espiritual: p.buffs?.espiritual || 0,
-                    mando: p.buffs?.mando || 0,
-                    psiquica: p.buffs?.psiquica || 0,
-                    oscura: p.buffs?.oscura || 0,
-                    danoRojo: p.buffs?.dano_rojo || 0,
-                    danoAzul: p.buffs?.dano_azul || 0,
-                    elimDorada: p.buffs?.elim_dorada || 0,
-                    vidaRojaMaxExtra: p.buffs?.vida_roja_max_extra || 0,
-                    vidaAzulExtra: p.buffs?.vida_azul_extra || 0,
-                    guardaDoradaExtra: p.buffs?.guarda_dorada_extra || 0
+                    fisica: Number(p.ext_fisica) || 0,
+                    energetica: Number(p.ext_energetica) || 0,
+                    espiritual: Number(p.ext_espiritual) || 0,
+                    mando: Number(p.ext_mando) || 0,
+                    psiquica: Number(p.ext_psiquica) || 0,
+                    oscura: Number(p.ext_oscura) || 0,
+                    danoRojo: Number(p.ext_dano_rojo) || 0,
+                    danoAzul: Number(p.ext_dano_azul) || 0,
+                    elimDorada: Number(p.ext_elim_dorada) || 0,
+                    vidaRojaMaxExtra: Number(p.ext_vida_roja_max) || 0,
+                    vidaAzulExtra: Number(p.ext_vida_azul) || 0,
+                    guardaDoradaExtra: Number(p.ext_guarda_dorada) || 0
                 },
                 
                 estados: p.estados || {},
