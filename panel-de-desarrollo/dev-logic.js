@@ -54,84 +54,134 @@ export function actualizarLogGlobal() {
 
     // --- 2. Estadísticas ---
     const nomLegibles = {
-        'hex': 'HEX', 'asistencia': 'Asistencia', 'vidaRojaActual': 'Vida Roja',
-        'baseVidaRojaMax': 'Límite Rojo', 'baseVidaAzul': 'Corazones Azules', 'baseGuardaDorada': 'Guarda Dorada',
-        'baseDanoRojo': 'Daño Rojo', 'baseDanoAzul': 'Daño Azul', 'baseElimDorada': 'Eliminación Dorada'
+        'hex':              'HEX',
+        'asistencia':       'Asistencia',
+        'vidaRojaActual':   'Vida Roja',
+        'baseVidaRojaMax':  'Vida Roja Máx',
+        'baseVidaAzul':     'Vida Azul',
+        'baseGuardaDorada': 'Guarda Dorada',
+        'baseDanoRojo':     'Daño Rojo',
+        'baseDanoAzul':     'Daño Azul',
+        'baseElimDorada':   'Elim. Dorada'
     };
-    const afinCapital = { fisica: 'Física', energetica: 'Energética', espiritual: 'Espiritual', mando: 'Mando', psiquica: 'Psíquica', oscura: 'Oscura' };
+
+    const subNomLegibles = {
+        'fisica':            'Física',
+        'energetica':        'Energética',
+        'espiritual':        'Espiritual',
+        'mando':             'Mando',
+        'psiquica':          'Psíquica',
+        'oscura':            'Oscura',
+        'danoRojo':          'Daño Rojo',
+        'danoAzul':          'Daño Azul',
+        'elimDorada':        'Elim. Dorada',
+        'vidaRojaMaxExtra':  'Vida Roja Máx Extra',
+        'vidaAzulExtra':     'Vida Azul Extra',
+        'guardaDoradaExtra': 'Guarda Dorada Extra'
+    };
 
     for (const pjKey in stState.colaStats) {
         const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey.toLowerCase())?.nombre || pjKey;
         const cambios = stState.colaStats[pjKey];
         const dbPj = stState.statsDB[pjKey] || {};
 
+        // Validar si la asistencia dio la vuelta de 7 a 1
+        const asistNueva = cambios['asistencia'];
+        const asistVieja = dbPj['asistencia'];
+        const fueReinicioAsistencia = (asistVieja >= 7 && asistNueva === 1);
+
         for (const flatKey in cambios) {
             if (flatKey.endsWith('.null')) continue;
 
             const cantNueva = cambios[flatKey];
-            let cantVieja = 0;
             const parts = flatKey.split('.');
-            if (parts.length === 1) cantVieja = dbPj[parts[0]] || 0;
-            else cantVieja = dbPj[parts[0]]?.[parts[1]] || 0;
+            const campoRaiz = parts[0];
+            const subCampo = parts.length > 1 ? parts[1] : null;
+
+            let cantVieja = 0;
+            if (!subCampo) cantVieja = dbPj[campoRaiz] ?? 0;
+            else cantVieja = dbPj[campoRaiz]?.[subCampo] ?? 0;
 
             if (typeof cantNueva === 'number' && typeof cantVieja === 'number') {
                 const delta = cantNueva - cantVieja;
-                if (delta !== 0) {
-                    if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
-                    const sign = delta > 0 ? '+' : '';
-                    let statName = nomLegibles[flatKey] || flatKey;
-                    
-                    if (flatKey.includes('afinidadesBase')) statName = `Afinidad Base ${afinCapital[parts[1]]}`;
-                    if (flatKey.includes('hechizosEfecto')) statName = `Afinidad Alt. ${afinCapital[parts[1]]}`;
-                    if (flatKey.includes('buffs')) statName = `Buff Extra ${afinCapital[parts[1]] || parts[1]}`;
-                    
-                    // 🌟 REGLAS CORREGIDAS DE ASISTENCIA Y HEX 🌟
-                    if (flatKey === 'asistencia') {
-                        if (delta < 0 && cantNueva === 1) {
-                            logPorPJ[realPj].push(`Asistencia reiniciada (1/7)`);
-                        } else {
-                            logPorPJ[realPj].push(`Asistencia ${sign}${delta} (${cantNueva}/7)`);
-                        }
-                    }
-                    else if (flatKey === 'hex') {
-                        const aNueva = cambios['asistencia'];
-                        const aVieja = dbPj['asistencia'];
-                        
-                        // Solo bifurca si la asistencia efectivamente dio la vuelta de 7 a 1
-                        if (aVieja === 7 && aNueva === 1 && delta >= 1300) {
-                            let extra = delta - 300;
-                            logPorPJ[realPj].push(`HEX +300`);
-                            logPorPJ[realPj].push(`HEX +${extra} ¡Extra! (${cantNueva})`);
-                        } else {
-                            logPorPJ[realPj].push(`HEX ${sign}${delta} (${cantNueva})`);
-                        }
-                    }
-                    // 🌟 ESTADOS NUMÉRICOS 🌟
-                    else if (flatKey.includes('estados')) {
-                        const eDef = stState.estadosDB.find(e => e.id === parts[1]);
-                        const eName = eDef ? eDef.nombre : parts[1];
-                        logPorPJ[realPj].push(`${eName} ${sign}${delta} (${cantNueva})`);
-                    } 
-                    // 🌟 VIDA (X/Y) 🌟
-                    else if (flatKey === 'vidaRojaActual' || flatKey === 'baseVidaRojaMax') {
-                        let maxBase = (flatKey === 'baseVidaRojaMax' ? cantNueva : (dbPj.baseVidaRojaMax||0) + (cambios['baseVidaRojaMax'] !== undefined ? cambios['baseVidaRojaMax'] - (dbPj.baseVidaRojaMax||0) : 0));
-                        let extra = (dbPj.buffs?.vidaRojaMaxExtra||0) + (dbPj.hechizosEfecto?.vidaRojaMaxExtra||0) + (dbPj.hechizos?.vidaRojaMaxExtra||0);
-                        let finalMax = maxBase + extra;
-                        let finalAct = (flatKey === 'vidaRojaActual' ? cantNueva : (dbPj.vidaRojaActual||0) + (cambios['vidaRojaActual'] !== undefined ? cambios['vidaRojaActual'] - (dbPj.vidaRojaActual||0) : 0));
-                        logPorPJ[realPj].push(`${statName} ${sign}${delta} (${finalAct}/${finalMax})`);
-                    } 
-                    else {
-                        logPorPJ[realPj].push(`${statName} ${sign}${delta} (${cantNueva})`);
+                if (delta === 0) continue;
+                if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
+                const sign = delta > 0 ? '+' : '';
+
+                // ── ASISTENCIA (Con o sin reseteo a 1/7) ──
+                if (campoRaiz === 'asistencia') {
+                    if (fueReinicioAsistencia) {
+                        logPorPJ[realPj].push(`Asistencia reiniciada (1/7)`);
+                        const hexFinal = cambios['hex'] !== undefined ? cambios['hex'] : dbPj['hex'];
+                        logPorPJ[realPj].push(`HEX +300`);
+                        logPorPJ[realPj].push(`HEX +1000 ¡Extra! (${hexFinal})`);
+                    } else {
+                        logPorPJ[realPj].push(`Asistencia ${sign}${delta} (${cantNueva}/7)`);
                     }
                 }
+
+                // ── HEX (Se oculta si ya se imprimió en el reinicio) ──
+                else if (campoRaiz === 'hex') {
+                    if (!fueReinicioAsistencia) {
+                        logPorPJ[realPj].push(`HEX ${sign}${delta} (${cantNueva})`);
+                    }
+                }
+
+                // ── VIDA ROJA (Formato 15/15) ──
+                else if (campoRaiz === 'vidaRojaActual' || campoRaiz === 'baseVidaRojaMax') {
+                    const maxBase = campoRaiz === 'baseVidaRojaMax' 
+                        ? cantNueva 
+                        : (dbPj.baseVidaRojaMax || 0) + (cambios['baseVidaRojaMax'] !== undefined ? cambios['baseVidaRojaMax'] - (dbPj.baseVidaRojaMax || 0) : 0);
+                    
+                    const extraVida = (dbPj.buffs?.vidaRojaMaxExtra || 0) + (dbPj.hechizosEfecto?.vidaRojaMaxExtra || 0) + (dbPj.hechizos?.vidaRojaMaxExtra || 0);
+                    const finalMax = maxBase + extraVida;
+                    
+                    const finalAct = campoRaiz === 'vidaRojaActual' 
+                        ? cantNueva 
+                        : (dbPj.vidaRojaActual || 0) + (cambios['vidaRojaActual'] !== undefined ? cambios['vidaRojaActual'] - (dbPj.vidaRojaActual || 0) : 0);
+                    
+                    logPorPJ[realPj].push(`${nomLegibles[campoRaiz]} ${sign}${delta} (${finalAct}/${finalMax})`);
+                }
+
+                // ── ESTADOS NUMÉRICOS ──
+                else if (campoRaiz === 'estados' && subCampo) {
+                    const eDef = stState.estadosDB.find(e => e.id === subCampo);
+                    const eName = eDef ? eDef.nombre : subCampo;
+                    logPorPJ[realPj].push(`${eName} ${sign}${delta} (${cantNueva})`);
+                }
+
+                // ── AFINIDADES BASE ──
+                else if (campoRaiz === 'afinidadesBase' && subCampo) {
+                    logPorPJ[realPj].push(`Af. Base ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
+                }
+
+                // ── ALTERACIONES (hechizosEfecto) ──
+                else if (campoRaiz === 'hechizosEfecto' && subCampo) {
+                    logPorPJ[realPj].push(`Af. Alt. ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
+                }
+
+                // ── BUFFS ──
+                else if (campoRaiz === 'buffs' && subCampo) {
+                    logPorPJ[realPj].push(`Buff ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
+                }
+
+                // ── EL RESTO (Daño, Azul, Dorada, etc) ──
+                else {
+                    logPorPJ[realPj].push(`${nomLegibles[campoRaiz] || campoRaiz} ${sign}${delta} (${cantNueva})`);
+                }
+
             } 
-            // 🌟 ESTADOS BOOLEANOS 🌟
-            else if (typeof cantNueva === 'boolean' && cantNueva !== cantVieja) {
+            // ── ESTADOS BOOLEANOS ──
+            else if (typeof cantNueva === 'boolean') {
+                const cantViejaBool = !subCampo ? !!dbPj[campoRaiz] : !!(dbPj[campoRaiz]?.[subCampo]);
+                if (cantNueva === cantViejaBool) continue;
                 if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
-                const eDef = stState.estadosDB.find(e => e.id === parts[1]);
-                const eName = eDef ? eDef.nombre : parts[1];
-                if (cantNueva) logPorPJ[realPj].push(`Estado adq. ${eName}`);
-                else logPorPJ[realPj].push(`Estado rmv. ${eName}`);
+                
+                if (campoRaiz === 'estados' && subCampo) {
+                    const eDef = stState.estadosDB.find(e => e.id === subCampo);
+                    const eName = eDef ? eDef.nombre : subCampo;
+                    logPorPJ[realPj].push(cantNueva ? `Estado adq. ${eName}` : `Estado rmv. ${eName}`);
+                }
             }
         }
     }
@@ -195,7 +245,8 @@ export async function ejecutarGuardadoGlobal() {
         }
 
         // =========================================================================
-        // ESTADÍSTICAS: MAPEO EXACTO A COLUMNAS DE SUPABASE (af_, ef_, bf_)
+        // ESTADÍSTICAS: MAPEO EXACTO A COLUMNAS DE SUPABASE
+        // Nombres corregidos para Supabase (vida_azul_max, guarda_dorada, dano_rojo)
         // =========================================================================
         for (const pjKey in stState.colaStats) {
             const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey.toLowerCase())?.nombre || pjKey;
@@ -203,7 +254,7 @@ export async function ejecutarGuardadoGlobal() {
             let updatedPj = JSON.parse(JSON.stringify(stState.statsDB[pjKey]));
 
             for (const flatKey in cambios) {
-                if (flatKey.endsWith('.null')) continue; 
+                if (flatKey.endsWith('.null')) continue;
                 const keys = flatKey.split('.');
                 if (keys.length === 1) updatedPj[keys[0]] = cambios[flatKey];
                 else {
@@ -218,11 +269,13 @@ export async function ejecutarGuardadoGlobal() {
                 asistencia: updatedPj.asistencia,
                 vida_roja_actual: updatedPj.vidaRojaActual,
                 base_vida_roja_max: updatedPj.baseVidaRojaMax,
-                base_vida_azul: updatedPj.baseVidaAzul,
-                base_guarda_dorada: updatedPj.baseGuardaDorada,
-                base_dano_rojo: updatedPj.baseDanoRojo,
-                base_dano_azul: updatedPj.baseDanoAzul,
-                base_elim_dorada: updatedPj.baseElimDorada,
+                
+                // Nombres Reales de Supabase
+                vida_azul_max: updatedPj.baseVidaAzul,
+                guarda_dorada: updatedPj.baseGuardaDorada,
+                dano_rojo: updatedPj.baseDanoRojo,
+                dano_azul: updatedPj.baseDanoAzul,
+                elim_dorada: updatedPj.baseElimDorada,
                 estados: updatedPj.estados,
 
                 // Afinidades Base (af_)
