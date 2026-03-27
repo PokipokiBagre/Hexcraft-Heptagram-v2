@@ -28,7 +28,6 @@ export function revisarCambiosPendientes() {
 export function actualizarLogGlobal() {
     const logPorPJ = {};
 
-    // --- 1. Objetos ---
     for (const pjKey in objState.colaInventario) {
         const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey)?.nombre || pjKey;
         for (const objNombre in objState.colaInventario[pjKey]) {
@@ -52,7 +51,6 @@ export function actualizarLogGlobal() {
         }
     }
 
-    // --- 2. Estadísticas ---
     const nomLegibles = {
         'hex': 'HEX', 'asistencia': 'Asistencia', 'vidaRojaActual': 'Vida Roja',
         'baseVidaRojaMax': 'Límite Rojo', 'baseVidaAzul': 'Corazones Azules', 'baseGuardaDorada': 'Guarda Dorada',
@@ -83,7 +81,6 @@ export function actualizarLogGlobal() {
                     if (flatKey.includes('hechizosEfecto')) statName = `Afinidad Alt. ${afinCapital[parts[1]]}`;
                     if (flatKey.includes('buffs')) statName = `Buff Extra ${afinCapital[parts[1]] || parts[1]}`;
                     
-                    // 🌟 DIVISION DEL HEX POR BONO DE ASISTENCIA 🌟
                     if (flatKey === 'hex' && delta >= 1300) {
                         let extra = delta - 300;
                         logPorPJ[realPj].push(`HEX +300`);
@@ -144,6 +141,7 @@ export async function ejecutarGuardadoGlobal() {
         const statsUpserts = [];
         const estadosUpserts = [];
 
+        // OBJETOS
         const nuevosArr = Object.values(objState.colaNuevosObjetos).filter(o => o.nombre.trim() !== '');
         for (const obj of nuevosArr) {
             catalogUpserts.push({ nombre: obj.nombre, tipo: obj.tipo, material: obj.mat, rareza: obj.rar, efecto: obj.eff });
@@ -176,7 +174,9 @@ export async function ejecutarGuardadoGlobal() {
             }
         }
 
-        // ================== ESTADÍSTICAS Y MAPEADO A COLUMNAS PLANAS ==================
+        // =========================================================================
+        // ESTADÍSTICAS: MAPEO EXACTO A TUS COLUMNAS DE SUPABASE (af_, ef_, bf_)
+        // =========================================================================
         for (const pjKey in stState.colaStats) {
             const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey.toLowerCase())?.nombre || pjKey;
             const cambios = stState.colaStats[pjKey];
@@ -195,6 +195,7 @@ export async function ejecutarGuardadoGlobal() {
                 nombre: realPj,
                 hex: updatedPj.hex,
                 asistencia: updatedPj.asistencia,
+                vex: updatedPj.vex,
                 vida_roja_actual: updatedPj.vidaRojaActual,
                 base_vida_roja_max: updatedPj.baseVidaRojaMax,
                 base_vida_azul: updatedPj.baseVidaAzul,
@@ -204,38 +205,59 @@ export async function ejecutarGuardadoGlobal() {
                 base_elim_dorada: updatedPj.baseElimDorada,
                 estados: updatedPj.estados,
                 
-                fisica: updatedPj.afinidadesBase.fisica || 0,
-                energetica: updatedPj.afinidadesBase.energetica || 0,
-                espiritual: updatedPj.afinidadesBase.espiritual || 0,
-                mando: updatedPj.afinidadesBase.mando || 0,
-                psiquica: updatedPj.afinidadesBase.psiquica || 0,
-                oscura: updatedPj.afinidadesBase.oscura || 0,
+                // Afinidades Base
+                af_fisica: updatedPj.afinidadesBase.fisica || 0,
+                af_energetica: updatedPj.afinidadesBase.energetica || 0,
+                af_espiritual: updatedPj.afinidadesBase.espiritual || 0,
+                af_mando: updatedPj.afinidadesBase.mando || 0,
+                af_psiquica: updatedPj.afinidadesBase.psiquica || 0,
+                af_oscura: updatedPj.afinidadesBase.oscura || 0,
                 
-                alt_fisica: updatedPj.hechizosEfecto.fisica || 0,
-                alt_energetica: updatedPj.hechizosEfecto.energetica || 0,
-                alt_espiritual: updatedPj.hechizosEfecto.espiritual || 0,
-                alt_mando: updatedPj.hechizosEfecto.mando || 0,
-                alt_psiquica: updatedPj.hechizosEfecto.psiquica || 0,
-                alt_oscura: updatedPj.hechizosEfecto.oscura || 0,
-                alt_dano_rojo: updatedPj.hechizosEfecto.danoRojo || 0,
-                alt_dano_azul: updatedPj.hechizosEfecto.danoAzul || 0,
-                alt_elim_dorada: updatedPj.hechizosEfecto.elimDorada || 0,
+                // Alteraciones (ef_)
+                ef_fisica: updatedPj.hechizosEfecto.fisica || 0,
+                ef_energetica: updatedPj.hechizosEfecto.energetica || 0,
+                ef_espiritual: updatedPj.hechizosEfecto.espiritual || 0,
+                ef_mando: updatedPj.hechizosEfecto.mando || 0,
+                ef_psiquica: updatedPj.hechizosEfecto.psiquica || 0,
+                ef_oscura: updatedPj.hechizosEfecto.oscura || 0,
+                efecto_dano_rojo: updatedPj.hechizosEfecto.danoRojo || 0,
+                efecto_dano_azul: updatedPj.hechizosEfecto.danoAzul || 0,
+                efecto_elim: updatedPj.hechizosEfecto.elimDorada || 0,
+                efecto_vida_roja: updatedPj.hechizosEfecto.vidaRojaMaxExtra || 0,
+                efecto_vida_azul: updatedPj.hechizosEfecto.vidaAzulExtra || 0,
+                efecto_guarda: updatedPj.hechizosEfecto.guardaDoradaExtra || 0,
                 
-                ext_fisica: updatedPj.buffs.fisica || 0,
-                ext_energetica: updatedPj.buffs.energetica || 0,
-                ext_espiritual: updatedPj.buffs.espiritual || 0,
-                ext_mando: updatedPj.buffs.mando || 0,
-                ext_psiquica: updatedPj.buffs.psiquica || 0,
-                ext_oscura: updatedPj.buffs.oscura || 0,
-                ext_dano_rojo: updatedPj.buffs.danoRojo || 0,
-                ext_dano_azul: updatedPj.buffs.danoAzul || 0,
-                ext_elim_dorada: updatedPj.buffs.elimDorada || 0,
-                ext_vida_roja_max: updatedPj.buffs.vidaRojaMaxExtra || 0,
-                ext_vida_azul: updatedPj.buffs.vidaAzulExtra || 0,
-                ext_guarda_dorada: updatedPj.buffs.guardaDoradaExtra || 0
+                // Extras/Buffs (bf_)
+                bf_fisica: updatedPj.buffs.fisica || 0,
+                bf_energetica: updatedPj.buffs.energetica || 0,
+                bf_espiritual: updatedPj.buffs.espiritual || 0,
+                bf_mando: updatedPj.buffs.mando || 0,
+                bf_psiquica: updatedPj.buffs.psiquica || 0,
+                bf_oscura: updatedPj.buffs.oscura || 0,
+                buff_dano_rojo: updatedPj.buffs.danoRojo || 0,
+                buff_dano_azul: updatedPj.buffs.danoAzul || 0,
+                buff_elim: updatedPj.buffs.elimDorada || 0,
+                buff_vida_roja: updatedPj.buffs.vidaRojaMaxExtra || 0,
+                buff_vida_azul: updatedPj.buffs.vidaAzulExtra || 0,
+                buff_guarda: updatedPj.buffs.guardaDoradaExtra || 0,
+
+                // Preserve Hechizos Variables (Read-Only)
+                hz_fisica: updatedPj.hechizos.fisica || 0,
+                hz_energetica: updatedPj.hechizos.energetica || 0,
+                hz_espiritual: updatedPj.hechizos.espiritual || 0,
+                hz_mando: updatedPj.hechizos.mando || 0,
+                hz_psiquica: updatedPj.hechizos.psiquica || 0,
+                hz_oscura: updatedPj.hechizos.oscura || 0,
+                hechizo_dano_rojo: updatedPj.hechizos.danoRojo || 0,
+                hechizo_dano_azul: updatedPj.hechizos.danoAzul || 0,
+                hechizo_elim: updatedPj.hechizos.elimDorada || 0,
+                hechizo_vida_roja: updatedPj.hechizos.vidaRojaMaxExtra || 0,
+                hechizo_vida_azul: updatedPj.hechizos.vidaAzulExtra || 0,
+                hechizo_guarda: updatedPj.hechizos.guardaDoradaExtra || 0
             });
         }
 
+        // ESTADOS GLOBALES
         for (const id in stState.colaEstadosConfig) {
             estadosUpserts.push({ id: id, ...stState.colaEstadosConfig[id] });
         }
@@ -243,6 +265,7 @@ export async function ejecutarGuardadoGlobal() {
             deletePromises.push(supabase.from('estados_config').delete().in('id', stState.colaBorrarEstados));
         }
 
+        // 🔥 LANZAMIENTO A SUPABASE 🔥
         if (deletePromises.length > 0) await Promise.all(deletePromises);
 
         if (catalogUpserts.length > 0) {
