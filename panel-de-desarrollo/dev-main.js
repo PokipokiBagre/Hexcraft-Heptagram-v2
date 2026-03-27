@@ -34,14 +34,14 @@ window.onload = async () => {
     }
 
     try {
-        // 🔥 AQUÍ ESTÁ LA CORRECCIÓN: Le ordenamos a Supabase descargar el inventario
+        // 🔥 CORRECCIÓN: Apuntamos a la tabla correcta 'hechizos_inventario'
         const [{data: personajesBD}, catalogoObj, invObj, estadosArr, hechizosData, {data: invHz}] = await Promise.all([
             supabase.from('personajes').select('*'),
             db.objetos.getCatalogo(),
             db.objetos.getInventarioCompleto(),
             db.estadosConfig.getAll(),
             db.hechizos.getDataCompleta(),
-            supabase.from('inventario_hechizos').select('*') 
+            supabase.from('hechizos_inventario').select('*') 
         ]);
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
@@ -106,7 +106,6 @@ window.onload = async () => {
         initObjetosDev(catalogoObj, invObj);
         initStatsDev(statsGlobalMock, estadosListMock);
         
-        // ¡Enviamos el inventario real de Supabase al módulo!
         initHechizosDev(catalogoHz, invHz || []); 
 
         document.getElementById('pantalla-carga').classList.add('oculto');
