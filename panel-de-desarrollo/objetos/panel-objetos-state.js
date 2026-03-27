@@ -7,10 +7,9 @@ export const STORAGE_URL = 'https://gkscqurkpyteusqyspsu.supabase.co/storage/v1/
 export const objState = {
     catalogoDB: [], 
     inventariosDB: {}, 
-    equipadosDB: {}, // 🌟 NUEVO: Estado guardado de equipación
+    equipadosDB: {}, // 🌟 BD Equipados
     
-    // Estado de la Interfaz
-    vistaActiva: 'inventario', // 'inventario', 'catalogo', 'forja', 'editar'
+    vistaActiva: 'inventario',
     busqueda: "",
     busquedaCat: "",
     busquedaEdit: "",
@@ -19,12 +18,11 @@ export const objState = {
     
     // 🔥 LAS COLAS DE CAMBIOS (Staging) 🔥
     colaInventario: {},    
-    colaEquipados: {}, // 🌟 NUEVO: Cola de cambios de equipación
+    colaEquipados: {}, // 🌟 Cola de equipación
     colaNuevosObjetos: {}, 
     colaEdicionObjetos: {} 
 };
 
-// 🌟 LISTAS OFICIALES CORREGIDAS SEGÚN TU SISTEMA 🌟
 export const TIPOS_OBJ = ["Consumible", "Herramienta", "Accesorio", "Equipamiento", "-"];
 export const MATERIALES_OBJ = ["Cristal", "Metal", "Orgánico", "Sagrado", "-"];
 export const RAREZAS_OBJ = ["Común", "Raro", "Legendario", "-"];
