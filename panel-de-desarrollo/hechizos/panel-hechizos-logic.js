@@ -94,13 +94,27 @@ export function copiarPrimerDado() {
     navigator.clipboard.writeText(`!r 1d100 + ${fila.afinidad || 0} // ${fila.nombre || '?'}`).then(() => alert(`Dado ${dado} copiado a todas las filas.`));
 }
 
-// 🌟 UTILIDAD DE EXTRACCIÓN 
+// 🌟 UTILIDAD DE EXTRACCIÓN (Igual que en el panel público, pero filtrando ceros)
 const getVal = (v) => {
     if (v === undefined || v === null) return '';
     let s = Array.isArray(v) ? v.join(', ') : String(v);
     s = s.trim();
     if (s === '0' || s === '-' || s.toLowerCase() === 'null' || s === '') return '';
     return s;
+};
+
+// Busca el primer valor no-vacío entre múltiples claves posibles del objeto
+const getValKeys = (obj, keys) => {
+    if (!obj) return '';
+    const actualKeys = Object.keys(obj);
+    for (const pk of keys) {
+        const matched = actualKeys.find(k => k.trim().toLowerCase() === pk.toLowerCase());
+        if (matched) {
+            const val = getVal(obj[matched]);
+            if (val) return val;
+        }
+    }
+    return '';
 };
 
 export function calcularConjurosMasivos(pjNombre) {
@@ -128,27 +142,30 @@ export function calcularConjurosMasivos(pjNombre) {
 
             const nc = dado * afin;
             
-            // Extracción directa de variables
-            let efeNormal = getVal(hechizo.Efecto_desc || hechizo.Efecto || hechizo.efecto || hechizo.Desc || hechizo.desc);
-            const outcastProp = getVal(hechizo.Efecto_overcast || hechizo.Overcast || hechizo.overcast);
+            // Extracción usando claves reales de la DB
+            let efeToPrint = getValKeys(hechizo, ['efecto_desc', 'efecto', 'desc', 'descripcion']);
+            const outcastProp = getValKeys(hechizo, ['overcast 100%', 'overcast', 'efecto_overcast']);
 
-            let outcome = "";
-            let efeToPrint = "";
-
-            if (nc < costoU) {
-                outcome = "❌ FALLO";
-            } else if (outcastProp && costoU > 0 && nc >= (costoU * 2)) {
-                // 🌟 LÓGICA DE OVERCAST COMBINADO
-                outcome = "✅ ÉXITO";
-                efeToPrint = efeNormal ? `${efeNormal} (Overcast: ${outcastProp})` : `(Overcast: ${outcastProp})`;
-            } else {
-                outcome = "✅ ÉXITO";
-                efeToPrint = efeNormal;
-            }
+            const isOvercast = outcastProp && costoU > 0 && nc >= (costoU * 2);
+            const isFallo    = nc < costoU;
 
             const realName = hechizo.Nombre || hechizo.nombre;
-            const efectoFinal = (hzState.mostrarEfectos && efeToPrint && !outcome.includes('FALLO')) ? ` | ${efeToPrint}` : '';
-            logsArr.push(`Casteo | ${realName} x${cant} | NC: ${nc} | ${outcome}${efectoFinal}`);
+
+            let lineLog = `Casteo | ${realName} x${cant} | NC: ${nc} | `;
+
+            if (isFallo) {
+                lineLog += `❌ FALLO`;
+            } else {
+                lineLog += `✅ ÉXITO`;
+                if (hzState.mostrarEfectos && efeToPrint) {
+                    lineLog += ` | ${efeToPrint}`;
+                }
+                if (isOvercast && outcastProp) {
+                    lineLog += ` | 🌟 Overcast: ${outcastProp}`;
+                }
+            }
+
+            logsArr.push(lineLog);
         } else {
             logsArr.push(`[!] Hechizo no encontrado: ${fila.nombre} x${cant}`);
         }
