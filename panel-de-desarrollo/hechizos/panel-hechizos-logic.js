@@ -10,7 +10,6 @@ export function initHechizosDev(catalogo, inventarios_pj) {
     hzState.catalogoDB = catalogo || [];
     hzState.inventariosDB = {};
     
-    // Failsafe absoluto para que jamás lance "Cannot read properties of undefined"
     (inventarios_pj || []).forEach(item => {
         const pj = norm(item.personaje_nombre || item.Personaje || ""); 
         const hzId = norm(item.hechizo_nombre || item.hechizo_id || item.Hechizo || item.ID || item.id);
@@ -90,7 +89,6 @@ export function calcularConjurosMasivos(pjNombre) {
         const afin = parseInt(fila.afinidad) || 0;
 
         if (hechizo) {
-            // 🔥 CORRECCIÓN CRÍTICA: Priorizamos hechizo.HEX
             const costoU = parseInt(hechizo.HEX || hechizo.Hex || hechizo.costo || hechizo.Costo || 0) || 0;
             totalCost += (costoU * cant);
             validSpells += cant;
@@ -110,10 +108,13 @@ export function calcularConjurosMasivos(pjNombre) {
             }
 
             const realName = hechizo.Nombre || hechizo.nombre;
-            const resLine = ` - ${realName} x${cant} | NC: ${nc} | ${outcome}`;
-            logsArr.push(resLine + (hzState.mostrarEfectos && efeToPrint && !outcome.includes('FALLO') ? `\n   ↳ ${efeToPrint}` : ''));
+            
+            // Log de casteo simplificado con " | "
+            const efectoFinal = (hzState.mostrarEfectos && efeToPrint && !outcome.includes('FALLO')) ? ` | ${efeToPrint}` : '';
+            logsArr.push(`${pjNombre} | ${realName} x${cant} | NC: ${nc} | ${outcome}${efectoFinal}`);
+            
         } else {
-            logsArr.push(` - [!] Hechizo no encontrado: "${fila.nombre}" x${cant}`);
+            logsArr.push(`${pjNombre} | [!] Hechizo no encontrado: ${fila.nombre} x${cant}`);
         }
     }
 
@@ -127,19 +128,21 @@ export function calcularConjurosMasivos(pjNombre) {
 
         if (vexDisponible >= totalCost) {
             hzState.vexGastadoPorPj[pjNombre] = vexUsado + totalCost;
-            stringCobro = `(Pagado todo con ${totalCost} VEX)`;
+            stringCobro = `${pjNombre} | Cobro Casteo | -${totalCost} Vex`;
         } else {
             const hexAFacturar = totalCost - vexDisponible;
             hzState.vexGastadoPorPj[pjNombre] = vexMax; 
             modPjStat(pjNombre, 'hex', null, -hexAFacturar, true, false);
-            stringCobro = vexDisponible > 0 
-                ? `(Pagado con ${vexDisponible} VEX y ${hexAFacturar} HEX)` 
-                : `(-${hexAFacturar} HEX)`;
+            
+            const hexActual = getPjStat(pjNombre, 'hex'); // Lectura tras el cobro
+            const textoVex = vexDisponible > 0 ? `-${vexDisponible} Vex y ` : '';
+            stringCobro = `${pjNombre} | Cobro Casteo | ${textoVex}-${hexAFacturar} Hex (${hexActual})`;
         }
     }
 
-    let mainLog = `[${pjNombre}] Lanza ${validSpells} conjuros simultáneos ${stringCobro}\n` + logsArr.join("\n");
-    hzState.logCasteosSession.push(mainLog);
+    // Insertar cobro primero, luego los resultados individuales
+    if (stringCobro) hzState.logCasteosSession.push(stringCobro);
+    logsArr.forEach(l => hzState.logCasteosSession.push(l));
 
     hzState.casteoManual.filas = Array.from({ length: 50 }, () => ({ dado: '', nombre: '', afinidad: '', cant: 1 }));
     window.dispatchEvent(new Event('devUIUpdate'));
@@ -157,7 +160,6 @@ export function asignarHechizo(pjNombre, hechizoId) {
     hzState.colaAsignaciones[pjKey][idNorm] = accionDar;
 
     const hechizo = hzState.catalogoDB.find(h => norm(h.ID || h.id) === idNorm);
-    // 🔥 CORRECCIÓN CRÍTICA
     const costo = parseInt(hechizo ? (hechizo.HEX || hechizo.Hex || hechizo.costo || hechizo.Costo || 0) : 0) || 0;
     const nombreHechizo = hechizo ? (hechizo.Nombre || hechizo.nombre || hechizoId) : hechizoId;
 
@@ -165,9 +167,12 @@ export function asignarHechizo(pjNombre, hechizoId) {
         modPjStat(pjNombre, 'hex', null, -costo, true, false); 
     }
 
-    const accionStr = accionDar ? "Adquirió" : "Olvidó";
-    const strCobro = (accionDar && hzState.cobrarAlAsignar && costo > 0) ? ` (-${costo} HEX)` : "";
-    hzState.logCasteosSession.push(`[${pjNombre}] ${accionStr} el hechizo: ${nombreHechizo}${strCobro}`);
+    // Log de aprendizaje simplificado con " | "
+    const hexActual = getPjStat(pjNombre, 'hex'); // Lectura tras la asignación
+    const accionStr = accionDar ? "Hechizo Aprendido" : "Hechizo Olvidado";
+    const strCobro = (accionDar && hzState.cobrarAlAsignar && costo > 0) ? ` | -${costo} Hex (${hexActual})` : "";
+    
+    hzState.logCasteosSession.push(`${pjNombre} | ${accionStr} | ${nombreHechizo}${strCobro}`);
     
     window.dispatchEvent(new Event('devUIUpdate'));
 }
