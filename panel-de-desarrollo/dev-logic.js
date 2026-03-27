@@ -178,8 +178,8 @@ export function actualizarLogGlobal() {
         }
     }
 
+    // Se eliminó el título "--- REGISTRO DE HECHIZOS ---"
     if (hzState.logCasteosSession && hzState.logCasteosSession.length > 0) {
-        logText += `\n--- REGISTRO DE HECHIZOS (SESIÓN) ---\n`;
         hzState.logCasteosSession.forEach(log => {
             logText += log + '\n';
         });
@@ -187,7 +187,6 @@ export function actualizarLogGlobal() {
 
     const textarea = document.getElementById('log-global-textarea');
     if (textarea) textarea.value = logText.trim();
-}
 
 export async function ejecutarGuardadoGlobal() {
     const btnSync = document.getElementById('btn-sync-global');
