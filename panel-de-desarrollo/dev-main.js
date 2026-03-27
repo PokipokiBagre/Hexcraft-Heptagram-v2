@@ -33,34 +33,14 @@ window.onload = async () => {
 
     try {
         // 🌟 EXTRACCIÓN PURA: Obligamos a Supabase a darnos TODO sin los filtros de hex-db
-        const [{data: personajesBD}, catalogoObj, invObj, estadosArr, {data: hecInv}, {data: hecNodos}] = await Promise.all([
-            supabase.from('personajes').select('*'), // <--- LA CLAVE ESTÁ AQUÍ
+        const [{data: personajesBD}, catalogoObj, invObj, estadosArr] = await Promise.all([
+            supabase.from('personajes').select('*'),
             db.objetos.getCatalogo(),
             db.objetos.getInventarioCompleto(),
-            db.estadosConfig.getAll(),
-            supabase.from('hechizos_inventario').select('*'),
-            supabase.from('hechizos_nodos').select('*')
+            db.estadosConfig.getAll()
         ]);
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
-
-        // Sumatoria de Atributos del Grimorio
-        const spellStats = {};
-        if (hecInv && hecNodos) {
-            hecInv.forEach(h => {
-                const pj = h.personaje_nombre.toLowerCase();
-                const node = hecNodos.find(n => n.nombre === h.hechizo_nombre);
-                if (node) {
-                    if (!spellStats[pj]) spellStats[pj] = {};
-                    const props = ['fisica','energetica','espiritual','mando','psiquica','oscura','dano_rojo','dano_azul','elim_dorada','vida_roja_max_extra','vida_azul_extra','guarda_dorada_extra'];
-                    props.forEach(pr => {
-                        const val = node[pr] || 0;
-                        const camel = pr.replace(/_([a-z])/g, g => g[1].toUpperCase()); 
-                        spellStats[pj][camel] = (spellStats[pj][camel] || 0) + val;
-                    });
-                }
-            });
-        }
 
         // Mapeo Plano Directo
         const statsGlobalMock = {};
@@ -83,20 +63,26 @@ window.onload = async () => {
                     mando: Number(p.af_mando) || 0, psiquica: Number(p.af_psiquica) || 0, oscura: Number(p.af_oscura) || 0
                 },
                 hechizosEfecto: {
-                    fisica: Number(p.alt_fisica) || 0, energetica: Number(p.alt_energetica) || 0, espiritual: Number(p.alt_espiritual) || 0,
-                    mando: Number(p.alt_mando) || 0, psiquica: Number(p.alt_psiquica) || 0, oscura: Number(p.alt_oscura) || 0,
-                    danoRojo: Number(p.alt_dano_rojo) || 0, danoAzul: Number(p.alt_dano_azul) || 0, elimDorada: Number(p.alt_elim_dorada) || 0
+                    fisica: Number(p.ef_fisica) || 0, energetica: Number(p.ef_energetica) || 0, espiritual: Number(p.ef_espiritual) || 0,
+                    mando: Number(p.ef_mando) || 0, psiquica: Number(p.ef_psiquica) || 0, oscura: Number(p.ef_oscura) || 0,
+                    danoRojo: Number(p.efecto_dano_rojo) || 0, danoAzul: Number(p.efecto_dano_azul) || 0, elimDorada: Number(p.efecto_elim) || 0,
+                    vidaRojaMaxExtra: Number(p.efecto_vida_roja) || 0, vidaAzulExtra: Number(p.efecto_vida_azul) || 0, guardaDoradaExtra: Number(p.efecto_guarda) || 0
                 },
                 buffs: {
-                    fisica: Number(p.ext_fisica) || 0, energetica: Number(p.ext_energetica) || 0, espiritual: Number(p.ext_espiritual) || 0,
-                    mando: Number(p.ext_mando) || 0, psiquica: Number(p.ext_psiquica) || 0, oscura: Number(p.ext_oscura) || 0,
-                    danoRojo: Number(p.ext_dano_rojo) || 0, danoAzul: Number(p.ext_dano_azul) || 0, elimDorada: Number(p.ext_elim_dorada) || 0,
-                    vidaRojaMaxExtra: Number(p.ext_vida_roja_max) || 0, vidaAzulExtra: Number(p.ext_vida_azul) || 0, guardaDoradaExtra: Number(p.ext_guarda_dorada) || 0
+                    fisica: Number(p.bf_fisica) || 0, energetica: Number(p.bf_energetica) || 0, espiritual: Number(p.bf_espiritual) || 0,
+                    mando: Number(p.bf_mando) || 0, psiquica: Number(p.bf_psiquica) || 0, oscura: Number(p.bf_oscura) || 0,
+                    danoRojo: Number(p.buff_dano_rojo) || 0, danoAzul: Number(p.buff_dano_azul) || 0, elimDorada: Number(p.buff_elim) || 0,
+                    vidaRojaMaxExtra: Number(p.buff_vida_roja) || 0, vidaAzulExtra: Number(p.buff_vida_azul) || 0, guardaDoradaExtra: Number(p.buff_guarda) || 0
                 },
                 
                 estados: p.estados || {},
                 iconoOverride: p.icono_override || '',
-                hechizos: spellStats[p.nombre.toLowerCase()] || {} 
+                hechizos: {
+                    fisica: Number(p.hz_fisica) || 0, energetica: Number(p.hz_energetica) || 0, espiritual: Number(p.hz_espiritual) || 0,
+                    mando: Number(p.hz_mando) || 0, psiquica: Number(p.hz_psiquica) || 0, oscura: Number(p.hz_oscura) || 0,
+                    danoRojo: Number(p.hechizo_dano_rojo) || 0, danoAzul: Number(p.hechizo_dano_azul) || 0, elimDorada: Number(p.hechizo_elim) || 0,
+                    vidaRojaMaxExtra: Number(p.hechizo_vida_roja) || 0, vidaAzulExtra: Number(p.hechizo_vida_azul) || 0, guardaDoradaExtra: Number(p.hechizo_guarda) || 0
+                }
             };
         });
 
