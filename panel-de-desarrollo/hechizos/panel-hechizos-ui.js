@@ -20,16 +20,29 @@ window.devCopiarPrimerDado = copiarPrimerDado;
 window.devCopiarPrimerHechizo = copiarPrimerHechizo;
 
 // ── UTILIDAD DE RENDERIZADO DE EFECTOS (Filtra "0" y nulos) ──
+function isValidSpellProp(v) {
+    return v !== undefined && v !== null && v !== "0" && v !== 0 && String(v).trim() !== "" && String(v).trim().toLowerCase() !== "null" && String(v).trim() !== "-";
+}
+
+function findSpellProp(dbSpell, ...names) {
+    if (!dbSpell) return '';
+    for (const key of Object.keys(dbSpell)) {
+        const cleanKey = key.trim().toLowerCase();
+        if (names.some(n => n.toLowerCase() === cleanKey)) {
+            if (isValidSpellProp(dbSpell[key])) return dbSpell[key];
+        }
+    }
+    return '';
+}
+
 function getSpellDetailsHTML(dbSpell) {
     if (!dbSpell) return '';
     
-    // Función estricta para saber si un texto es real o basura de la BD
-    const isValid = (v) => v !== undefined && v !== null && v !== "0" && v !== 0 && String(v).trim() !== "" && String(v).trim().toLowerCase() !== "null" && String(v).trim() !== "-";
-
-    const efe = [dbSpell.Efecto, dbSpell.efecto_desc, dbSpell.efecto].find(isValid) || '';
-    const over = [dbSpell.Overcast, dbSpell.overcast, dbSpell.Overcast_desc, dbSpell.overcast_desc].find(isValid) || '';
-    const under = [dbSpell.Undercast, dbSpell.undercast, dbSpell.Undercast_desc, dbSpell.undercast_desc].find(isValid) || '';
-    const esp = [dbSpell.Especial, dbSpell.especial, dbSpell.Especial_desc, dbSpell.especial_desc].find(isValid) || '';
+    // 🌟 Escaneo dinámico insensible a mayúsculas
+    const efe = findSpellProp(dbSpell, 'efecto', 'efecto_desc', 'desc', 'descripcion');
+    const over = findSpellProp(dbSpell, 'overcast', 'overcast_desc', 'efecto_overcast');
+    const under = findSpellProp(dbSpell, 'undercast', 'undercast_desc', 'efecto_undercast');
+    const esp = findSpellProp(dbSpell, 'especial', 'especial_desc', 'efecto_especial');
 
     let dHtml = '';
     if (efe || over || under || esp) {
@@ -169,8 +182,11 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     const hNom = hechizo.Nombre || hechizo.nombre || 'Hechizo sin nombre';
     const hAf = hechizo.Afinidad || hechizo.afinidad || '-';
     const hClase = hechizo.Clase || hechizo.clase || '-';
-    const costo = parseInt(hechizo.HEX || hechizo.Hex || hechizo.costo || hechizo.Costo || 0) || 0;
-    const efecto = hechizo.Efecto || hechizo.efecto_desc || hechizo.efecto || '-';
+    
+    // Búsqueda inteligente de propiedades
+    const costoRaw = findSpellProp(hechizo, 'hex', 'costo');
+    const costo = parseInt(costoRaw) || 0;
+    const efecto = findSpellProp(hechizo, 'efecto', 'efecto_desc', 'desc', 'descripcion') || '-';
 
     const isPublicBase = hechizo.Conocido && hechizo.Conocido.toString().trim().toLowerCase() === 'si';
     const isKnown = hzState.colaVisibilidad[hId] !== undefined ? hzState.colaVisibilidad[hId] : isPublicBase;
