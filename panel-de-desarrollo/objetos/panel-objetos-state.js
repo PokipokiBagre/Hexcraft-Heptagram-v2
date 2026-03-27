@@ -9,9 +9,10 @@ export const objState = {
     inventariosDB: {}, 
     
     // Estado de la Interfaz
-    vistaActiva: 'inventario', // 'inventario', 'forja', 'editar'
-    busqueda: "",
-    busquedaEdit: "", // Búsqueda separada para la pestaña Editar
+    vistaActiva: 'inventario', // 'inventario', 'catalogo', 'forja', 'editar'
+    busqueda: "",       // Buscador de inventario
+    busquedaCat: "",    // Buscador global
+    busquedaEdit: "",   // Buscador de edición
     formulariosCreacion: 1, 
     objAEditarSeleccionado: "", 
     
