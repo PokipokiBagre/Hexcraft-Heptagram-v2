@@ -9,21 +9,21 @@ export const hzState = {
     vistaActiva: 'castear', 
     busquedaAsignar: "",
     
-    // 🌟 ESTADO DEL FORMULARIO DE CASTEO MULTIPLE 🌟
+    // 🌟 FORMULARIO DE CASTEO EXACTO A TU SISTEMA ORIGINAL 🌟
     casteoManual: {
         numFilas: 3,
-        filas: Array.from({ length: 50 }, () => ({ nombre: '', cant: 1 })),
-        datalistModo: 'local' // 'local' (Grimorio) o 'global' (Todos)
+        // Ahora con las 4 propiedades: dado, nombre, afinidad, cant
+        filas: Array.from({ length: 50 }, () => ({ dado: '', nombre: '', afinidad: '', cant: 1 })),
+        datalistModo: 'local'
     },
     
-    cobrarAuto: false,
+    cobrarAuto: true,
     mostrarEfectos: true,
-    cobrarAlAsignar: false,
+    cobrarAlAsignar: true,
     
     vexGastadoPorPj: {}, 
 
-    // 🔥 COLAS DE CAMBIOS (Staging) 🔥
     colaAsignaciones: {}, 
-    colaVisibilidad: {}, // Para Ocultar/Hacer Público
+    colaVisibilidad: {}, 
     logCasteosSession: [] 
 };
