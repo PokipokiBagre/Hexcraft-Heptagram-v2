@@ -51,14 +51,15 @@ export function modFilaCast(index, campo, valor, pjNombre) {
             norm(h.ID || h.id || '') === norm(valor)
         );
         
+        const afInput = document.getElementById(`dev-afinidad-${index}`);
+
         if (hechizo) {
-            hzState.casteoManual.filas[index].afinidad = obtenerAfinidadTotal(pjNombre, hechizo.Afinidad);
-            // 🌟 Disparamos actualización para mostrar la tarjeta de información del hechizo instantáneamente
-            window.dispatchEvent(new Event('devUIUpdate'));
+            const nuevaAfinidad = obtenerAfinidadTotal(pjNombre, hechizo.Afinidad);
+            hzState.casteoManual.filas[index].afinidad = nuevaAfinidad;
+            if (afInput) afInput.value = nuevaAfinidad;
         } else if (oldValue && !hechizo) {
             hzState.casteoManual.filas[index].afinidad = '';
-            // 🌟 Disparamos actualización para ocultar la tarjeta si el texto ya no coincide
-            window.dispatchEvent(new Event('devUIUpdate'));
+            if (afInput) afInput.value = '';
         }
     }
 }
@@ -78,7 +79,7 @@ export function copiarPrimerHechizo() {
         if (elAf) elAf.value = fila.afinidad;
     }
     navigator.clipboard.writeText(`Casteando: ${fila.nombre}`).then(() => alert(`"${fila.nombre}" copiado a todas las filas.`));
-    window.dispatchEvent(new Event('devUIUpdate')); // Refrescar para pintar las tarjetas de abajo
+    window.dispatchEvent(new Event('devUIUpdate'));
 }
 
 export function copiarPrimerDado() {
