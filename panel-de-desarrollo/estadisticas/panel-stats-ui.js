@@ -131,7 +131,7 @@ export function renderColumnaStats(pjSeleccionado) {
                 <button onclick="window.devModStat('${sPj}','asistencia',null,-1)" style="background:#4a0000; color:#fff; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer;">-1</button>
                 <button onclick="window.devModStat('${sPj}','asistencia',null,1)" style="background:#004a00; color:#fff; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer;">+1</button>
             </div>
-            <button onclick="window.devDarAsis('${sPj}')" style="width:100%; background:linear-gradient(135deg, #1a365d, #4a90e2); color:#fff; border:1px solid #00ffff; padding:12px; border-radius:6px; font-weight:bold; font-family:'Cinzel'; font-size:1.1em; cursor:pointer; box-shadow:0 4px 10px rgba(74,144,226,0.3);">⭐ DAR ASISTENCIA (+200 HEX / +10 VEX)</button>
+            <button onclick="window.devDarAsis('${sPj}')" style="width:100%; background:linear-gradient(135deg, #1a365d, #4a90e2); color:#fff; border:1px solid #00ffff; padding:12px; border-radius:6px; font-weight:bold; font-family:'Cinzel'; font-size:1.1em; cursor:pointer; box-shadow:0 4px 10px rgba(74,144,226,0.3);">⭐ DAR ASISTENCIA (+300 HEX)</button>
         </div>`;
     }
 
@@ -228,7 +228,6 @@ export function renderColumnaStats(pjSeleccionado) {
         });
         html += `</div>`;
 
-        // 🌟 GESTIÓN DE ESTADOS GLOBALES
         html += `
         <div style="border-top:2px dashed #444; padding-top:20px;">
             <h3 style="color:#ffaa00; font-family:'Cinzel'; margin:0 0 10px 0;">🌍 Gestión de Estados Globales</h3>
