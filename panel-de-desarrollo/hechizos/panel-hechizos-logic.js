@@ -35,6 +35,7 @@ function obtenerAfinidadTotal(pjNombre, afNombreRaw) {
            (getPjStat(pjNombre, 'buffs', key) || 0);
 }
 
+// ── FORMULARIO DE CASTEO MASIVO ──
 export function setNumFilasCast(num) {
     hzState.casteoManual.numFilas = parseInt(num) || 1;
     window.dispatchEvent(new Event('devUIUpdate'));
@@ -94,27 +95,13 @@ export function copiarPrimerDado() {
     navigator.clipboard.writeText(`!r 1d100 + ${fila.afinidad || 0} // ${fila.nombre || '?'}`).then(() => alert(`Dado ${dado} copiado a todas las filas.`));
 }
 
-// 🌟 EXTRAE ARRAYS JSON Y TEXTOS DE FORMA SEGURA 🌟
-const extractVal = (v) => {
-    if (!v || v === "0" || v === 0 || v === "-") return '';
-    if (Array.isArray(v)) {
-        const text = v.join(" ");
-        return (text && text !== "0" && text !== "-") ? text : '';
-    }
-    const text = String(v).trim();
-    return (text && text !== "0" && text.toLowerCase() !== "null" && text !== "-") ? text : '';
-};
-
-const findProp = (obj, ...names) => {
-    if (!obj) return '';
-    for (const key of Object.keys(obj)) {
-        const cleanKey = key.trim().toLowerCase();
-        if (names.some(n => n.toLowerCase() === cleanKey)) {
-            const val = extractVal(obj[key]);
-            if (val) return val;
-        }
-    }
-    return '';
+// 🌟 UTILIDAD: Extrae textos de Arrays y limpia basura ("0", nulos)
+const parseSpellText = (val) => {
+    if (val === undefined || val === null || val === "0" || val === 0 || val === "-") return '';
+    let text = Array.isArray(val) ? val.join(', ') : String(val);
+    text = text.trim();
+    if (!text || text === "0" || text === "-" || text.toLowerCase() === "null") return '';
+    return text;
 };
 
 export function calcularConjurosMasivos(pjNombre) {
@@ -136,17 +123,19 @@ export function calcularConjurosMasivos(pjNombre) {
         const afin = parseInt(fila.afinidad) || 0;
 
         if (hechizo) {
-            const costoRaw = findProp(hechizo, 'hex', 'costo');
-            const costoU = parseInt(costoRaw) || 0;
+            // Extraer costo exacto (como en inventario-main.js)
+            const costoU = parseInt(hechizo.HEX || hechizo.Hex || hechizo.Costo || hechizo.costo || 0) || 0;
             totalCost += (costoU * cant);
             validSpells += cant;
 
             const nc = dado * afin;
-            let outcome = "";
-            let efeToPrint = findProp(hechizo, 'efecto', 'efecto_desc', 'desc', 'descripcion');
-            const outcastProp = findProp(hechizo, 'overcast', 'overcast_desc', 'efecto_overcast');
+            
+            // 🌟 Extraer propiedades limpias
+            let efeToPrint = parseSpellText(hechizo.Efecto || hechizo.Efecto_desc || hechizo.efecto_desc || hechizo.efecto);
+            const outcastProp = parseSpellText(hechizo.Overcast || hechizo.overcast);
 
-            // 🌟 LÓGICA OVERCAST: Si NC es el doble del Costo
+            let outcome = "";
+            // 🌟 Lógica estricta de Overcast (NC >= Costo * 2)
             if (nc < costoU) {
                 outcome = "❌ FALLO";
             } else if (outcastProp && costoU > 0 && nc >= (costoU * 2)) {
