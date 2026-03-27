@@ -1,4 +1,4 @@
-import { invGlobal, objGlobal, statsGlobal, estadoUI, propuestasGlobal, eqpGlobal, historial } from './obj-state.js';
+import { invGlobal, objGlobal, statsGlobal, estadoUI, propuestasGlobal, eqpGlobal } from './obj-state.js';
 import { db } from '../hex-db.js';
 
 function drawnHEXPreserveFocus(containerId, html) {
@@ -18,233 +18,369 @@ function drawnHEXPreserveFocus(containerId, html) {
 const raridadValor = { "Legendario": 3, "Raro": 2, "Común": 1, "-": 0 };
 const normalizarNombre = (str) => str ? str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n').replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'') : "";
 
+// RUTA ÚNICA del fallback — se usa en TODOS los onerror
 const NO_ENCONTRADO = () => `${db.storage.urlBase}/imginterfaz/no_encontrado.png`;
-const STORAGE_URL = 'https://gkscqurkpyteusqyspsu.supabase.co/storage/v1/object/public/imagenes-hex';
 
-const rColores = { "Común": "#aaa", "Raro": "#4a90e2", "Legendario": "#d4af37", "-": "#888" };
-const safeStr = (s) => s.replace(/'/g, "\\'");
+const getPjStats = (nombre) => {
+    const key = Object.keys(statsGlobal).find(k => k.toLowerCase() === nombre.toLowerCase());
+    return key ? statsGlobal[key] : { isPlayer: false, isActive: true, iconoOverride: "" };
+};
 
-function filtrar(obj) {
-    let matc = estadoUI.busquedaInv ? obj.toLowerCase().includes(estadoUI.busquedaInv) : true;
-    let rar = estadoUI.filtroRar === 'Todos' ? true : (objGlobal[obj] && objGlobal[obj].rar === estadoUI.filtroRar);
-    let mat = estadoUI.filtroMat === 'Todos' ? true : (objGlobal[obj] && objGlobal[obj].mat === estadoUI.filtroMat);
-    return matc && rar && mat;
+export function refrescarUI() { 
+    if (estadoUI.resetCacheOrder) {
+        estadoUI.cachedSortKeys = Object.keys(objGlobal).sort((a, b) => (invGlobal[estadoUI.jugadorInv]?.[b]||0) - (invGlobal[estadoUI.jugadorInv]?.[a]||0) || a.localeCompare(b));
+        estadoUI.cachedInvOrders = {};
+        Object.keys(invGlobal).forEach(j => {
+            estadoUI.cachedInvOrders[j] = Object.keys(invGlobal[j]).filter(o => invGlobal[j][o] > 0).sort();
+        });
+        estadoUI.resetCacheOrder = false;
+    }
+
+    if (estadoUI.vistaActual === 'grilla') dibujarGrillaPersonajes();
+    else if (estadoUI.vistaActual === 'inventario') dibujarInventarios();
+    else if (estadoUI.vistaActual === 'resumen') dibujarResumenVisual();
+    else if (estadoUI.vistaActual === 'catalogo') dibujarCatalogo(); 
+    else if (estadoUI.vistaActual === 'control') dibujarControl();
+    else if (estadoUI.vistaActual === 'op-menu') dibujarMenuOP();
+    else if (estadoUI.vistaActual === 'crear') dibujarCreacionObjeto();
+    else if (estadoUI.vistaActual === 'crear-multi') dibujarCreacionMulti();
+    else if (estadoUI.vistaActual === 'party-loot') dibujarPartyLoot();
+    else if (estadoUI.vistaActual === 'transfer') dibujarTransferencia();
+    else if (estadoUI.vistaActual === 'propuestas') dibujarPropuestas();
+    else if (estadoUI.vistaActual === 'crear-propuesta') dibujarFormularioPropuesta();
+}
+
+export function dibujarGrillaPersonajes() {
+    estadoUI.filtroRol = estadoUI.filtroRol || 'Jugadores';
+    estadoUI.filtroAct = estadoUI.filtroAct || 'Activos';
+
+    let html = `
+    <h2 style="margin-top:0; text-align:center; font-family:'Cinzel'; color:var(--gold);">Inventarios de Personajes</h2>
+    <div style="display:flex; justify-content:center; gap:20px; margin-bottom:30px; flex-wrap:wrap; border-bottom:2px solid #222; padding-bottom:15px; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 8px;">
+        <div class="filter-group" style="margin:0; display:flex; gap:10px;">
+            <button onclick="window.setFiltro('rol', 'Todos')" class="${estadoUI.filtroRol === 'Todos' ? 'btn-active' : ''}">👥 Todos</button>
+            <button onclick="window.setFiltro('rol', 'Jugadores')" class="${estadoUI.filtroRol === 'Jugadores' ? 'btn-active' : ''}">⚔️ Jugadores</button>
+            <button onclick="window.setFiltro('rol', 'NPCs')" class="${estadoUI.filtroRol === 'NPCs' ? 'btn-active' : ''}">🎭 NPCs</button>
+        </div>
+        <div class="filter-group" style="margin:0; display:flex; gap:10px;">
+            <button onclick="window.setFiltro('act', 'Todos')" class="${estadoUI.filtroAct === 'Todos' ? 'btn-active' : ''}">🌟 Ambos</button>
+            <button onclick="window.setFiltro('act', 'Activos')" class="${estadoUI.filtroAct === 'Activos' ? 'btn-active' : ''}">🟢 Activos</button>
+            <button onclick="window.setFiltro('act', 'Inactivos')" class="${estadoUI.filtroAct === 'Inactivos' ? 'btn-active' : ''}">🔴 Inactivos</button>
+        </div>
+    </div>
+    <div class="catalogo-grid">`;
+    
+    const getSortValue = (p) => { if (p.isPlayer && p.isActive) return 1; if (!p.isPlayer && p.isActive) return 2; if (!p.isPlayer && !p.isActive) return 3; if (p.isPlayer && !p.isActive) return 4; return 5; };
+    
+    const sortedNames = Object.keys(statsGlobal).sort((a, b) => { 
+        const valA = getSortValue(statsGlobal[a]); const valB = getSortValue(statsGlobal[b]); 
+        if (valA !== valB) return valA - valB; 
+        return a.localeCompare(b); 
+    });
+
+    sortedNames.forEach(j => {
+        const p = statsGlobal[j];
+        if (estadoUI.filtroRol === 'Jugadores' && !p.isPlayer) return; 
+        if (estadoUI.filtroRol === 'NPCs' && p.isPlayer) return;
+        if (estadoUI.filtroAct === 'Activos' && !p.isActive) return; 
+        if (estadoUI.filtroAct === 'Inactivos' && p.isActive) return;
+
+        let countComun = 0, countRaro = 0, countLeg = 0;
+        
+        if(invGlobal[j]) {
+            Object.keys(invGlobal[j]).forEach(o => {
+                if (invGlobal[j][o] > 0) {
+                    const rar = objGlobal[o] ? objGlobal[o].rar : 'Común';
+                    if (rar === 'Legendario') countLeg += invGlobal[j][o];
+                    else if (rar === 'Raro') countRaro += invGlobal[j][o];
+                    else countComun += invGlobal[j][o];
+                }
+            });
+        }
+        
+        const jSafe = j.replace(/'/g, "\\'"); 
+        const iconoMuestra = normalizarNombre(p.iconoOverride || j);
+        
+        let borderStyle = ""; let bgStyle = "background: #11001c;"; 
+        if (p.isPlayer && p.isActive) { borderStyle = "border: 2px solid var(--gold); box-shadow: 0 4px 15px rgba(212, 175, 55, 0.2);"; } 
+        else if (!p.isPlayer && p.isActive) { borderStyle = "border: 2px solid #00ffff; box-shadow: 0 4px 10px rgba(0, 255, 255, 0.1);"; bgStyle = "background: #060b19;"; } 
+        else if (!p.isPlayer && !p.isActive) { borderStyle = "border: 2px solid #444;"; bgStyle = "background: #0a0a0a;"; } 
+        else if (p.isPlayer && !p.isActive) { borderStyle = "border: 2px solid #cc0000; box-shadow: 0 4px 10px rgba(204, 0, 0, 0.2);"; bgStyle = "background: #1a0000;"; }
+
+        const claseInactiva = p.isActive ? '' : 'inactive-card';
+
+        html += `
+        <div class="char-card player-card ${claseInactiva}" style="${borderStyle} ${bgStyle} padding: 15px; border-radius: 12px; transition: transform 0.2s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'" onclick="window.abrirInventario('${jSafe}')">
+            <img src="${db.storage.urlBase}/imgpersonajes/${iconoMuestra}icon.png" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.2); margin-bottom: 10px;" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'">
+            <h3 style="margin: 0 0 10px 0; font-family: 'Cinzel', serif; font-size: 1.2em; text-transform: uppercase;">${j}</h3>
+            <div style="background: rgba(0,0,0,0.5); padding: 8px; border-radius: 6px;">
+                <p style="margin: 0; font-size: 0.85em; color: #ddd;">Comunes: <strong style="color: white;">${countComun}</strong></p>
+                <p style="margin: 5px 0 0 0; font-size: 0.85em; color: #ddd;">Raros: <strong style="color: #8a2be2;">${countRaro}</strong> | Legendarios: <strong style="color: var(--gold);">${countLeg}</strong></p>
+            </div>
+        </div>`;
+    });
+    html += `</div>`;
+    
+    const container = document.getElementById('contenedor-grilla');
+    if(container) container.innerHTML = html;
+}
+
+export function dibujarResumenVisual() {
+    let html = `<h2 style="margin-top:0;">Resumen del Equipo del Grupo</h2>`;
+    
+    Object.keys(invGlobal).sort().forEach(j => {
+        let itemsHtml = '';
+        const pjStatsR  = getPjStats(j);
+        const esNPCR    = !pjStatsR.isPlayer;
+        const puedeEditarR = estadoUI.esAdmin || esNPCR;
+        
+        let frozenKeys = estadoUI.cachedInvOrders[j] || [];
+        Object.keys(invGlobal[j]).forEach(k => { if (invGlobal[j][k] > 0 && !frozenKeys.includes(k)) frozenKeys.push(k); });
+
+        // 🌟 Ordenar los equipados primero en el resumen de party
+        frozenKeys.sort((a,b) => {
+            const eqpA = eqpGlobal[j]?.[a] || false;
+            const eqpB = eqpGlobal[j]?.[b] || false;
+            if(eqpA && !eqpB) return -1;
+            if(!eqpA && eqpB) return 1;
+            return 0; 
+        });
+
+        frozenKeys.forEach(o => {
+            const count = invGlobal[j][o];
+            if (count > 0) {
+                const info = objGlobal[o] || {};
+                const imgFile = normalizarNombre(o);
+                const isEqp = eqpGlobal[j]?.[o] || false;
+                const tooltipText = `<span>${o}</span>Tipo: ${info.tipo}<br>Rareza: ${info.rar}<br><br>${info.eff}`;
+                
+                // 🌟 Estilos si está equipado
+                const eqpBadge = isEqp ? `<div style="position:absolute; top:-5px; right:-5px; background:var(--gold); color:#000; font-size:0.6em; padding:2px 4px; border-radius:4px; font-weight:bold; z-index:10;">EQP</div>` : '';
+                const imgBorder = isEqp ? 'border:2px solid var(--gold); box-shadow:0 0 8px var(--gold);' : '';
+
+                let badgeHTML = '';
+                if(puedeEditarR) {
+                    badgeHTML = `
+                    <div class="badge-op">
+                        <button class="minus" onclick="window.hexMod('${j}','${o.replace(/'/g, "\\'")}',-1); event.stopPropagation();">-</button>
+                        <span>${count}</span>
+                        <button class="plus" onclick="window.hexMod('${j}','${o.replace(/'/g, "\\'")}',1); event.stopPropagation();">+</button>
+                    </div>`;
+                } else {
+                    badgeHTML = `<div class="badge-normal">${count}</div>`;
+                }
+
+                itemsHtml += `
+                <div class="hex-tooltip img-stack" style="position:relative;" onclick="window.verImagen('${db.storage.urlBase}/imgobjetos/${imgFile}.png')">
+                    ${eqpBadge}
+                    <img src="${db.storage.urlBase}/imgobjetos/${imgFile}.png" style="${imgBorder}" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'" alt="${o}">
+                    ${badgeHTML}
+                    <div class="tooltiptext">${tooltipText}</div>
+                </div>`;
+            }
+        });
+
+        if(itemsHtml !== '') {
+            html += `
+            <div class="resumen-row">
+                <div class="resumen-left">
+                    <img src="${db.storage.urlBase}/imgpersonajes/${normalizarNombre(j)}icon.png" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'" style="width:75px; height:75px; border-radius:50%; border:2px solid var(--gold); object-fit:cover;">
+                    <h3 style="margin:8px 0 0 0; font-size:1em; color:var(--gold);">${j.toUpperCase()}</h3>
+                </div>
+                <div class="resumen-right">
+                    ${itemsHtml}
+                </div>
+            </div>`;
+        }
+    });
+    
+    drawnHEXPreserveFocus('contenedor-resumen', html || '<p style="text-align:center; color:#aaa;">Nadie tiene objetos todavía.</p>');
 }
 
 export function dibujarInventarios() {
+    if (!estadoUI.jugadorInv) return;
     const j = estadoUI.jugadorInv;
-    if (!j || !invGlobal[j]) return document.getElementById('grid-inventario').innerHTML = '<p style="color:#666;">Selecciona un personaje válido.</p>';
+    const term = (estadoUI.busquedaInv || "").toLowerCase();
     
-    let inventario = Object.keys(invGlobal[j]).filter(o => invGlobal[j][o] > 0 && filtrar(o));
+    const linkStats = `../estadisticas/index.html?pj=${encodeURIComponent(j)}`;
     
-    // 🌟 Ordenar: Primero los equipados, luego por rareza
-    inventario.sort((a, b) => {
+    const pjStats   = getPjStats(j);
+    const esNPC     = !pjStats.isPlayer;
+    const puedeEditar = estadoUI.esAdmin || esNPC;
+
+    let html = `
+    <button onclick="window.volverAGrilla()" style="background:#444; margin-bottom: 20px;">⬅ Volver a Inventarios</button>
+    <div class="player-header">
+        <a href="${linkStats}" target="_blank" title="Ver ficha de estado de ${j}" style="display:flex;">
+            <img src="${db.storage.urlBase}/imgpersonajes/${normalizarNombre(j)}icon.png" class="player-icon" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'">
+        </a>
+        <div style="text-align:left; flex:1;">
+            <a href="${linkStats}" target="_blank" style="text-decoration:none;" title="Ver ficha de estado de ${j}">
+                <h1 style="margin: 0; color:var(--gold); cursor:pointer;">${j.toUpperCase()}</h1>
+            </a>
+        </div>
+        ${puedeEditar ? `<button onclick="window.mostrarPagina('control')" style="background:#4a004a; border-color:var(--gold);">⚙️ Panel Control Masivo</button>` : ''}
+    </div>
+    <input type="text" id="busq-inv" class="search-bar" placeholder="🔍 Filtrar equipo..." value="${estadoUI.busquedaInv}" oninput="window.setBusquedaInv(this.value)">`;
+    
+    let frozenKeys = estadoUI.cachedInvOrders[j] || [];
+    Object.keys(invGlobal[j]).forEach(k => { if (invGlobal[j][k] > 0 && !frozenKeys.includes(k)) frozenKeys.push(k); });
+
+    // 🌟 Ordenar para inventario: Equipados siempre de primero
+    frozenKeys.sort((a,b) => {
         const eqpA = eqpGlobal[j]?.[a] || false;
         const eqpB = eqpGlobal[j]?.[b] || false;
         if (eqpA && !eqpB) return -1;
         if (!eqpA && eqpB) return 1;
-
-        let va = objGlobal[a] ? raridadValor[objGlobal[a].rar] : 0;
-        let vb = objGlobal[b] ? raridadValor[objGlobal[b].rar] : 0;
-        return vb - va || a.localeCompare(b);
+        return 0;
     });
 
-    let html = '';
-    inventario.forEach(o => {
-        const safeO = safeStr(o);
-        const cant = invGlobal[j][o];
-        const isEqp = eqpGlobal[j]?.[o] || false;
-        
-        // 🌟 Estilos dinámicos si está equipado
-        const colorMarco = isEqp ? 'var(--gold)' : (rColores[objGlobal[o].rar] || '#888');
-        const eqpShadow = isEqp ? `box-shadow: 0 0 10px rgba(212,175,55,0.6);` : '';
-        const badgeEqp = isEqp ? `<div style="position:absolute; top:-5px; right:-5px; background:var(--gold); color:#000; font-size:0.65em; font-weight:bold; padding:2px 6px; border-radius:4px; z-index:10; box-shadow:0 0 5px var(--gold);">EQP</div>` : '';
-        
-        let btnEqpHTML = '';
-        if (estadoUI.esAdmin) {
-            btnEqpHTML = `<button onclick="window.toggleEqp('${j}', '${safeO}'); event.stopPropagation();" style="width:100%; margin-top:5px; padding:3px; background:${isEqp ? 'var(--gold)' : '#222'}; color:${isEqp ? '#000' : '#aaa'}; border:1px solid #444; border-radius:4px; font-size:0.75em; font-weight:bold; cursor:pointer; transition:0.2s;">${isEqp ? 'DSQP' : 'EQP'}</button>`;
-        }
+    const destacados = frozenKeys
+        .filter(o => invGlobal[j][o] > 0 && (!term || o.toLowerCase().includes(term)))
+        .sort((a, b) => {
+            const eqpA = eqpGlobal[j]?.[a] || false;
+            const eqpB = eqpGlobal[j]?.[b] || false;
+            if (eqpA && !eqpB) return -1;
+            if (!eqpA && eqpB) return 1;
+            return (raridadValor[objGlobal[b]?.rar] || 0) - (raridadValor[objGlobal[a]?.rar] || 0);
+        })
+        .slice(0, 5);
 
-        html += `<div class="obj-card tooltip" onclick="window.abrirOpciones('${safeO}', '${j}')" style="border-color:${colorMarco}; ${eqpShadow}; position:relative;">
-            ${badgeEqp}
-            <img src="${STORAGE_URL}/imgobjetos/${normalizarNombre(o)}.png" class="obj-icon" style="border-color:${isEqp ? 'var(--gold)' : '#444'};" onerror="${NO_ENCONTRADO()}">
-            <div class="obj-info">
-                <div class="obj-name" style="color:${isEqp ? 'var(--gold)' : '#fff'};">${o}</div>
-                <div class="obj-stock" style="color:${isEqp ? 'var(--gold)' : 'var(--cyan-magic)'};">Stock: ${cant}</div>
-                ${btnEqpHTML}
-            </div>
-            <span class="tooltiptext">${o} <span style="color:#aaa;">(${objGlobal[o].tipo})</span><br><span style="color:var(--cyan-magic);">${objGlobal[o].eff}</span></span>
-        </div>`;
-    });
+    if (destacados.length > 0) {
+        html += `<div class="top-items-grid">`;
+        destacados.forEach(o => {
+            const imgFile = normalizarNombre(o);
+            const rarClase = objGlobal[o]?.rar === 'Raro' ? 'rarity-raro' : (objGlobal[o]?.rar === 'Legendario' ? 'rarity-legendario' : '');
+            const isEqp = eqpGlobal[j]?.[o] || false;
+            const imgBorder = isEqp ? 'border:2px solid var(--gold); box-shadow:0 0 10px var(--gold);' : '';
+            const eqpBadge = isEqp ? `<div style="position:absolute; top:-5px; right:-5px; background:var(--gold); color:#000; font-size:0.6em; padding:2px 4px; border-radius:4px; font-weight:bold; z-index:10;">EQP</div>` : '';
+            
+            html += `
+            <div class="top-item-card ${rarClase}" style="position:relative;">
+                ${eqpBadge}
+                <img src="${db.storage.urlBase}/imgobjetos/${imgFile}.png" style="${imgBorder}" onclick="window.verImagen(this.src)" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'">
+                <span style="font-size:0.65em; display:block; height:2.4em; overflow:hidden; color:${isEqp ? 'var(--gold)' : '#d4af37'};" title="${o}">${o}</span>
+            </div>`;
+        });
+        html += `</div><hr style="border:0; border-top:1px solid rgba(212,175,55,0.2); margin:20px 0;">`;
+    }
 
-    if (html === '') html = '<p style="color:#666; font-style:italic;">Inventario vacío o sin coincidencias de filtro.</p>';
-    document.getElementById('grid-inventario').innerHTML = html;
-}
-
-export function dibujarControl() {
-    let html = '';
-    let objs = Object.keys(objGlobal);
-    if(estadoUI.busquedaOP) objs = objs.filter(o => o.toLowerCase().includes(estadoUI.busquedaOP));
-    
-    objs.sort().forEach(o => {
-        const safeO = safeStr(o);
-        const colRar = rColores[objGlobal[o].rar] || '#888';
-        
-        html += `<div style="background:#111; border:1px solid #333; padding:15px; border-radius:6px; margin-bottom:15px; border-top: 3px solid ${colRar};">
-                    <h3 style="color:#eee; margin-bottom:5px; font-size:1.1em;">${o} <span style="font-size:0.75em; color:#888; font-weight:normal;">(${objGlobal[o].tipo})</span></h3>
-                    <p style="color:var(--cyan-magic); font-size:0.85em; font-style:italic; margin-bottom:10px;">${objGlobal[o].eff}</p>
-                    <div style="display:flex; flex-direction:column; gap:5px;">`;
-        
-        Object.keys(invGlobal).sort().forEach(j => {
-            if(invGlobal[j][o] > 0) {
-                // 🌟 Eqp Botones en Interactivo
-                const isEqp = eqpGlobal[j]?.[o] || false;
+    html += `<div class="table-responsive"><table><tr><th>Imagen</th><th>Objeto</th><th>Efecto</th><th>Cant</th></tr>`;
+    frozenKeys.forEach(o => {
+        if (invGlobal[j][o] > 0 && (!term || o.toLowerCase().includes(term))) {
+            const oSafe = o.replace(/'/g, "\\'");
+            
+            const isEqp = eqpGlobal[j]?.[o] || false;
+            const imgBorder = isEqp ? 'border:2px solid var(--gold); box-shadow:0 0 8px var(--gold);' : '';
+            const eqpStyle = isEqp ? 'color:var(--gold); text-shadow:0 0 5px rgba(212,175,55,0.4);' : 'color:#d4af37;';
+            const badgeEqp = isEqp ? `<span style="background:var(--gold); color:#000; font-size:0.6em; padding:2px 4px; border-radius:4px; margin-left:5px; vertical-align:middle; display:inline-block;">EQP</span>` : '';
+            
+            let btnEqpHTML = '';
+            if (puedeEditar) {
                 const btnEqpText = isEqp ? 'Dsqp.' : 'Eqp.';
-                const btnEqpStyle = isEqp ? 'background:var(--gold); color:#000; box-shadow:0 0 5px var(--gold);' : 'background:#222; color:#888; border: 1px solid #444;';
-                const colorNombre = isEqp ? 'var(--gold)' : '#fff';
-                const borderColor = isEqp ? 'var(--gold)' : '#333';
-
-                html += `<div style="display:flex; justify-content:space-between; align-items:center; background:#000; padding:8px; border-radius:6px; border:1px solid ${borderColor};">
-                            <div style="flex:1; display:flex; align-items:center; gap:10px;">
-                                <img src="${STORAGE_URL}/imgpersonajes/${normalizarNombre(statsGlobal[j].iconoOverride || j)}icon.png" onerror="${NO_ENCONTRADO()}" style="width:30px; height:30px; border-radius:50%; object-fit:cover; border:1px solid ${borderColor};">
-                                <div>
-                                    <div style="color:${colorNombre}; font-weight:bold; font-size:0.9em;">${j}</div>
-                                    <div style="font-size:0.7em; color:#888;">Stock: <span style="color:var(--cyan-magic); font-weight:bold; font-size:1.1em;">${invGlobal[j][o]}</span></div>
-                                </div>
-                            </div>
-                            <div style="display:flex; gap:3px;">
-                                <button onclick="window.mod(-1, '${j}', '${safeO}')" class="btn-mod" style="background:#a00000;">-1</button>
-                                <button onclick="window.toggleEqp('${j}', '${safeO}')" class="btn-mod" style="${btnEqpStyle} padding:4px 8px; font-weight:bold; font-size:0.7em;">${btnEqpText}</button>
-                                <button onclick="window.mod(1, '${j}', '${safeO}')" class="btn-mod" style="background:#006600;">+1</button>
-                            </div>
-                        </div>`;
+                const btnEqpCss = isEqp ? 'background:var(--gold); color:#000; box-shadow:0 0 5px var(--gold);' : 'background:#222; color:#888; border:1px solid #444;';
+                btnEqpHTML = `<button class="btn-inline-op" onclick="window.toggleEqp('${j}', '${oSafe}')" style="${btnEqpCss} margin:0 5px; font-size:0.8em; font-weight:bold; min-width:45px;">${btnEqpText}</button>`;
             }
-        });
-        html += `   </div>
-                 </div>`;
-    });
-    drawnHEXPreserveFocus('panel-interactivo', html);
-}
 
-export function dibujarResumenVisual() {
-    let html = '';
-    const jugadores = Object.keys(invGlobal).filter(j => 
-        (estadoUI.filtroRol === 'Todos' || (estadoUI.filtroRol === 'Jugadores' && statsGlobal[j]?.isPlayer) || (estadoUI.filtroRol === 'NPCs' && !statsGlobal[j]?.isPlayer)) &&
-        (estadoUI.filtroAct === 'Todos' || (estadoUI.filtroAct === 'Activos' && statsGlobal[j]?.isActive) || (estadoUI.filtroAct === 'Inactivos' && !statsGlobal[j]?.isActive))
-    ).sort();
+            const cantHTML = puedeEditar
+                ? `<div style="display:flex; justify-content:center; align-items:center; gap:4px;">
+                     <button class="btn-inline-op minus" onclick="window.hexMod('${j}','${oSafe}',-1)">-</button>
+                     <b style="font-size:1.3em; width:20px;">${invGlobal[j][o]}</b>
+                     <button class="btn-inline-op plus" onclick="window.hexMod('${j}','${oSafe}',1)">+</button>
+                     ${btnEqpHTML}
+                   </div>`
+                : `<b style="font-size:1.2em">${invGlobal[j][o]}</b>`;
 
-    jugadores.forEach(j => {
-        let inventario = Object.keys(invGlobal[j]).filter(o => invGlobal[j][o] > 0);
-        inventario.sort((a,b) => {
-            const eqpA = eqpGlobal[j]?.[a] || false; const eqpB = eqpGlobal[j]?.[b] || false;
-            if (eqpA && !eqpB) return -1; if (!eqpA && eqpB) return 1;
-            return (raridadValor[objGlobal[b].rar] || 0) - (raridadValor[objGlobal[a].rar] || 0) || a.localeCompare(b);
-        });
-
-        if(inventario.length > 0) {
-            html += `<h3 style="color:var(--gold); border-bottom:1px solid #333; padding-bottom:5px; margin-top:20px;">🎒 ${j}</h3><div class="grid-objetos" style="margin-bottom:15px;">`;
-            inventario.forEach(o => {
-                const safeO = safeStr(o);
-                const isEqp = eqpGlobal[j]?.[o] || false;
-                const colorMarco = isEqp ? 'var(--gold)' : (rColores[objGlobal[o].rar] || '#888');
-                const eqpShadow = isEqp ? `box-shadow: 0 0 10px rgba(212, 175, 55, 0.6);` : '';
-                const badgeEqp = isEqp ? `<div style="position:absolute; top:-5px; right:-5px; background:var(--gold); color:#000; font-size:0.65em; font-weight:bold; padding:2px 6px; border-radius:4px; z-index:10; box-shadow:0 0 5px var(--gold);">EQP</div>` : '';
-
-                let btnEqpHTML = `<button onclick="window.toggleEqp('${j}', '${safeO}')" style="width:100%; margin-top:5px; padding:3px; background:${isEqp ? 'var(--gold)' : '#222'}; color:${isEqp ? '#000' : '#aaa'}; border:1px solid #444; border-radius:4px; font-size:0.75em; font-weight:bold; cursor:pointer; transition:0.2s;">${isEqp ? 'DSQP' : 'EQP'}</button>`;
-
-                html += `<div class="obj-card tooltip" style="border-color:${colorMarco}; ${eqpShadow}; position:relative; cursor:default;">
-                    ${badgeEqp}
-                    <img src="${STORAGE_URL}/imgobjetos/${normalizarNombre(o)}.png" class="obj-icon" style="border-color:${isEqp ? 'var(--gold)' : '#444'};" onerror="${NO_ENCONTRADO()}">
-                    <div class="obj-info">
-                        <div class="obj-name" style="color:${isEqp ? 'var(--gold)' : '#fff'};">${o}</div>
-                        <div class="obj-stock">Stock: ${invGlobal[j][o]}</div>
-                        ${btnEqpHTML}
-                    </div>
-                    <span class="tooltiptext">${o} <span style="color:#aaa;">(${objGlobal[o].tipo})</span><br><span style="color:var(--cyan-magic);">${objGlobal[o].eff}</span></span>
-                </div>`;
-            });
-            html += `</div>`;
+            html += `<tr>
+                <td style="position:relative;"><img src="${db.storage.urlBase}/imgobjetos/${normalizarNombre(o)}.png" class="cat-img" style="${imgBorder}" onclick="window.verImagen(this.src)" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'"></td>
+                <td style="font-weight:bold; ${eqpStyle} cursor:pointer;" title="Clic para copiar al portapapeles" onclick="navigator.clipboard.writeText('${oSafe}: ${invGlobal[j][o]}').then(()=>{const t=document.createElement('div');t.innerText='📋 ${oSafe}: ${invGlobal[j][o]}';t.style.cssText='position:fixed;top:30px;left:50%;transform:translateX(-50%);background:#333;color:#d4af37;padding:8px 20px;border-radius:6px;z-index:99999;font-size:0.9em;font-family:Cinzel;border:1px solid #d4af37;';document.body.appendChild(t);setTimeout(()=>t.remove(),1500);})">${o} ${badgeEqp}</td>
+                <td style="text-align:left; font-size:0.85em;">${objGlobal[o]?.eff || ''}</td>
+                <td>${cantHTML}</td>
+            </tr>`;
         }
     });
-    
-    if (html === '') html = '<p style="color:#666; font-style:italic;">No hay inventarios que coincidan con los filtros.</p>';
-    document.getElementById('panel-party-loot').innerHTML = html;
-}
+    html += `</table></div>`;
 
-export function dibujarLog() {
-    const contenedor = document.getElementById('historial-log');
-    if (!contenedor) return;
-    let html = '';
-    
-    // 🌟 Pintado inteligente de Logs con colores para Equipo
-    historial.slice().reverse().forEach(h => {
-        let colorCambio = "#fff";
-        let cTxt = h.cambio;
-        if (h.cambio === "Eqp.") colorCambio = "var(--gold)";
-        else if (h.cambio === "Dsqp.") colorCambio = "#aaa";
-        else if (h.cambio > 0) { colorCambio = "#00ff00"; cTxt = "+" + h.cambio; }
-        else if (h.cambio < 0) { colorCambio = "#ff4444"; }
-        
-        let extraHTML = h.extraLog ? `<div style="font-size:0.75em; color:var(--cyan-magic); margin-top:3px; font-style:italic;">Efecto: ${h.extraLog}</div>` : '';
+    // ── Propuestas pendientes para este personaje ──────────────
+    const propuestasPJ = estadoUI._propuestasCache || [];
+    if (propuestasPJ.length > 0) {
+        html += `
+        <div style="margin-top:30px;">
+            <h3 style="font-family:'Cinzel'; color:#ff9900; border-bottom:1px solid rgba(255,102,0,0.4); padding-bottom:8px; display:flex; align-items:center; gap:10px;">
+                📥 Objetos Propuestos Pendientes
+                <span style="background:#ff9900; color:#000; font-size:0.6em; padding:2px 8px; border-radius:10px; font-weight:bold;">${propuestasPJ.length}</span>
+            </h3>
+            <div class="table-responsive"><table>
+                <tr><th>Imagen</th><th>Objeto</th><th>Efecto</th><th>Cant</th>${puedeEditar ? '<th>Acción</th>' : ''}</tr>`;
 
-        html += `<div style="border-bottom:1px solid #333; padding:6px 0; font-family:'Rajdhani';">
-                    <span style="color:#666; font-size:0.8em;">${h.fecha}</span> | 
-                    <span style="color:var(--cyan-magic); font-weight:bold;">${h.jugador}</span> | 
-                    ${h.objeto} <span style="color:${colorCambio}; font-weight:bold;">(${cTxt})</span>
-                    ${extraHTML}
-                 </div>`;
-    });
-    contenedor.innerHTML = html;
-}
+        propuestasPJ.forEach(p => {
+            const oSafe = p.nombre.replace(/'/g, "\\'");
+            const imgFile = normalizarNombre(p.nombre);
+            html += `<tr style="background:rgba(255,102,0,0.07); border-left:3px solid #ff9900;">
+                <td><img src="${db.storage.urlBase}/imgobjetos/${imgFile}.png" class="cat-img"
+                    onclick="window.verImagen(this.src)"
+                    onerror="this.onerror=null;this.src='${NO_ENCONTRADO()}'">
+                </td>
+                <td style="font-weight:bold; color:#ff9900;">
+                    ${p.nombre}
+                    <div style="font-size:0.7em; color:#888; margin-top:2px; font-family:sans-serif;">Por: ${p.propuesto_por || '?'}</div>
+                </td>
+                <td style="text-align:left; font-size:0.85em;">${p.efecto || p.eff || ''}</td>
+                <td><b style="color:#ff9900; font-size:1.2em;">${p.propuesta_cantidad || 1}</b></td>
+                ${puedeEditar ? `
+                <td>
+                    <div style="display:flex; gap:5px; justify-content:center;">
+                        <button onclick="window.aprobarPropuestaDesdeInventario('${oSafe}', '${j.replace(/'/g,"\\'")}')"
+                            style="background:#004a00; border:1px solid #00aa00; color:white; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:0.8em; white-space:nowrap;">✅ Aprobar</button>
+                        <button onclick="window.rechazarPropuesta('${oSafe}')"
+                            style="background:#4a0000; border:1px solid #aa0000; color:white; padding:4px 10px; border-radius:4px; cursor:pointer; font-size:0.8em;">❌</button>
+                    </div>
+                </td>` : ''}
+            </tr>`;
+        });
 
-// ... Las demás funciones de UI de crear, proponer, transferir y menús no necesitan cambiar
-export function dibujarGrillaPersonajes() {
-    let pjs = Object.keys(invGlobal).filter(j => 
-        (estadoUI.filtroRol === 'Todos' || (estadoUI.filtroRol === 'Jugadores' && statsGlobal[j]?.isPlayer) || (estadoUI.filtroRol === 'NPCs' && !statsGlobal[j]?.isPlayer)) &&
-        (estadoUI.filtroAct === 'Todos' || (estadoUI.filtroAct === 'Activos' && statsGlobal[j]?.isActive) || (estadoUI.filtroAct === 'Inactivos' && !statsGlobal[j]?.isActive))
-    ).sort();
+        html += `</table></div></div>`;
+    }
 
-    let html = '';
-    pjs.forEach(j => {
-        let iconName = statsGlobal[j]?.iconoOverride || j;
-        let cBorder = (statsGlobal[j] && statsGlobal[j].isPlayer) ? '#00e676' : '#ff4444';
-        let activo = (estadoUI.jugadorInv === j) ? 'box-shadow: 0 0 15px var(--cyan-magic); border-color:var(--cyan-magic); filter:brightness(1.2);' : `border-color:${cBorder}44; filter:brightness(0.6);`;
-        
-        let invSize = Object.keys(invGlobal[j]).filter(o => invGlobal[j][o] > 0).length;
-        
-        html += `<div class="pj-portrait-container tooltip" onclick="window.seleccionarPersonaje('${j.replace(/'/g, "\\'")}')">
-                    <img src="${STORAGE_URL}/imgpersonajes/${normalizarNombre(iconName)}icon.png" class="pj-portrait" style="${activo}" onerror="${NO_ENCONTRADO()}">
-                    <div class="pj-name" style="${estadoUI.jugadorInv === j ? 'color:var(--cyan-magic); text-shadow:0 0 5px var(--cyan-magic);' : ''}">${j}</div>
-                    <span class="tooltiptext">${j}<br><span style="color:var(--gold);">${invSize} objetos distintos</span></span>
-                 </div>`;
-    });
-    document.getElementById('selector-personajes-grid').innerHTML = html;
-}
-
-export function refrescarUI() {
-    dibujarGrillaPersonajes();
-    if(estadoUI.vistaActual === 'grilla') dibujarInventarios();
-    else if(estadoUI.vistaActual === 'catalogo') dibujarCatalogo();
-    else if(estadoUI.vistaActual === 'control') dibujarControl();
-    else if(estadoUI.vistaActual === 'party-loot') dibujarResumenVisual();
-    else if(estadoUI.vistaActual === 'transfer') dibujarTransferencia();
-    else if(estadoUI.vistaActual === 'propuestas') dibujarPropuestas();
-    dibujarLog();
+    drawnHEXPreserveFocus('contenedor-jugadores', html);
 }
 
 export function dibujarCatalogo() {
-    let objs = Object.keys(objGlobal);
-    if(estadoUI.busquedaCat) objs = objs.filter(o => o.toLowerCase().includes(estadoUI.busquedaCat));
-    objs.sort().forEach(o => { /* Mantiene igual */ });
-    drawnHEXPreserveFocus('tabla-todos-objetos', html); // El resto de métodos no cambió
-}
-
-export function dibujarTransferencia(objeto, jugador) {
-    if(objeto && jugador) { estadoUI.transOrigen = jugador; estadoUI.transDestino = null; window.objTrans = objeto; estadoUI.transMult = 1; }
-    if(!window.objTrans || !objGlobal[window.objTrans]) {
-        document.getElementById('panel-transferencia').innerHTML = '<p style="color:#666;">Selecciona un objeto en el inventario.</p>'; return;
-    }
-    // Logica visual de transferir (la misma que tenías, no la pego para no exceder caracteres en UI)
+    let html = "<h2>Catálogo Completo</h2><div class='filter-group'>";
+    ['Todos', 'Común', 'Raro', 'Legendario'].forEach(r => {
+        const active = estadoUI.filtroRar === r ? 'class="btn-active"' : '';
+        html += `<button onclick="window.setRar('${r}')" ${active}>${r}</button> `;
+    });
+    html += "</div><div class='filter-group'>";
+    ['Todos', 'Orgánico', 'Cristal', 'Metal', 'Sagrado'].forEach(m => {
+        const active = estadoUI.filtroMat === m ? 'class="btn-active-mat"' : '';
+        html += `<button onclick="window.setMat('${m}')" ${active}>${m}</button> `;
+    });
+    html += `</div><br><input type="text" id="busq-cat" class="search-bar" placeholder="🔍 Buscar objeto..." value="${estadoUI.busquedaCat}" oninput="window.setBusquedaCat(this.value)">
+    <div class="table-responsive"><table><tr><th>Imagen</th><th>Nombre</th><th>Tipo</th><th>Efecto</th><th>Rareza</th></tr>`;
+    
+    const term = (estadoUI.busquedaCat || "").toLowerCase();
+    Object.keys(objGlobal).sort().forEach(o => {
+        const item = objGlobal[o];
+        const matchR = estadoUI.filtroRar === 'Todos' || item.rar.trim() === estadoUI.filtroRar;
+        const matchM = estadoUI.filtroMat === 'Todos' || item.mat.trim() === estadoUI.filtroMat;
+        
+        if (matchR && matchM && (!term || o.toLowerCase().includes(term))) {
+            const oSafe = o.replace(/'/g, "\\'");
+            const btnAdmin = estadoUI.esAdmin ? `
+                <button onclick="window.abrirEdicionObjeto('${oSafe}')" style="background:rgba(0,100,255,0.8); color:white; border:1px solid #0064ff; border-radius:3px; cursor:pointer; padding:2px 6px; font-size:0.8em; margin-left:6px;" title="Editar">✏️</button>
+                <button onclick="window.eliminarObjetoBD('${oSafe}')" style="background:rgba(255,0,0,0.8); color:white; border:1px solid #f00; border-radius:3px; cursor:pointer; padding:2px 6px; font-size:0.8em;" title="Eliminar">🗑️</button>
+            ` : '';
+            html += `<tr>
+                <td><img src="${db.storage.urlBase}/imgobjetos/${normalizarNombre(o)}.png" class="cat-img" onclick="window.verImagen(this.src)" onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'"></td>
+                <td style="font-weight:bold; color:#d4af37;">${o} ${btnAdmin}</td>
+                <td style="font-size:0.85em; color:#aaa;">${item.tipo}</td>
+                <td style="text-align:left; font-size:0.85em;">${item.eff}</td>
+                <td style="font-size:0.85em;">${item.rar}</td>
+            </tr>`;
+        }
+    });
+    drawnHEXPreserveFocus('tabla-todos-objetos', html + "</table></div>");
 }
 
 export function dibujarMenuOP() {
@@ -318,13 +454,23 @@ export function dibujarControl() {
         if (!term || o.toLowerCase().includes(term)) {
             const c = invGlobal[j][o] || 0;
             const oSafe = o.replace(/'/g, "\\'");
-            html += `<div class="control-card ${c > 0 ? "item-con-stock" : ""}">
+            
+            // 🌟 Eqp Modificaciones para Panel Control
+            const isEqp = eqpGlobal[j]?.[o] || false;
+            const eqpBadge = isEqp ? `<div style="position:absolute; top:-5px; right:-5px; background:var(--gold); color:#000; font-size:0.65em; font-weight:bold; padding:2px 6px; border-radius:4px; z-index:10; box-shadow:0 0 5px var(--gold);">EQP</div>` : '';
+            const btnEqpText = isEqp ? 'Dsqp.' : 'Eqp.';
+            const btnEqpCss = isEqp ? 'background:var(--gold); color:#000; box-shadow:0 0 5px var(--gold); border:none;' : 'background:#222; color:#888; border:1px solid #444;';
+            const imgBorder = isEqp ? `border:2px solid var(--gold); box-shadow:0 0 10px var(--gold);` : `border:2px solid ${actionColor}; box-shadow:0 0 10px ${actionColor};`;
+
+            html += `<div class="control-card ${c > 0 ? "item-con-stock" : ""}" style="position:relative;">
+                        ${c > 0 ? eqpBadge : ''}
                         <img src="${db.storage.urlBase}/imgobjetos/${normalizarNombre(o)}.png" 
                              onclick="window.hexMod('${j}','${oSafe}', ${estadoUI.editMult * estadoUI.editModo})" 
-                             style="width:80px; height:80px; object-fit:cover; cursor:pointer; border-radius:8px; border:2px solid ${actionColor}; transition:0.2s; box-shadow:0 0 10px ${actionColor};"
+                             style="width:80px; height:80px; object-fit:cover; cursor:pointer; border-radius:8px; ${c > 0 ? imgBorder : ''} transition:0.2s;"
                              onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'"
                              onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'" title="Click para aplicar">
-                        <span class="item-name" style="margin-top:10px;">${o}</span>
+                        <span class="item-name" style="margin-top:10px; color:${isEqp ? 'var(--gold)' : '#fff'};">${o}</span>
+                        ${c > 0 ? `<button onclick="window.toggleEqp('${j}', '${oSafe}')" style="${btnEqpCss} margin-top:5px; padding:3px 10px; border-radius:4px; font-size:0.75em; font-weight:bold; cursor:pointer; width:100%; transition:0.2s;">${btnEqpText}</button>` : ''}
                      </div>`;
         }
     });
@@ -378,13 +524,19 @@ export function dibujarTransferencia() {
                     const c = invGlobal[j][o];
                     const cantToPass = estadoUI.transMult === 'TODO' ? c : estadoUI.transMult;
                     const oSafe = o.replace(/'/g, "\\'");
-                    html += `<div class="control-card item-con-stock">
+                    
+                    // 🌟 Mostrar si lo está transfiriendo puesto
+                    const isEqp = eqpGlobal[j]?.[o] || false;
+                    const eqpBadge = isEqp ? `<div style="position:absolute; top:-5px; right:-5px; background:var(--gold); color:#000; font-size:0.65em; font-weight:bold; padding:2px 6px; border-radius:4px; z-index:10;">EQP</div>` : '';
+                    
+                    html += `<div class="control-card item-con-stock" style="position:relative;">
+                                ${eqpBadge}
                                 <img src="${db.storage.urlBase}/imgobjetos/${normalizarNombre(o)}.png" 
                                      onclick="window.ejecutarTransfer('${oSafe}', ${cantToPass})" 
-                                     style="width:80px; height:80px; object-fit:cover; cursor:pointer; border-radius:8px; border:2px solid #00ff00; transition:0.2s; box-shadow:0 0 10px #00ff00;"
+                                     style="width:80px; height:80px; object-fit:cover; cursor:pointer; border-radius:8px; border:2px solid ${isEqp ? 'var(--gold)' : '#00ff00'}; transition:0.2s; box-shadow:0 0 10px ${isEqp ? 'var(--gold)' : '#00ff00'};"
                                      onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'"
                                      onerror="this.onerror=null; this.src='${NO_ENCONTRADO()}'" title="Clic para Transferir ${cantToPass}">
-                                <span class="item-name" style="margin-top:10px;">${o}</span>
+                                <span class="item-name" style="margin-top:10px; color:${isEqp ? 'var(--gold)' : '#fff'};">${o}</span>
                                 <span style="font-size:1.1em; color:white;">Stock: <b>${c}</b></span>
                              </div>`;
                 }
@@ -749,7 +901,6 @@ export function dibujarFormularioPropuesta() {
                 <textarea id="prop-eff" class="search-bar" placeholder="¿Qué hace este objeto?" style="width:100%; height:80px; box-sizing:border-box; resize:none;"></textarea>
             </div>
 
-            <!-- ── Destinatario ── -->
             <div style="background:rgba(255,102,0,0.07); border:1px solid rgba(255,102,0,0.3); border-radius:8px; padding:14px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
                     <label style="color:#ff9900; font-size:0.85em; font-weight:bold;">🎁 Brindar a (Opcional)</label>
