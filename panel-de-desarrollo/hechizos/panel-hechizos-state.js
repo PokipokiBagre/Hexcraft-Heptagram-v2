@@ -12,9 +12,9 @@ export const hzState = {
     busquedaAsignar: "",
     
     // Toggles de Casteo Rápido 
-    cobrarAuto: true,
+    cobrarAuto: false,
     mostrarEfectos: true,
-    cobrarAlAsignar: true,
+    cobrarAlAsignar: false,
     
     // Memoria Volátil de Sesión (Para calcular el consumo VEX -> HEX)
     vexGastadoPorPj: {}, 
