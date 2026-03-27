@@ -195,7 +195,11 @@ export function renderColumnaHechizos(pjSeleccionado) {
 
         html += `<div style="overflow-y:auto; padding-right:5px; max-height: 550px;">`;
         const top = mostrar.slice(0, 50); 
-        top.forEach(h => { html += generarTarjetaAsignar(h, pjSeleccionado, hechizosDelPj.has(norm(h.ID || h.id))); });
+        // 🔥 CORRECCIÓN: Revisamos si el Set tiene el ID normalizado o el Nombre normalizado
+        top.forEach(h => { 
+            const loTiene = hechizosDelPj.has(norm(h.ID || h.id)) || hechizosDelPj.has(norm(h.Nombre || h.nombre));
+            html += generarTarjetaAsignar(h, pjSeleccionado, loTiene); 
+        });
         if (mostrar.length > 50) html += `<div style="text-align:center; color:#666; font-size:0.8em; padding:5px;">Mostrando los primeros 50 resultados.</div>`;
         html += `</div>`;
     }
