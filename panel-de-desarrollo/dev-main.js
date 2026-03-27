@@ -32,17 +32,37 @@ window.onload = async () => {
     }
 
     try {
-        // 🌟 EXTRACCIÓN PURA: Obligamos a Supabase a darnos TODO sin los filtros de hex-db
-        const [{data: personajesBD}, catalogoObj, invObj, estadosArr] = await Promise.all([
+        // EXTRACCIÓN PURA DE SUPABASE
+        const [{data: personajesBD}, catalogoObj, invObj, estadosArr, {data: hecInv}, {data: hecNodos}] = await Promise.all([
             supabase.from('personajes').select('*'),
             db.objetos.getCatalogo(),
             db.objetos.getInventarioCompleto(),
-            db.estadosConfig.getAll()
+            db.estadosConfig.getAll(),
+            supabase.from('hechizos_inventario').select('*'),
+            supabase.from('hechizos_nodos').select('*')
         ]);
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
 
-        // Mapeo Plano Directo
+        // Sumatoria de Atributos del Grimorio
+        const spellStats = {};
+        if (hecInv && hecNodos) {
+            hecInv.forEach(h => {
+                const pj = h.personaje_nombre.toLowerCase();
+                const node = hecNodos.find(n => n.nombre === h.hechizo_nombre);
+                if (node) {
+                    if (!spellStats[pj]) spellStats[pj] = {};
+                    const props = ['fisica','energetica','espiritual','mando','psiquica','oscura','dano_rojo','dano_azul','elim_dorada','vida_roja_max_extra','vida_azul_extra','guarda_dorada_extra'];
+                    props.forEach(pr => {
+                        const val = node[pr] || 0;
+                        const camel = pr.replace(/_([a-z])/g, g => g[1].toUpperCase()); 
+                        spellStats[pj][camel] = (spellStats[pj][camel] || 0) + val;
+                    });
+                }
+            });
+        }
+
+        // MAPEO PLANO DIRECTO A LA MEMORIA (Con los nombres de columnas corregidos)
         const statsGlobalMock = {};
         personajesBD.forEach(p => {
             statsGlobalMock[p.nombre] = {
@@ -50,13 +70,15 @@ window.onload = async () => {
                 isActive: p.is_active,
                 hex: Number(p.hex) || 0,
                 asistencia: Number(p.asistencia) || 1,
+                
+                // Stats de Vida y Daño (Nombres de DB arreglados)
                 vidaRojaActual: Number(p.vida_roja_actual) || 0,
                 baseVidaRojaMax: Number(p.base_vida_roja_max) || 0,
-                baseVidaAzul: Number(p.base_vida_azul) || 0,
-                baseGuardaDorada: Number(p.base_guarda_dorada) || 0,
-                baseDanoRojo: Number(p.base_dano_rojo) || 0,
-                baseDanoAzul: Number(p.base_dano_azul) || 0,
-                baseElimDorada: Number(p.base_elim_dorada) || 0,
+                baseVidaAzul: Number(p.vida_azul_max) || 0,
+                baseGuardaDorada: Number(p.guarda_dorada) || 0,
+                baseDanoRojo: Number(p.dano_rojo) || 0,
+                baseDanoAzul: Number(p.dano_azul) || 0,
+                baseElimDorada: Number(p.elim_dorada) || 0,
                 
                 afinidadesBase: {
                     fisica: Number(p.af_fisica) || 0, energetica: Number(p.af_energetica) || 0, espiritual: Number(p.af_espiritual) || 0,
@@ -77,12 +99,7 @@ window.onload = async () => {
                 
                 estados: p.estados || {},
                 iconoOverride: p.icono_override || '',
-                hechizos: {
-                    fisica: Number(p.hz_fisica) || 0, energetica: Number(p.hz_energetica) || 0, espiritual: Number(p.hz_espiritual) || 0,
-                    mando: Number(p.hz_mando) || 0, psiquica: Number(p.hz_psiquica) || 0, oscura: Number(p.hz_oscura) || 0,
-                    danoRojo: Number(p.hechizo_dano_rojo) || 0, danoAzul: Number(p.hechizo_dano_azul) || 0, elimDorada: Number(p.hechizo_elim) || 0,
-                    vidaRojaMaxExtra: Number(p.hechizo_vida_roja) || 0, vidaAzulExtra: Number(p.hechizo_vida_azul) || 0, guardaDoradaExtra: Number(p.hechizo_guarda) || 0
-                }
+                hechizos: spellStats[p.nombre.toLowerCase()] || {} 
             };
         });
 
