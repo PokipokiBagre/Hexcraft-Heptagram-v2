@@ -20,7 +20,6 @@ window.devCopiarPrimerDado = copiarPrimerDado;
 window.devCopiarPrimerHechizo = copiarPrimerHechizo;
 
 // ── DROPDOWN CUSTOM DE AUTOCOMPLETADO ──
-// Se llama en cada keystroke del input de hechizo
 window.devSpellInput = (row, valor, pjNombre) => {
     window.devModFilaCast(row, 'nombre', valor, pjNombre);
 
@@ -79,7 +78,7 @@ window.devSpellBlur = (row) => {
 window.devOnGridKeydown = (e, row, col, pjSeleccionado) => {
     const num = hzState.casteoManual.numFilas;
 
-    // TAB en el campo de hechizo: autocompletar con el primer resultado del dropdown
+    // TAB en el campo de hechizo
     if (e.key === 'Tab' && col === 1) {
         const input = document.getElementById(`dev-spell-${row}`);
         const dd = document.getElementById(`dev-dd-${row}`);
@@ -95,7 +94,6 @@ window.devOnGridKeydown = (e, row, col, pjSeleccionado) => {
                 return;
             }
         }
-        // Fallback: buscar coincidencia que empiece con el valor escrito
         const val = input.value.toLowerCase();
         if (val) {
             const pjKey = norm(pjSeleccionado);
@@ -122,14 +120,12 @@ window.devOnGridKeydown = (e, row, col, pjSeleccionado) => {
         }
     }
 
-    // Flechas Arriba/Abajo
     if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
         e.preventDefault();
         let nextRow = e.key === 'ArrowUp' ? Math.max(0, row - 1) : Math.min(num - 1, row + 1);
         const mapCol = { 0: 'dev-dado', 1: 'dev-spell', 2: 'dev-afinidad', 3: 'dev-cant' };
         document.getElementById(`${mapCol[col]}-${nextRow}`)?.focus();
     }
-    // Flechas Izquierda/Derecha
     else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
         const target = e.target;
         let shouldMove = false;
@@ -187,8 +183,6 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     const costo = parseInt(hechizo.HEX || hechizo.Hex || hechizo.costo || hechizo.Costo || 0) || 0;
     const efecto = hechizo.Efecto || hechizo.efecto_desc || hechizo.efecto || '-';
 
-    // ✅ FIX: Solo es conocido si el valor es EXPLÍCITAMENTE verdadero.
-    // null, undefined, o cualquier valor falsy se trata como OCULTO.
     const raw = hechizo.es_conocido;
     const dbConocido = raw === true || raw === 1 || raw === "1" || raw === "true" || raw === "TRUE";
     const isKnown = hzState.colaVisibilidad[hId] !== undefined ? hzState.colaVisibilidad[hId] : dbConocido;
@@ -256,9 +250,6 @@ export function renderColumnaHechizos(pjSeleccionado) {
         </div>
     `;
 
-    // ════════════════════════════════════════
-    // VISTA: CASTEAR
-    // ════════════════════════════════════════
     if (v === 'castear') {
         const dMode = hzState.casteoManual.datalistModo;
         const escapedPj = pjSeleccionado.replace(/'/g, "\\'");
@@ -326,9 +317,6 @@ export function renderColumnaHechizos(pjSeleccionado) {
         <button onclick="window.devCalcularConjuros('${escapedPj}')" style="width:100%; margin-top:15px; background:linear-gradient(135deg, #4a004a, #800080); color:white; font-size:1.1em; font-weight:bold; font-family:'Cinzel'; padding:12px; border:1px solid #ff00ff; border-radius:6px; cursor:pointer; text-shadow: 0 0 5px #ff00ff; transition:0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">⚡ CALCULAR CONJUROS ⚡</button>
         `;
 
-    // ════════════════════════════════════════
-    // VISTA: GESTIÓN BD / ASIGNAR
-    // ════════════════════════════════════════
     } else {
         html += `
         <div style="background:#001a00; border:1px solid #00ff00; border-radius:6px; padding:10px; margin-bottom:15px; text-align:center; font-size:0.85em;">
