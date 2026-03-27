@@ -44,8 +44,9 @@ export function actualizarLogGlobal() {
                 const eff = catObj && catObj.efecto ? catObj.efecto.replace(/\r?\n/g, ' ').trim() : '';
                 const effStr = eff ? ` | ${eff}` : '';
 
-                if (delta > 0) logPorPJ[realPj].push(`OO: ${objNombre} x${delta}${effStr}`);
-                else logPorPJ[realPj].push(`OO Removido: ${objNombre} x${Math.abs(delta)}`);
+                // NUEVA NOMENCLATURA: Obj Obt. y Obj Prd.
+                if (delta > 0) logPorPJ[realPj].push(`Obj Obt: ${objNombre} x${delta}${effStr}`);
+                else logPorPJ[realPj].push(`Obj Prd: ${objNombre} x${Math.abs(delta)}`);
             }
         }
     }
@@ -59,7 +60,7 @@ export function actualizarLogGlobal() {
             if (!logPorPJ[pjActual]) logPorPJ[pjActual] = [];
             const eff = obj.eff ? obj.eff.replace(/\r?\n/g, ' ').trim() : '';
             const effStr = eff ? ` | ${eff}` : '';
-            logPorPJ[pjActual].push(`OO: ${obj.nombre} x${obj.cant}${effStr}`);
+            logPorPJ[pjActual].push(`Obj Obt: ${obj.nombre} x${obj.cant}${effStr}`);
         }
     }
 
