@@ -8,7 +8,6 @@ import { devState } from './dev-state.js';
 import { objState } from './objetos/panel-objetos-state.js';
 import { stState } from './estadisticas/panel-stats-state.js';
 
-// 🌟 SUPERVISOR DE CAMBIOS (Revela el botón de Guardar)
 export function revisarCambiosPendientes() {
     const btnSync = document.getElementById('btn-sync-global');
     if (!btnSync) return;
@@ -25,7 +24,7 @@ export function revisarCambiosPendientes() {
     else btnSync.classList.add('oculto');
 }
 
-// 🌟 GENERADOR INTELIGENTE DEL PORTAPAPELES
+// 🌟 GENERADOR INTELIGENTE DEL PORTAPAPELES (Nomenclaturas Corregidas)
 export function actualizarLogGlobal() {
     const logPorPJ = {};
 
@@ -44,8 +43,8 @@ export function actualizarLogGlobal() {
                 const eff = catObj && catObj.efecto ? catObj.efecto.replace(/\r?\n/g, ' ').trim() : '';
                 const effStr = eff ? ` | ${eff}` : '';
 
-                if (delta > 0) logPorPJ[realPj].push(`Obj Obt: ${objNombre} x${delta}${effStr}`);
-                else logPorPJ[realPj].push(`Obj Prd: ${objNombre} x${Math.abs(delta)}`);
+                if (delta > 0) logPorPJ[realPj].push(`Obj Obt. ${objNombre} x${delta}${effStr}`);
+                else logPorPJ[realPj].push(`Obj Prd. ${objNombre} x${Math.abs(delta)}`);
             }
         }
     }
@@ -59,7 +58,7 @@ export function actualizarLogGlobal() {
             if (!logPorPJ[pjActual]) logPorPJ[pjActual] = [];
             const eff = obj.eff ? obj.eff.replace(/\r?\n/g, ' ').trim() : '';
             const effStr = eff ? ` | ${eff}` : '';
-            logPorPJ[pjActual].push(`Obj Obt: ${obj.nombre} x${obj.cant}${effStr}`);
+            logPorPJ[pjActual].push(`Obj Obt. ${obj.nombre} x${obj.cant}${effStr}`);
         }
     }
 
@@ -88,16 +87,28 @@ export function actualizarLogGlobal() {
                     if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
                     const sign = delta > 0 ? '+' : '';
                     let statName = nomLegibles[flatKey] || flatKey;
-                    if (flatKey.includes('afinidadesBase')) statName = `Afinidad ${parts[1]}`;
-                    if (flatKey.includes('hechizosEfecto')) statName = `Alteración ${parts[1]}`;
-                    if (flatKey.includes('buffs')) statName = `Buff Extra ${parts[1]}`;
                     
-                    logPorPJ[realPj].push(`Estadística: ${statName} ${sign}${delta}`);
+                    if (flatKey.includes('afinidadesBase')) statName = `Afinidad Base ${parts[1]}`;
+                    if (flatKey.includes('hechizosEfecto')) statName = `Afinidad Alt. ${parts[1]}`;
+                    if (flatKey.includes('buffs')) statName = `Extra ${parts[1]}`;
+                    
+                    // Manejo de Estados Numéricos
+                    if (flatKey.includes('estados')) {
+                        const eDef = stState.estadosDB.find(e => e.id === parts[1]);
+                        const eName = eDef ? eDef.nombre : parts[1];
+                        logPorPJ[realPj].push(`${eName} ${sign}${delta} (${cantNueva})`);
+                    } else {
+                        // Formato: HEX -10 (1590)
+                        logPorPJ[realPj].push(`${statName} ${sign}${delta} (${cantNueva})`);
+                    }
                 }
             } else if (typeof cantNueva === 'boolean' && cantNueva !== cantVieja) {
                 if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
-                const estadoStatus = cantNueva ? 'Afectado' : 'Removido';
-                logPorPJ[realPj].push(`Efecto de Estado: ${parts[1]} (${estadoStatus})`);
+                const eDef = stState.estadosDB.find(e => e.id === parts[1]);
+                const eName = eDef ? eDef.nombre : parts[1];
+                
+                if (cantNueva) logPorPJ[realPj].push(`Estado adq. ${eName}`);
+                else logPorPJ[realPj].push(`Estado rmv. ${eName}`);
             }
         }
     }
@@ -116,7 +127,6 @@ export function actualizarLogGlobal() {
     if (textarea) textarea.value = logText.trim();
 }
 
-// 🌟 EL GRAN BOTÓN DE GUARDADO DIRECTO A SUPABASE
 export async function ejecutarGuardadoGlobal() {
     const btnSync = document.getElementById('btn-sync-global');
     btnSync.innerText = "⏳ SINCRONIZANDO CON LA BASE DE DATOS...";
@@ -129,7 +139,6 @@ export async function ejecutarGuardadoGlobal() {
         const statsUpserts = [];
         const estadosUpserts = [];
 
-        // ================== OBJETOS ==================
         const nuevosArr = Object.values(objState.colaNuevosObjetos).filter(o => o.nombre.trim() !== '');
         for (const obj of nuevosArr) {
             catalogUpserts.push({ nombre: obj.nombre, tipo: obj.tipo, material: obj.mat, rareza: obj.rar, efecto: obj.eff });
@@ -166,9 +175,8 @@ export async function ejecutarGuardadoGlobal() {
         for (const pjKey in stState.colaStats) {
             const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey.toLowerCase())?.nombre || pjKey;
             const cambios = stState.colaStats[pjKey];
-            let updatedPj = JSON.parse(JSON.stringify(stState.statsDB[pjKey])); // Clonamos la data vieja
+            let updatedPj = JSON.parse(JSON.stringify(stState.statsDB[pjKey]));
 
-            // Aplicamos los cambios al clon
             for (const flatKey in cambios) {
                 const keys = flatKey.split('.');
                 if (keys.length === 1) updatedPj[keys[0]] = cambios[flatKey];
@@ -178,7 +186,6 @@ export async function ejecutarGuardadoGlobal() {
                 }
             }
 
-            // Lo empaquetamos con los nombres de columnas de Supabase
             statsUpserts.push({
                 nombre: realPj,
                 hex: updatedPj.hex,
@@ -198,11 +205,10 @@ export async function ejecutarGuardadoGlobal() {
             });
         }
 
-        // ================== EFECTOS DE ESTADO GLOBALES ==================
+        // ================== ESTADOS GLOBALES ==================
         for (const id in stState.colaEstadosConfig) {
             estadosUpserts.push({ id: id, ...stState.colaEstadosConfig[id] });
         }
-
 
         // 🔥 LANZAMIENTO MASIVO A SUPABASE 🔥
         if (deletePromises.length > 0) await Promise.all(deletePromises);
@@ -227,11 +233,15 @@ export async function ejecutarGuardadoGlobal() {
             if (errEst) throw new Error("Error Estados: " + errEst.message);
         }
 
-        // Destructor de Cachés para Forzar Lectura Fresca
         localStorage.removeItem('hex_obj_v4');
         localStorage.removeItem('hex_stats_v2');
 
-        // Éxito visual
+        objState.colaInventario = {}; 
+        objState.colaNuevosObjetos = {};
+        objState.colaEdicionObjetos = {};
+        stState.colaStats = {};
+        stState.colaEstadosConfig = {};
+
         btnSync.innerText = "✅ CAMBIOS APLICADOS";
         btnSync.style.background = "#004a00";
         btnSync.style.borderColor = "#00ff00";
