@@ -88,16 +88,17 @@ export function limpiarLogAsistencia() {
 }
 
 function getTotalAfinidad(pj, af) {
-    return getPjStat(pj, 'afinidadesBase', af) +
-           getPjStat(pj, 'hechizos', af) +
-           getPjStat(pj, 'hechizosEfecto', af) +
-           getPjStat(pj, 'buffs', af);
+    return Number(getPjStat(pj, 'afinidadesBase', af) || 0) +
+           Number(getPjStat(pj, 'hechizos', af) || 0) +
+           Number(getPjStat(pj, 'hechizosEfecto', af) || 0) +
+           Number(getPjStat(pj, 'buffs', af) || 0);
 }
 
 // 🌟 VEX CALCULADO DE SOLO LECTURA 🌟
 export function getVexMax(pjNombre) {
     const calcOscT = getTotalAfinidad(pjNombre, 'oscura');
-    return Math.floor((calcOscT * 75) / 50) * 50; 
+    // Aplicamos la fórmula exacta: (Total Oscura * 300) / 4, redondeado al 50 más cercano
+    return Math.round(((calcOscT * 300) / 4) / 50) * 50; 
 }
 
 export function recalcularCorazones(pjNombre) {
