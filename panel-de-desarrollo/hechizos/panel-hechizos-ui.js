@@ -19,6 +19,72 @@ window.devCalcularConjuros = calcularConjurosMasivos;
 window.devCopiarPrimerDado = copiarPrimerDado;
 window.devCopiarPrimerHechizo = copiarPrimerHechizo;
 
+// 🔥 NAVEGACIÓN PORTADA DEL CÓDIGO ORIGINAL 🔥
+window.devOnGridKeydown = (e, row, col, pjSeleccionado) => {
+    const num = hzState.casteoManual.numFilas;
+    
+    // Autocompletado con TAB
+    if (e.key === 'Tab' && col === 1) {
+        const input = document.getElementById(`dev-spell-${row}`);
+        const val = input.value.toLowerCase();
+        
+        if (val) {
+            const pjKey = norm(pjSeleccionado);
+            const baseIds = hzState.inventariosDB[pjKey] || [];
+            const cola = hzState.colaAsignaciones[pjKey] || {};
+            const hechizosDelPj = new Set(baseIds.map(norm));
+            Object.entries(cola).forEach(([id, agregar]) => {
+                if (agregar) hechizosDelPj.add(norm(id));
+                else hechizosDelPj.delete(norm(id));
+            });
+            
+            const dMode = hzState.casteoManual.datalistModo;
+            const opciones = dMode === 'local' 
+                ? hzState.catalogoDB.filter(h => hechizosDelPj.has(norm(h.ID || h.id)))
+                : hzState.catalogoDB;
+                
+            const invNombres = opciones.map(h => h.Nombre || h.nombre || h.ID || h.id);
+            invNombres.sort((a, b) => a.localeCompare(b)); 
+            
+            const match = invNombres.find(h => h.toLowerCase().startsWith(val));
+            if (match && match.toLowerCase() !== val) {
+                e.preventDefault(); 
+                input.value = match; 
+                window.devModFilaCast(row, 'nombre', match, pjSeleccionado); 
+                document.getElementById(`dev-afinidad-${row}`)?.focus(); 
+                return;
+            }
+        }
+    }
+
+    // Navegación con flechas (Arriba/Abajo)
+    if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+        e.preventDefault(); 
+        let nextRow = e.key === 'ArrowUp' ? Math.max(0, row - 1) : Math.min(num - 1, row + 1);
+        const mapCol = {0: 'dev-dado', 1: 'dev-spell', 2: 'dev-afinidad', 3: 'dev-cant'};
+        document.getElementById(`${mapCol[col]}-${nextRow}`)?.focus();
+    } 
+    // Navegación con flechas (Izquierda/Derecha)
+    else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+        const target = e.target;
+        let shouldMove = false;
+        
+        if (target.type === 'number') {
+            shouldMove = true; 
+        } else if (target.type === 'text') {
+            if (e.key === 'ArrowLeft' && target.selectionStart === 0) shouldMove = true;
+            if (e.key === 'ArrowRight' && target.selectionEnd === target.value.length) shouldMove = true;
+        }
+
+        if (shouldMove) {
+            e.preventDefault();
+            const mapCol = {0: 'dev-dado', 1: 'dev-spell', 2: 'dev-afinidad', 3: 'dev-cant'};
+            let nextCol = e.key === 'ArrowLeft' ? Math.max(0, col - 1) : Math.min(3, col + 1);
+            document.getElementById(`${mapCol[nextCol]}-${row}`)?.focus();
+        }
+    }
+};
+
 function drawnHEXPreserveFocus(containerId, html) {
     const activeEl = document.activeElement;
     const activeId = activeEl ? activeEl.id : null;
@@ -53,8 +119,6 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     const hNom = hechizo.Nombre || hechizo.nombre || 'Hechizo sin nombre';
     const hAf = hechizo.Afinidad || hechizo.afinidad || '-';
     const hClase = hechizo.Clase || hechizo.clase || '-';
-    
-    // 🔥 CORRECCIÓN CRÍTICA: Se añade hechizo.HEX en mayúsculas
     const costo = parseInt(hechizo.HEX || hechizo.Hex || hechizo.costo || hechizo.Costo || 0) || 0;
     const efecto = hechizo.Efecto || hechizo.efecto_desc || hechizo.efecto || '-';
     
@@ -66,7 +130,6 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     const borderColor = isHidden ? '#333' : col.b;
     const titleColor = isHidden ? '#666' : col.t;
 
-    // 🔥 CORRECCIÓN VISUAL: Más limpio. Sombra interior tenue si lo tiene, en vez de chocar con un borde verde sólido.
     const cardStyle = loTiene 
         ? `border: 1px solid #003300; border-top: 3px solid ${borderColor}; box-shadow: inset 0 0 15px rgba(0,255,0,0.08);` 
         : `border: 1px solid #222; border-top: 3px solid ${borderColor};`;
@@ -164,13 +227,15 @@ export function renderColumnaHechizos(pjSeleccionado) {
         for (let i = 0; i < hzState.casteoManual.numFilas; i++) {
             const fila = hzState.casteoManual.filas[i];
             const escapedPj = pjSeleccionado.replace(/'/g, "\\'");
+            
+            // 🔥 CORRECCIÓN: IDs explícitos y eventos de teclado agregados 🔥
             html += `
             <div style="display:flex; gap:5px; margin-bottom:5px; align-items:center;">
                 <button onclick="const d=Math.floor(Math.random()*20)+1; document.getElementById('dev-dado-${i}').value=d; window.devModFilaCast(${i}, 'dado', d, '${escapedPj}')" style="background:#333; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; cursor:pointer;" title="Aleatorio">🎲</button>
-                <input type="number" id="dev-dado-${i}" placeholder="Dado" value="${fila.dado}" oninput="window.devModFilaCast(${i}, 'dado', this.value, '${escapedPj}')" style="width:50px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; text-align:center; outline:none;" title="NC Base (Dado)">
-                <input type="text" list="dev-dl-hechizos" placeholder="Nombre Hechizo..." value="${fila.nombre}" oninput="window.devModFilaCast(${i}, 'nombre', this.value, '${escapedPj}')" style="flex:1; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; outline:none;">
-                <input type="number" placeholder="Af.Total" value="${fila.afinidad}" oninput="window.devModFilaCast(${i}, 'afinidad', this.value, '${escapedPj}')" style="width:65px; background:#111; color:var(--gold); border:1px solid var(--gold); border-radius:4px; padding:8px; text-align:center; outline:none;" title="Afinidad Total">
-                <input type="number" placeholder="Cant" value="${fila.cant}" min=\"1\" oninput="window.devModFilaCast(${i}, 'cant', this.value, '${escapedPj}')" style="width:45px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; text-align:center; outline:none;" title="Cantidad">
+                <input type="number" id="dev-dado-${i}" placeholder="Dado" value="${fila.dado}" oninput="window.devModFilaCast(${i}, 'dado', this.value, '${escapedPj}')" onkeydown="window.devOnGridKeydown(event, ${i}, 0, '${escapedPj}')" style="width:50px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; text-align:center; outline:none;" title="NC Base (Dado)">
+                <input type="text" list="dev-dl-hechizos" id="dev-spell-${i}" placeholder="Nombre Hechizo..." value="${fila.nombre}" oninput="window.devModFilaCast(${i}, 'nombre', this.value, '${escapedPj}')" onkeydown="window.devOnGridKeydown(event, ${i}, 1, '${escapedPj}')" style="flex:1; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; outline:none;">
+                <input type="number" id="dev-afinidad-${i}" placeholder="Af.Total" value="${fila.afinidad}" oninput="window.devModFilaCast(${i}, 'afinidad', this.value, '${escapedPj}')" onkeydown="window.devOnGridKeydown(event, ${i}, 2, '${escapedPj}')" style="width:65px; background:#111; color:var(--gold); border:1px solid var(--gold); border-radius:4px; padding:8px; text-align:center; outline:none;" title="Afinidad Total">
+                <input type="number" id="dev-cant-${i}" placeholder="Cant" value="${fila.cant}" min=\"1\" oninput="window.devModFilaCast(${i}, 'cant', this.value, '${escapedPj}')" onkeydown="window.devOnGridKeydown(event, ${i}, 3, '${escapedPj}')" style="width:45px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; text-align:center; outline:none;" title="Cantidad">
             </div>`;
         }
 
