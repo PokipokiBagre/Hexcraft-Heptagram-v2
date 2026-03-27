@@ -28,6 +28,7 @@ export function revisarCambiosPendientes() {
 export function actualizarLogGlobal() {
     const logPorPJ = {};
 
+    // --- 1. Objetos ---
     for (const pjKey in objState.colaInventario) {
         const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey)?.nombre || pjKey;
         for (const objNombre in objState.colaInventario[pjKey]) {
@@ -51,6 +52,7 @@ export function actualizarLogGlobal() {
         }
     }
 
+    // --- 2. Estadísticas ---
     const nomLegibles = {
         'hex': 'HEX', 'asistencia': 'Asistencia', 'vidaRojaActual': 'Vida Roja',
         'baseVidaRojaMax': 'Límite Rojo', 'baseVidaAzul': 'Corazones Azules', 'baseGuardaDorada': 'Guarda Dorada',
@@ -81,6 +83,7 @@ export function actualizarLogGlobal() {
                     if (flatKey.includes('hechizosEfecto')) statName = `Afinidad Alt. ${afinCapital[parts[1]]}`;
                     if (flatKey.includes('buffs')) statName = `Buff Extra ${afinCapital[parts[1]] || parts[1]}`;
                     
+                    // 🌟 DIVISION DEL HEX POR BONO DE ASISTENCIA 🌟
                     if (flatKey === 'hex' && delta >= 1300) {
                         let extra = delta - 300;
                         logPorPJ[realPj].push(`HEX +300`);
@@ -141,7 +144,7 @@ export async function ejecutarGuardadoGlobal() {
         const statsUpserts = [];
         const estadosUpserts = [];
 
-        // OBJETOS
+        // --- OBJETOS ---
         const nuevosArr = Object.values(objState.colaNuevosObjetos).filter(o => o.nombre.trim() !== '');
         for (const obj of nuevosArr) {
             catalogUpserts.push({ nombre: obj.nombre, tipo: obj.tipo, material: obj.mat, rareza: obj.rar, efecto: obj.eff });
@@ -175,7 +178,8 @@ export async function ejecutarGuardadoGlobal() {
         }
 
         // =========================================================================
-        // ESTADÍSTICAS: MAPEO EXACTO A TUS COLUMNAS DE SUPABASE (af_, ef_, bf_)
+        // ESTADÍSTICAS: MAPEO EXACTO A COLUMNAS DE SUPABASE (af_, ef_, bf_)
+        // Nota: hz_* y hechizo_* son propiedad del módulo Grimorio — no se tocan aquí
         // =========================================================================
         for (const pjKey in stState.colaStats) {
             const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey.toLowerCase())?.nombre || pjKey;
@@ -195,7 +199,6 @@ export async function ejecutarGuardadoGlobal() {
                 nombre: realPj,
                 hex: updatedPj.hex,
                 asistencia: updatedPj.asistencia,
-                vex: updatedPj.vex,
                 vida_roja_actual: updatedPj.vidaRojaActual,
                 base_vida_roja_max: updatedPj.baseVidaRojaMax,
                 base_vida_azul: updatedPj.baseVidaAzul,
@@ -204,16 +207,16 @@ export async function ejecutarGuardadoGlobal() {
                 base_dano_azul: updatedPj.baseDanoAzul,
                 base_elim_dorada: updatedPj.baseElimDorada,
                 estados: updatedPj.estados,
-                
-                // Afinidades Base
+
+                // Afinidades Base (af_)
                 af_fisica: updatedPj.afinidadesBase.fisica || 0,
                 af_energetica: updatedPj.afinidadesBase.energetica || 0,
                 af_espiritual: updatedPj.afinidadesBase.espiritual || 0,
                 af_mando: updatedPj.afinidadesBase.mando || 0,
                 af_psiquica: updatedPj.afinidadesBase.psiquica || 0,
                 af_oscura: updatedPj.afinidadesBase.oscura || 0,
-                
-                // Alteraciones (ef_)
+
+                // Alteraciones por Hechizos (ef_)
                 ef_fisica: updatedPj.hechizosEfecto.fisica || 0,
                 ef_energetica: updatedPj.hechizosEfecto.energetica || 0,
                 ef_espiritual: updatedPj.hechizosEfecto.espiritual || 0,
@@ -226,8 +229,8 @@ export async function ejecutarGuardadoGlobal() {
                 efecto_vida_roja: updatedPj.hechizosEfecto.vidaRojaMaxExtra || 0,
                 efecto_vida_azul: updatedPj.hechizosEfecto.vidaAzulExtra || 0,
                 efecto_guarda: updatedPj.hechizosEfecto.guardaDoradaExtra || 0,
-                
-                // Extras/Buffs (bf_)
+
+                // Extras Temporales / Buffs (bf_)
                 bf_fisica: updatedPj.buffs.fisica || 0,
                 bf_energetica: updatedPj.buffs.energetica || 0,
                 bf_espiritual: updatedPj.buffs.espiritual || 0,
@@ -239,25 +242,11 @@ export async function ejecutarGuardadoGlobal() {
                 buff_elim: updatedPj.buffs.elimDorada || 0,
                 buff_vida_roja: updatedPj.buffs.vidaRojaMaxExtra || 0,
                 buff_vida_azul: updatedPj.buffs.vidaAzulExtra || 0,
-                buff_guarda: updatedPj.buffs.guardaDoradaExtra || 0,
-
-                // Preserve Hechizos Variables (Read-Only)
-                hz_fisica: updatedPj.hechizos.fisica || 0,
-                hz_energetica: updatedPj.hechizos.energetica || 0,
-                hz_espiritual: updatedPj.hechizos.espiritual || 0,
-                hz_mando: updatedPj.hechizos.mando || 0,
-                hz_psiquica: updatedPj.hechizos.psiquica || 0,
-                hz_oscura: updatedPj.hechizos.oscura || 0,
-                hechizo_dano_rojo: updatedPj.hechizos.danoRojo || 0,
-                hechizo_dano_azul: updatedPj.hechizos.danoAzul || 0,
-                hechizo_elim: updatedPj.hechizos.elimDorada || 0,
-                hechizo_vida_roja: updatedPj.hechizos.vidaRojaMaxExtra || 0,
-                hechizo_vida_azul: updatedPj.hechizos.vidaAzulExtra || 0,
-                hechizo_guarda: updatedPj.hechizos.guardaDoradaExtra || 0
+                buff_guarda: updatedPj.buffs.guardaDoradaExtra || 0
             });
         }
 
-        // ESTADOS GLOBALES
+        // --- ESTADOS GLOBALES ---
         for (const id in stState.colaEstadosConfig) {
             estadosUpserts.push({ id: id, ...stState.colaEstadosConfig[id] });
         }
