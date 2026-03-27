@@ -19,82 +19,14 @@ window.devCalcularConjuros = calcularConjurosMasivos;
 window.devCopiarPrimerDado = copiarPrimerDado;
 window.devCopiarPrimerHechizo = copiarPrimerHechizo;
 
-// ── DROPDOWN CUSTOM DE AUTOCOMPLETADO ──
-window.devSpellInput = (row, valor, pjNombre) => {
-    window.devModFilaCast(row, 'nombre', valor, pjNombre);
-
-    const dd = document.getElementById(`dev-dd-${row}`);
-    if (!dd) return;
-
-    const pjKey = norm(pjNombre);
-    const baseIds = hzState.inventariosDB[pjKey] || [];
-    const cola = hzState.colaAsignaciones[pjKey] || {};
-    const hechizosDelPj = new Set(baseIds.map(norm));
-    Object.entries(cola).forEach(([id, agregar]) => {
-        if (agregar) hechizosDelPj.add(norm(id));
-        else hechizosDelPj.delete(norm(id));
-    });
-
-    const dMode = hzState.casteoManual.datalistModo;
-    const fuente = dMode === 'local'
-        ? hzState.catalogoDB.filter(h => hechizosDelPj.has(norm(h.ID || h.id)))
-        : hzState.catalogoDB;
-
-    const val = valor.toLowerCase();
-    const matches = fuente
-        .map(h => h.Nombre || h.nombre || h.ID || h.id)
-        .filter(n => n && n.toLowerCase().includes(val))
-        .sort((a, b) => a.localeCompare(b))
-        .slice(0, 20);
-
-    if (!val || matches.length === 0) {
-        dd.innerHTML = '';
-        return;
-    }
-
-    const pjEscaped = pjNombre.replace(/'/g, "\\'");
-    dd.innerHTML = `<div style="position:absolute; top:0; left:0; right:0; z-index:9999; background:#1a1a2e; border:1px solid var(--gold); border-top:none; border-radius:0 0 6px 6px; max-height:180px; overflow-y:auto; box-shadow:0 4px 15px rgba(0,0,0,0.9);">` +
-        matches.map(n => {
-            const nEsc = n.replace(/'/g, "\\'");
-            return `<div style="padding:6px 10px; cursor:pointer; color:#ddd; font-size:0.85em; border-bottom:1px solid #222; font-family:'Rajdhani',sans-serif;"
-                onmouseover="this.style.background='#2a1a4a'; this.style.color='#fff';"
-                onmouseout="this.style.background=''; this.style.color='#ddd';"
-                onmousedown="event.preventDefault(); document.getElementById('dev-spell-${row}').value='${nEsc}'; window.devModFilaCast(${row}, 'nombre', '${nEsc}', '${pjEscaped}'); document.getElementById('dev-dd-${row}').innerHTML='';">
-                ${n}
-            </div>`;
-        }).join('') +
-        `</div>`;
-};
-
-// Cierra el dropdown de una fila al perder el foco
-window.devSpellBlur = (row) => {
-    setTimeout(() => {
-        const dd = document.getElementById(`dev-dd-${row}`);
-        if (dd) dd.innerHTML = '';
-    }, 200);
-};
-
 // ── NAVEGACIÓN CON TECLADO ──
 window.devOnGridKeydown = (e, row, col, pjSeleccionado) => {
     const num = hzState.casteoManual.numFilas;
 
-    // TAB en el campo de hechizo
     if (e.key === 'Tab' && col === 1) {
         const input = document.getElementById(`dev-spell-${row}`);
-        const dd = document.getElementById(`dev-dd-${row}`);
-        if (dd && dd.innerHTML) {
-            const primerItem = dd.querySelector('div');
-            if (primerItem) {
-                e.preventDefault();
-                const texto = primerItem.textContent.trim();
-                input.value = texto;
-                window.devModFilaCast(row, 'nombre', texto, pjSeleccionado);
-                dd.innerHTML = '';
-                document.getElementById(`dev-afinidad-${row}`)?.focus();
-                return;
-            }
-        }
         const val = input.value.toLowerCase();
+        
         if (val) {
             const pjKey = norm(pjSeleccionado);
             const baseIds = hzState.inventariosDB[pjKey] || [];
@@ -104,12 +36,15 @@ window.devOnGridKeydown = (e, row, col, pjSeleccionado) => {
                 if (agregar) hechizosDelPj.add(norm(id));
                 else hechizosDelPj.delete(norm(id));
             });
+            
             const dMode = hzState.casteoManual.datalistModo;
             const opciones = dMode === 'local'
                 ? hzState.catalogoDB.filter(h => hechizosDelPj.has(norm(h.ID || h.id)))
                 : hzState.catalogoDB;
+                
             const invNombres = opciones.map(h => h.Nombre || h.nombre || h.ID || h.id).sort((a, b) => a.localeCompare(b));
             const match = invNombres.find(h => h.toLowerCase().startsWith(val));
+            
             if (match && match.toLowerCase() !== val) {
                 e.preventDefault();
                 input.value = match;
@@ -183,9 +118,9 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     const costo = parseInt(hechizo.HEX || hechizo.Hex || hechizo.costo || hechizo.Costo || 0) || 0;
     const efecto = hechizo.Efecto || hechizo.efecto_desc || hechizo.efecto || '-';
 
-    const raw = hechizo.es_conocido;
-    const dbConocido = raw === true || raw === 1 || raw === "1" || raw === "true" || raw === "TRUE";
-    const isKnown = hzState.colaVisibilidad[hId] !== undefined ? hzState.colaVisibilidad[hId] : dbConocido;
+    // ✅ FIX BUG 1: Validar "Conocido === 'si'" tal como lo hace el inventario público
+    const isPublicBase = hechizo.Conocido && hechizo.Conocido.toString().trim().toLowerCase() === 'si';
+    const isKnown = hzState.colaVisibilidad[hId] !== undefined ? hzState.colaVisibilidad[hId] : isPublicBase;
     const isHidden = !isKnown;
 
     const col = getColorAfinidad(hAf);
@@ -250,9 +185,30 @@ export function renderColumnaHechizos(pjSeleccionado) {
         </div>
     `;
 
+    // ════════════════════════════════════════
+    // VISTA: CASTEAR
+    // ════════════════════════════════════════
     if (v === 'castear') {
         const dMode = hzState.casteoManual.datalistModo;
         const escapedPj = pjSeleccionado.replace(/'/g, "\\'");
+
+        // ✅ FIX BUG 2: Implementación de <datalist> nativo en lugar del div personalizado
+        const fuenteDatalist = dMode === 'local' 
+            ? hzState.catalogoDB.filter(h => hechizosDelPj.has(norm(h.ID || h.id)))
+            : hzState.catalogoDB;
+
+        let datalistOptions = '';
+        const nombresUnicos = new Set();
+        fuenteDatalist.forEach(h => {
+            const n = h.Nombre || h.nombre || h.ID || h.id;
+            if(n) nombresUnicos.add(n);
+        });
+        nombresUnicos.forEach(n => {
+            datalistOptions += `<option value="${n.replace(/"/g, '&quot;')}">`;
+        });
+
+        // Inyectamos el datalist de HTML5
+        html += `<datalist id="dev-spells-list-${pjKey}">${datalistOptions}</datalist>`;
 
         html += `
         <div style="background:#1a0f00; border:1px solid var(--gold); border-radius:6px; padding:10px; margin-bottom:15px; text-align:center;">
@@ -291,14 +247,11 @@ export function renderColumnaHechizos(pjSeleccionado) {
                     style="width:50px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; text-align:center; outline:none;" title="NC Base (Dado)">
 
                 <div style="position:relative; flex:1;">
-                    <input type="text" id="dev-spell-${i}" placeholder="Nombre Hechizo..." value="${fila.nombre}"
+                    <input type="text" list="dev-spells-list-${pjKey}" id="dev-spell-${i}" placeholder="Nombre Hechizo..." value="${fila.nombre}"
                         autocomplete="off"
-                        oninput="window.devSpellInput(${i}, this.value, '${escapedPj}')"
-                        onfocus="window.devSpellInput(${i}, this.value, '${escapedPj}')"
-                        onblur="window.devSpellBlur(${i})"
+                        oninput="window.devModFilaCast(${i}, 'nombre', this.value, '${escapedPj}')"
                         onkeydown="window.devOnGridKeydown(event, ${i}, 1, '${escapedPj}')"
                         style="width:100%; box-sizing:border-box; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; outline:none;">
-                    <div id="dev-dd-${i}" style="position:absolute; top:100%; left:0; right:0; z-index:9999;"></div>
                 </div>
 
                 <input type="number" id="dev-afinidad-${i}" placeholder="Af.Total" value="${fila.afinidad}"
@@ -317,6 +270,9 @@ export function renderColumnaHechizos(pjSeleccionado) {
         <button onclick="window.devCalcularConjuros('${escapedPj}')" style="width:100%; margin-top:15px; background:linear-gradient(135deg, #4a004a, #800080); color:white; font-size:1.1em; font-weight:bold; font-family:'Cinzel'; padding:12px; border:1px solid #ff00ff; border-radius:6px; cursor:pointer; text-shadow: 0 0 5px #ff00ff; transition:0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">⚡ CALCULAR CONJUROS ⚡</button>
         `;
 
+    // ════════════════════════════════════════
+    // VISTA: GESTIÓN BD / ASIGNAR
+    // ════════════════════════════════════════
     } else {
         html += `
         <div style="background:#001a00; border:1px solid #00ff00; border-radius:6px; padding:10px; margin-bottom:15px; text-align:center; font-size:0.85em;">
