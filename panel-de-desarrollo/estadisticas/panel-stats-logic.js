@@ -5,22 +5,19 @@
 import { stState } from './panel-stats-state.js';
 
 export function initStatsDev(statsGlobal, listaEstados) {
-    stState.statsDB = JSON.parse(JSON.stringify(statsGlobal || {})); // Deep copy de seguridad
+    stState.statsDB = JSON.parse(JSON.stringify(statsGlobal || {}));
     stState.estadosDB = JSON.parse(JSON.stringify(listaEstados || []));
 }
 
-// ── LECTOR DE DATOS (Prioriza la Cola Temporal) ──
 export function getPjStat(pjNombre, campoRaiz, subCampo = null) {
     if (!pjNombre) return 0;
-    const pjKey = pjNombre; // Mantenemos el case original para stats
+    const pjKey = pjNombre; 
     
-    // 1. Revisar si está modificado en la Cola Temporal
     const flatKey = subCampo ? `${campoRaiz}.${subCampo}` : campoRaiz;
     if (stState.colaStats[pjKey] && stState.colaStats[pjKey][flatKey] !== undefined) {
         return stState.colaStats[pjKey][flatKey];
     }
     
-    // 2. Si no, extraer de la Base de Datos
     const p = stState.statsDB[pjKey];
     if (!p) return 0;
 
@@ -30,8 +27,7 @@ export function getPjStat(pjNombre, campoRaiz, subCampo = null) {
     return p[campoRaiz] !== undefined ? p[campoRaiz] : 0;
 }
 
-// ── MODIFICADOR DE DATOS ──
-export function modPjStat(pjNombre, campoRaiz, subCampo, variacion, allowNegative = false) {
+export function modPjStat(pjNombre, campoRaiz, subCampo, variacion, allowNegative = false, reRender = true) {
     if (!pjNombre) return;
     const pjKey = pjNombre;
     const flatKey = subCampo ? `${campoRaiz}.${subCampo}` : campoRaiz;
@@ -43,10 +39,11 @@ export function modPjStat(pjNombre, campoRaiz, subCampo, variacion, allowNegativ
     if (!stState.colaStats[pjKey]) stState.colaStats[pjKey] = {};
     stState.colaStats[pjKey][flatKey] = nuevoValor;
     
-    window.dispatchEvent(new Event('devUIUpdate'));
+    if (reRender) window.dispatchEvent(new Event('devUIUpdate'));
+    else window.dispatchEvent(new Event('devDataChanged'));
 }
 
-export function setPjStat(pjNombre, campoRaiz, subCampo, valor) {
+export function setPjStat(pjNombre, campoRaiz, subCampo, valor, reRender = true) {
     if (!pjNombre) return;
     const pjKey = pjNombre;
     const flatKey = subCampo ? `${campoRaiz}.${subCampo}` : campoRaiz;
@@ -54,10 +51,10 @@ export function setPjStat(pjNombre, campoRaiz, subCampo, valor) {
     if (!stState.colaStats[pjKey]) stState.colaStats[pjKey] = {};
     stState.colaStats[pjKey][flatKey] = valor;
     
-    window.dispatchEvent(new Event('devUIUpdate'));
+    if (reRender) window.dispatchEvent(new Event('devUIUpdate'));
+    else window.dispatchEvent(new Event('devDataChanged'));
 }
 
-// ── FUNCIONES ESPECIALES ──
 export function darAsistencia(pjNombre) {
     modPjStat(pjNombre, 'asistencia', null, 1);
     modPjStat(pjNombre, 'hex', null, 200);
@@ -72,26 +69,29 @@ export function limpiarLogAsistencia() {
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
+// 🌟 FÓRMULA PERFECTA: Suma Todo (Base + Alteración + Hechizos + Buffs)
+function getTotalAfinidad(pj, af) {
+    return getPjStat(pj, 'afinidadesBase', af) +
+           getPjStat(pj, 'hechizos', af) +
+           getPjStat(pj, 'hechizosEfecto', af) +
+           getPjStat(pj, 'buffs', af);
+}
+
 export function recalcularCorazones(pjNombre) {
-    const fis = getPjStat(pjNombre, 'afinidadesBase', 'fisica');
-    const ene = getPjStat(pjNombre, 'afinidadesBase', 'energetica');
-    const esp = getPjStat(pjNombre, 'afinidadesBase', 'espiritual');
-    const man = getPjStat(pjNombre, 'afinidadesBase', 'mando');
-    const psi = getPjStat(pjNombre, 'afinidadesBase', 'psiquica');
-    const osc = getPjStat(pjNombre, 'afinidadesBase', 'oscura');
+    const fis = getTotalAfinidad(pjNombre, 'fisica');
+    const ene = getTotalAfinidad(pjNombre, 'energetica');
+    const esp = getTotalAfinidad(pjNombre, 'espiritual');
+    const man = getTotalAfinidad(pjNombre, 'mando');
+    const psi = getTotalAfinidad(pjNombre, 'psiquica');
+    const osc = getTotalAfinidad(pjNombre, 'oscura');
 
     const nuevaRojaMax = 10 + Math.floor(fis / 2);
     const magiaTotal = ene + esp + man + psi + osc;
     const nuevaAzul = Math.floor(magiaTotal / 4);
 
-    setPjStat(pjNombre, 'baseVidaRojaMax', null, nuevaRojaMax);
-    setPjStat(pjNombre, 'baseVidaAzul', null, nuevaAzul);
-    setPjStat(pjNombre, 'vidaRojaActual', null, nuevaRojaMax); // Cura total
-}
-
-export function toggleEstado(pjNombre, estadoId) {
-    const actual = getPjStat(pjNombre, 'estados', estadoId);
-    setPjStat(pjNombre, 'estados', estadoId, !actual);
+    setPjStat(pjNombre, 'baseVidaRojaMax', null, nuevaRojaMax, false);
+    setPjStat(pjNombre, 'baseVidaAzul', null, nuevaAzul, false);
+    setPjStat(pjNombre, 'vidaRojaActual', null, nuevaRojaMax, true); 
 }
 
 export function setVistaStats(vista) {
@@ -99,17 +99,23 @@ export function setVistaStats(vista) {
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
-export function guardarNuevoEstado(id, nombre, tipo, bg, border, desc) {
+export function toggleEstado(pjNombre, estadoId) {
+    const actual = getPjStat(pjNombre, 'estados', estadoId);
+    setPjStat(pjNombre, 'estados', estadoId, !actual);
+}
+
+// Color picker envía HEX, le agregamos transparencia 55 a los fondos
+export function guardarNuevoEstado(id, nombre, tipo, bgHex, borderHex, desc) {
     const safeId = id.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
     if (!safeId) return alert("ID inválido.");
     
     stState.colaEstadosConfig[safeId] = {
         nombre: nombre || safeId,
         tipo: tipo,
-        color_bg: bg,
-        color_border: border,
+        color_bg: bgHex + '55', 
+        color_border: borderHex,
         descripcion: desc
     };
-    alert("Estado agregado a la cola. Clic en 'Guardar Todo' para enviarlo a la BD.");
-    window.dispatchEvent(new Event('devUIUpdate'));
+    alert(`Estado "${nombre}" agregado a la cola de base de datos. Se subirá al guardar.`);
+    window.dispatchEvent(new Event('devDataChanged')); 
 }
