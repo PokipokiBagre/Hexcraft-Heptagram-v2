@@ -37,7 +37,6 @@ window.devOnGridKeydown = (e, row, col, pjSeleccionado) => {
                 else hechizosDelPj.delete(norm(id));
             });
             
-            // ✅ FIX BUG 1 (Parte A): Buscar por ID o por Nombre al tabular
             const dMode = hzState.casteoManual.datalistModo;
             const opciones = dMode === 'local'
                 ? hzState.catalogoDB.filter(h => hechizosDelPj.has(norm(h.ID || h.id)) || hechizosDelPj.has(norm(h.Nombre || h.nombre)))
@@ -192,7 +191,6 @@ export function renderColumnaHechizos(pjSeleccionado) {
         const dMode = hzState.casteoManual.datalistModo;
         const escapedPj = pjSeleccionado.replace(/'/g, "\\'");
 
-        // ✅ FIX BUG 1 (Parte B): Construir el datalist buscando por Nombre O por ID en el Grimorio
         const fuenteDatalist = dMode === 'local' 
             ? hzState.catalogoDB.filter(h => hechizosDelPj.has(norm(h.ID || h.id)) || hechizosDelPj.has(norm(h.Nombre || h.nombre)))
             : hzState.catalogoDB;
@@ -239,7 +237,7 @@ export function renderColumnaHechizos(pjSeleccionado) {
 
             html += `
             <div style="display:flex; gap:5px; margin-bottom:5px; align-items:center;">
-                <button onclick="const d=Math.floor(Math.random()*20)+1; document.getElementById('dev-dado-${i}').value=d; window.devModFilaCast(${i}, 'dado', d, '${escapedPj}')" style="background:#333; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; cursor:pointer;" title="Aleatorio">🎲</button>
+                <button onclick="const d=Math.floor(Math.random()*100)+1; document.getElementById('dev-dado-${i}').value=d; window.devModFilaCast(${i}, 'dado', d, '${escapedPj}')" style="background:#333; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; cursor:pointer;" title="Aleatorio">🎲</button>
                 <input type="number" id="dev-dado-${i}" placeholder="Dado" value="${fila.dado}"
                     oninput="window.devModFilaCast(${i}, 'dado', this.value, '${escapedPj}')"
                     onkeydown="window.devOnGridKeydown(event, ${i}, 0, '${escapedPj}')"
