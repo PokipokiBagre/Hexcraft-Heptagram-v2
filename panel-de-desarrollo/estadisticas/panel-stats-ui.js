@@ -109,11 +109,12 @@ export function renderColumnaStats(pjSeleccionado) {
     if (v === 'hex') {
         const hVal = getPjStat(pjSeleccionado, 'hex');
         const aVal = getPjStat(pjSeleccionado, 'asistencia');
+        const vVal = getPjStat(pjSeleccionado, 'vex'); // VEX en lectura
         
         html += `
         <div style="background:#1a1a00; border:1px solid var(--gold); border-radius:8px; padding:15px; text-align:center; margin-bottom:20px;">
             <h3 style="margin:0 0 10px 0; color:var(--gold); font-family:'Cinzel';">HEX ACTUAL</h3>
-            <div style="font-size:2.5em; color:#fff; font-weight:bold; margin-bottom:15px;">${hVal}</div>
+            <div onclick="navigator.clipboard.writeText('Hex: ${hVal}'); alert('¡Hex Copiado!');" style="font-size:2.5em; color:#fff; font-weight:bold; margin-bottom:15px; cursor:pointer;" title="Click para copiar">${hVal}</div>
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
                 <div style="display:flex; flex-direction:column; gap:5px;">
                     ${[10, 50, 100, 300, 500, 1000].map(n => `<button onclick="window.devModStat('${sPj}','hex',null,${n})" style="background:#004a00; color:#fff; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;">+${n}</button>`).join('')}
@@ -124,14 +125,19 @@ export function renderColumnaStats(pjSeleccionado) {
             </div>
         </div>
 
-        <div style="background:#0a1a2a; border:1px solid var(--blue-life); border-radius:8px; padding:15px; text-align:center;">
+        <div style="background:#0a1a2a; border:1px solid var(--blue-life); border-radius:8px; padding:15px; text-align:center; margin-bottom:20px;">
             <h3 style="margin:0 0 10px 0; color:var(--blue-life); font-family:'Cinzel';">ASISTENCIA SEMANAL</h3>
-            <div style="font-size:2em; color:#fff; font-weight:bold; margin-bottom:10px;">${aVal} / 7</div>
+            <div onclick="navigator.clipboard.writeText('Asistencia ${aVal}/7'); alert('¡Asistencia Copiada!');" style="font-size:2em; color:#fff; font-weight:bold; margin-bottom:10px; cursor:pointer;" title="Click para copiar">${aVal} / 7</div>
             <div style="display:flex; gap:10px; justify-content:center; margin-bottom:15px;">
                 <button onclick="window.devModStat('${sPj}','asistencia',null,-1)" style="background:#4a0000; color:#fff; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer;">-1</button>
                 <button onclick="window.devModStat('${sPj}','asistencia',null,1)" style="background:#004a00; color:#fff; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer;">+1</button>
             </div>
             <button onclick="window.devDarAsis('${sPj}')" style="width:100%; background:linear-gradient(135deg, #1a365d, #4a90e2); color:#fff; border:1px solid #00ffff; padding:12px; border-radius:6px; font-weight:bold; font-family:'Cinzel'; font-size:1.1em; cursor:pointer; box-shadow:0 4px 10px rgba(74,144,226,0.3);">⭐ DAR ASISTENCIA (+300 HEX)</button>
+        </div>
+
+        <div style="background:#1a0033; border:1px solid #9966ff; border-radius:8px; padding:15px; text-align:center; margin-bottom:20px;">
+            <h3 style="margin:0 0 10px 0; color:#9966ff; font-family:'Cinzel';">VEX (Lectura)</h3>
+            <div onclick="navigator.clipboard.writeText('Vex: ${vVal}'); alert('¡Vex Copiado!');" style="font-size:2.5em; color:#fff; font-weight:bold; cursor:pointer;" title="Click para copiar">${vVal}</div>
         </div>`;
     }
 
