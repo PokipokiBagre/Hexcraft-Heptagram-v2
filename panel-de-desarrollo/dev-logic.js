@@ -314,7 +314,7 @@ export async function ejecutarGuardadoGlobal() {
             for (const hzId in hzState.colaAsignaciones[pjKey]) {
                 const agregar = hzState.colaAsignaciones[pjKey][hzId];
                 if (agregar) hzUpserts.push({ personaje_nombre: realPj, hechizo_id: hzId });
-                else deletePromises.push(supabase.from('personajes_hechizos').delete().eq('personaje_nombre', realPj).eq('hechizo_id', hzId));
+                else deletePromises.push(supabase.from('inventario_hechizos').delete().eq('personaje_nombre', realPj).eq('hechizo_id', hzId)); // ¡Corregido a inventario_hechizos!
             }
         }
 
@@ -338,12 +338,10 @@ export async function ejecutarGuardadoGlobal() {
             if (errEst) throw new Error("Estados: " + errEst.message);
         }
         if (hzUpserts.length > 0) {
-            const { error: errHz } = await supabase.from('personajes_hechizos').upsert(hzUpserts, { onConflict: 'personaje_nombre,hechizo_id' });
+            const { error: errHz } = await supabase.from('inventario_hechizos').upsert(hzUpserts, { onConflict: 'personaje_nombre,hechizo_id' }); // ¡Corregido a inventario_hechizos!
             if (errHz) throw new Error("Hechizos: " + errHz.message);
         }
 
-        // Nota: Asegúrate de tener los nombres de tabla ('hechizos', 'personajes_hechizos') correctos según tu Supabase
-        
         localStorage.removeItem('hex_obj_v4');
         localStorage.removeItem('hex_stats_v2');
 
