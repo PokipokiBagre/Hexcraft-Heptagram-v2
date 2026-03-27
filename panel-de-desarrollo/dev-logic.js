@@ -53,6 +53,8 @@ export function actualizarLogGlobal() {
     }
 
     // --- 2. Estadísticas ---
+
+    // Nombres legibles para flatKeys simples (campoRaiz sin subCampo)
     const nomLegibles = {
         'hex':              'HEX',
         'asistencia':       'Asistencia',
@@ -65,6 +67,7 @@ export function actualizarLogGlobal() {
         'baseElimDorada':   'Elim. Dorada'
     };
 
+    // Nombres legibles para subCampos (buffs, hechizosEfecto, afinidadesBase)
     const subNomLegibles = {
         'fisica':            'Física',
         'energetica':        'Energética',
@@ -85,13 +88,16 @@ export function actualizarLogGlobal() {
         const cambios = stState.colaStats[pjKey];
         const dbPj = stState.statsDB[pjKey] || {};
 
-        // Validar si la asistencia dio la vuelta de 7 a 1
-        const asistNueva = cambios['asistencia'];
-        const asistVieja = dbPj['asistencia'];
-        const fueReinicioAsistencia = (asistVieja >= 7 && asistNueva === 1);
+        // Detectar reinicio de asistencia ANTES del loop para filtrar HEX correctamente
+        // Usamos el flag explícito __esReinicio que pone darAsistencia() en panel-stats-logic.js
+        // Esto evita falsos negativos cuando el valor previo venía de la cola y no de la BD
+        const fueReinicioAsistencia = !!cambios['__esReinicio'];
 
         for (const flatKey in cambios) {
-            if (flatKey.endsWith('.null')) continue;
+            // BUG FIX: modPjStat llama setPjStat con subCampo=null cuando no hay subcampo,
+            // generando flatKeys como "baseVidaRojaMax.null" — los ignoramos aquí,
+            // el valor ya viene correctamente como "baseVidaRojaMax" en otro entry.
+            if (flatKey.endsWith('.null') || flatKey.startsWith('__')) continue;
 
             const cantNueva = cambios[flatKey];
             const parts = flatKey.split('.');
@@ -108,7 +114,7 @@ export function actualizarLogGlobal() {
                 if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
                 const sign = delta > 0 ? '+' : '';
 
-                // ── ASISTENCIA (Con o sin reseteo a 1/7) ──
+                // ── ASISTENCIA ──
                 if (campoRaiz === 'asistencia') {
                     if (fueReinicioAsistencia) {
                         logPorPJ[realPj].push(`Asistencia reiniciada (1/7)`);
@@ -120,26 +126,27 @@ export function actualizarLogGlobal() {
                     }
                 }
 
-                // ── HEX (Se oculta si ya se imprimió en el reinicio) ──
+                // ── HEX: omitir si el cambio vino del reinicio de asistencia ──
                 else if (campoRaiz === 'hex') {
                     if (!fueReinicioAsistencia) {
                         logPorPJ[realPj].push(`HEX ${sign}${delta} (${cantNueva})`);
                     }
                 }
 
-                // ── VIDA ROJA (Formato 15/15) ──
+                // ── VIDA ROJA (muestra actual/max) ──
                 else if (campoRaiz === 'vidaRojaActual' || campoRaiz === 'baseVidaRojaMax') {
-                    const maxBase = campoRaiz === 'baseVidaRojaMax' 
-                        ? cantNueva 
-                        : (dbPj.baseVidaRojaMax || 0) + (cambios['baseVidaRojaMax'] !== undefined ? cambios['baseVidaRojaMax'] - (dbPj.baseVidaRojaMax || 0) : 0);
-                    
-                    const extraVida = (dbPj.buffs?.vidaRojaMaxExtra || 0) + (dbPj.hechizosEfecto?.vidaRojaMaxExtra || 0) + (dbPj.hechizos?.vidaRojaMaxExtra || 0);
+                    const maxBase = campoRaiz === 'baseVidaRojaMax'
+                        ? cantNueva
+                        : (dbPj.baseVidaRojaMax || 0) + (cambios['baseVidaRojaMax'] !== undefined
+                            ? cambios['baseVidaRojaMax'] - (dbPj.baseVidaRojaMax || 0) : 0);
+                    const extraVida = (dbPj.buffs?.vidaRojaMaxExtra || 0)
+                        + (dbPj.hechizosEfecto?.vidaRojaMaxExtra || 0)
+                        + (dbPj.hechizos?.vidaRojaMaxExtra || 0);
                     const finalMax = maxBase + extraVida;
-                    
-                    const finalAct = campoRaiz === 'vidaRojaActual' 
-                        ? cantNueva 
-                        : (dbPj.vidaRojaActual || 0) + (cambios['vidaRojaActual'] !== undefined ? cambios['vidaRojaActual'] - (dbPj.vidaRojaActual || 0) : 0);
-                    
+                    const finalAct = campoRaiz === 'vidaRojaActual'
+                        ? cantNueva
+                        : (dbPj.vidaRojaActual || 0) + (cambios['vidaRojaActual'] !== undefined
+                            ? cambios['vidaRojaActual'] - (dbPj.vidaRojaActual || 0) : 0);
                     logPorPJ[realPj].push(`${nomLegibles[campoRaiz]} ${sign}${delta} (${finalAct}/${finalMax})`);
                 }
 
@@ -155,28 +162,25 @@ export function actualizarLogGlobal() {
                     logPorPJ[realPj].push(`Af. Base ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
                 }
 
-                // ── ALTERACIONES (hechizosEfecto) ──
+                // ── ALTERACIONES (hechizosEfecto / ALT) ──
                 else if (campoRaiz === 'hechizosEfecto' && subCampo) {
                     logPorPJ[realPj].push(`Af. Alt. ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
                 }
 
-                // ── BUFFS ──
+                // ── BUFFS / EXTRAS ──
                 else if (campoRaiz === 'buffs' && subCampo) {
                     logPorPJ[realPj].push(`Buff ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
                 }
 
-                // ── EL RESTO (Daño, Azul, Dorada, etc) ──
+                // ── RESTO (stats simples con nombre legible o el campoRaiz como fallback) ──
                 else {
                     logPorPJ[realPj].push(`${nomLegibles[campoRaiz] || campoRaiz} ${sign}${delta} (${cantNueva})`);
                 }
 
-            } 
-            // ── ESTADOS BOOLEANOS ──
-            else if (typeof cantNueva === 'boolean') {
+            } else if (typeof cantNueva === 'boolean') {
                 const cantViejaBool = !subCampo ? !!dbPj[campoRaiz] : !!(dbPj[campoRaiz]?.[subCampo]);
                 if (cantNueva === cantViejaBool) continue;
                 if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
-                
                 if (campoRaiz === 'estados' && subCampo) {
                     const eDef = stState.estadosDB.find(e => e.id === subCampo);
                     const eName = eDef ? eDef.nombre : subCampo;
@@ -245,8 +249,8 @@ export async function ejecutarGuardadoGlobal() {
         }
 
         // =========================================================================
-        // ESTADÍSTICAS: MAPEO EXACTO A COLUMNAS DE SUPABASE
-        // Nombres corregidos para Supabase (vida_azul_max, guarda_dorada, dano_rojo)
+        // ESTADÍSTICAS: MAPEO EXACTO A COLUMNAS DE SUPABASE (af_, ef_, bf_)
+        // Nota: hz_* y hechizo_* son propiedad del módulo Grimorio — no se tocan aquí
         // =========================================================================
         for (const pjKey in stState.colaStats) {
             const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey.toLowerCase())?.nombre || pjKey;
@@ -254,7 +258,7 @@ export async function ejecutarGuardadoGlobal() {
             let updatedPj = JSON.parse(JSON.stringify(stState.statsDB[pjKey]));
 
             for (const flatKey in cambios) {
-                if (flatKey.endsWith('.null')) continue;
+                if (flatKey.endsWith('.null') || flatKey.startsWith('__')) continue; // ignorar keys malformadas
                 const keys = flatKey.split('.');
                 if (keys.length === 1) updatedPj[keys[0]] = cambios[flatKey];
                 else {
@@ -269,13 +273,11 @@ export async function ejecutarGuardadoGlobal() {
                 asistencia: updatedPj.asistencia,
                 vida_roja_actual: updatedPj.vidaRojaActual,
                 base_vida_roja_max: updatedPj.baseVidaRojaMax,
-                
-                // Nombres Reales de Supabase
-                vida_azul_max: updatedPj.baseVidaAzul,
-                guarda_dorada: updatedPj.baseGuardaDorada,
-                dano_rojo: updatedPj.baseDanoRojo,
-                dano_azul: updatedPj.baseDanoAzul,
-                elim_dorada: updatedPj.baseElimDorada,
+                base_vida_azul: updatedPj.baseVidaAzul,
+                base_guarda_dorada: updatedPj.baseGuardaDorada,
+                base_dano_rojo: updatedPj.baseDanoRojo,
+                base_dano_azul: updatedPj.baseDanoAzul,
+                base_elim_dorada: updatedPj.baseElimDorada,
                 estados: updatedPj.estados,
 
                 // Afinidades Base (af_)
