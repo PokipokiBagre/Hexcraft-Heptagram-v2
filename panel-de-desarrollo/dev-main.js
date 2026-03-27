@@ -79,8 +79,8 @@ window.onload = async () => {
                 baseElimDorada: Number(p.base_elim_dorada) || 0,
                 
                 afinidadesBase: {
-                    fisica: Number(p.fisica) || 0, energetica: Number(p.energetica) || 0, espiritual: Number(p.espiritual) || 0,
-                    mando: Number(p.mando) || 0, psiquica: Number(p.psiquica) || 0, oscura: Number(p.oscura) || 0
+                    fisica: Number(p.af_fisica) || 0, energetica: Number(p.af_energetica) || 0, espiritual: Number(p.af_espiritual) || 0,
+                    mando: Number(p.af_mando) || 0, psiquica: Number(p.af_psiquica) || 0, oscura: Number(p.af_oscura) || 0
                 },
                 hechizosEfecto: {
                     fisica: Number(p.alt_fisica) || 0, energetica: Number(p.alt_energetica) || 0, espiritual: Number(p.alt_espiritual) || 0,
