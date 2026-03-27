@@ -25,11 +25,9 @@ export function revisarCambiosPendientes() {
     else btnSync.classList.add('oculto');
 }
 
-// 🌟 GENERADOR INTELIGENTE DEL PORTAPAPELES
 export function actualizarLogGlobal() {
     const logPorPJ = {};
 
-    // --- 1. Objetos ---
     for (const pjKey in objState.colaInventario) {
         const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey)?.nombre || pjKey;
         for (const objNombre in objState.colaInventario[pjKey]) {
@@ -53,11 +51,10 @@ export function actualizarLogGlobal() {
         }
     }
 
-    // --- 2. Estadísticas ---
     const nomLegibles = {
         'hex': 'HEX', 'asistencia': 'Asistencia', 'vidaRojaActual': 'Vida Roja',
         'baseVidaRojaMax': 'Límite Rojo', 'baseVidaAzul': 'Corazones Azules', 'baseGuardaDorada': 'Guarda Dorada',
-        'baseDanoRojo': 'Daño Rojo', 'baseDanoAzul': 'Daño Azul', 'baseElimDorada': 'Elim. Dorada'
+        'baseDanoRojo': 'Daño Rojo', 'baseDanoAzul': 'Daño Azul', 'baseElimDorada': 'Eliminación Dorada'
     };
 
     for (const pjKey in stState.colaStats) {
@@ -132,7 +129,6 @@ export async function ejecutarGuardadoGlobal() {
         const statsUpserts = [];
         const estadosUpserts = [];
 
-        // Objetos
         const nuevosArr = Object.values(objState.colaNuevosObjetos).filter(o => o.nombre.trim() !== '');
         for (const obj of nuevosArr) {
             catalogUpserts.push({ nombre: obj.nombre, tipo: obj.tipo, material: obj.mat, rareza: obj.rar, efecto: obj.eff });
@@ -165,7 +161,7 @@ export async function ejecutarGuardadoGlobal() {
             }
         }
 
-        // ================== ESTADÍSTICAS Y MAPEADO A COLUMNAS PLANAS DE POSTGRES ==================
+        // 🌟 EMPAQUETADO EXACTO EN JSONB
         for (const pjKey in stState.colaStats) {
             const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey.toLowerCase())?.nombre || pjKey;
             const cambios = stState.colaStats[pjKey];
@@ -194,17 +190,43 @@ export async function ejecutarGuardadoGlobal() {
                 base_elim_dorada: updatedPj.baseElimDorada,
                 estados: updatedPj.estados,
                 
-                // Mapeo plano exacto
-                fisica: updatedPj.afinidadesBase.fisica, energetica: updatedPj.afinidadesBase.energetica, espiritual: updatedPj.afinidadesBase.espiritual, mando: updatedPj.afinidadesBase.mando, psiquica: updatedPj.afinidadesBase.psiquica, oscura: updatedPj.afinidadesBase.oscura,
-                alt_fisica: updatedPj.hechizosEfecto.fisica, alt_energetica: updatedPj.hechizosEfecto.energetica, alt_espiritual: updatedPj.hechizosEfecto.espiritual, alt_mando: updatedPj.hechizosEfecto.mando, alt_psiquica: updatedPj.hechizosEfecto.psiquica, alt_oscura: updatedPj.hechizosEfecto.oscura,
-                alt_dano_rojo: updatedPj.hechizosEfecto.danoRojo, alt_dano_azul: updatedPj.hechizosEfecto.danoAzul, alt_elim_dorada: updatedPj.hechizosEfecto.elimDorada,
-                ext_fisica: updatedPj.buffs.fisica, ext_energetica: updatedPj.buffs.energetica, ext_espiritual: updatedPj.buffs.espiritual, ext_mando: updatedPj.buffs.mando, ext_psiquica: updatedPj.buffs.psiquica, ext_oscura: updatedPj.buffs.oscura,
-                ext_dano_rojo: updatedPj.buffs.danoRojo, ext_dano_azul: updatedPj.buffs.danoAzul, ext_elim_dorada: updatedPj.buffs.elimDorada,
-                ext_vida_roja_max: updatedPj.buffs.vidaRojaMaxExtra, ext_vida_azul: updatedPj.buffs.vidaAzulExtra, ext_guarda_dorada: updatedPj.buffs.guardaDoradaExtra
+                // Mapeo estructurado como lo necesita Supabase
+                afinidades_base: {
+                    fisica: updatedPj.afinidadesBase.fisica || 0,
+                    energetica: updatedPj.afinidadesBase.energetica || 0,
+                    espiritual: updatedPj.afinidadesBase.espiritual || 0,
+                    mando: updatedPj.afinidadesBase.mando || 0,
+                    psiquica: updatedPj.afinidadesBase.psiquica || 0,
+                    oscura: updatedPj.afinidadesBase.oscura || 0
+                },
+                hechizos_efecto: {
+                    fisica: updatedPj.hechizosEfecto.fisica || 0,
+                    energetica: updatedPj.hechizosEfecto.energetica || 0,
+                    espiritual: updatedPj.hechizosEfecto.espiritual || 0,
+                    mando: updatedPj.hechizosEfecto.mando || 0,
+                    psiquica: updatedPj.hechizosEfecto.psiquica || 0,
+                    oscura: updatedPj.hechizosEfecto.oscura || 0,
+                    dano_rojo: updatedPj.hechizosEfecto.danoRojo || 0,
+                    dano_azul: updatedPj.hechizosEfecto.danoAzul || 0,
+                    elim_dorada: updatedPj.hechizosEfecto.elimDorada || 0
+                },
+                buffs: {
+                    fisica: updatedPj.buffs.fisica || 0,
+                    energetica: updatedPj.buffs.energetica || 0,
+                    espiritual: updatedPj.buffs.espiritual || 0,
+                    mando: updatedPj.buffs.mando || 0,
+                    psiquica: updatedPj.buffs.psiquica || 0,
+                    oscura: updatedPj.buffs.oscura || 0,
+                    dano_rojo: updatedPj.buffs.danoRojo || 0,
+                    dano_azul: updatedPj.buffs.danoAzul || 0,
+                    elim_dorada: updatedPj.buffs.elimDorada || 0,
+                    vida_roja_max_extra: updatedPj.buffs.vidaRojaMaxExtra || 0,
+                    vida_azul_extra: updatedPj.buffs.vidaAzulExtra || 0,
+                    guarda_dorada_extra: updatedPj.buffs.guardaDoradaExtra || 0
+                }
             });
         }
 
-        // ================== ESTADOS GLOBALES ==================
         for (const id in stState.colaEstadosConfig) {
             estadosUpserts.push({ id: id, ...stState.colaEstadosConfig[id] });
         }
@@ -212,24 +234,20 @@ export async function ejecutarGuardadoGlobal() {
             deletePromises.push(supabase.from('estados_config').delete().in('id', stState.colaBorrarEstados));
         }
 
-        // 🔥 LANZAMIENTO MASIVO A SUPABASE 🔥
         if (deletePromises.length > 0) await Promise.all(deletePromises);
 
         if (catalogUpserts.length > 0) {
             const { error: errCat } = await supabase.from('objetos').upsert(catalogUpserts, { onConflict: 'nombre' });
             if (errCat) throw new Error("Catálogo: " + errCat.message);
         }
-
         if (invUpserts.length > 0) {
             const { error: errInv } = await supabase.from('inventario_objetos').upsert(invUpserts, { onConflict: 'personaje_nombre,objeto_nombre' });
             if (errInv) throw new Error("Inventarios: " + errInv.message);
         }
-
         if (statsUpserts.length > 0) {
             const { error: errSt } = await supabase.from('personajes').upsert(statsUpserts, { onConflict: 'nombre' });
             if (errSt) throw new Error("Estadísticas: " + errSt.message);
         }
-
         if (estadosUpserts.length > 0) {
             const { error: errEst } = await supabase.from('estados_config').upsert(estadosUpserts, { onConflict: 'id' });
             if (errEst) throw new Error("Estados: " + errEst.message);
