@@ -74,11 +74,11 @@ window.onload = async () => {
                 // Stats de Vida y Daño (Nombres de DB arreglados)
                 vidaRojaActual: Number(p.vida_roja_actual) || 0,
                 baseVidaRojaMax: Number(p.base_vida_roja_max) || 0,
-                baseVidaAzul: Number(p.vida_azul_max) || 0,
-                baseGuardaDorada: Number(p.guarda_dorada) || 0,
-                baseDanoRojo: Number(p.dano_rojo) || 0,
-                baseDanoAzul: Number(p.dano_azul) || 0,
-                baseElimDorada: Number(p.elim_dorada) || 0,
+                baseVidaAzul: Number(p.base_vida_azul) || 0,
+                baseGuardaDorada: Number(p.base_guarda_dorada) || 0,
+                baseDanoRojo: Number(p.base_dano_rojo) || 0,
+                baseDanoAzul: Number(p.base_dano_azul) || 0,
+                baseElimDorada: Number(p.base_elim_dorada) || 0,
                 
                 afinidadesBase: {
                     fisica: Number(p.af_fisica) || 0, energetica: Number(p.af_energetica) || 0, espiritual: Number(p.af_espiritual) || 0,
