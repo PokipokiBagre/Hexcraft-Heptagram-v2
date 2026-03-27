@@ -35,7 +35,6 @@ function obtenerAfinidadTotal(pjNombre, afNombreRaw) {
            (getPjStat(pjNombre, 'buffs', key) || 0);
 }
 
-// ── FORMULARIO DE CASTEO MASIVO ──
 export function setNumFilasCast(num) {
     hzState.casteoManual.numFilas = parseInt(num) || 1;
     window.dispatchEvent(new Event('devUIUpdate'));
@@ -95,13 +94,13 @@ export function copiarPrimerDado() {
     navigator.clipboard.writeText(`!r 1d100 + ${fila.afinidad || 0} // ${fila.nombre || '?'}`).then(() => alert(`Dado ${dado} copiado a todas las filas.`));
 }
 
-// 🌟 UTILIDAD: Extrae textos de Arrays y limpia basura ("0", nulos)
-const parseSpellText = (val) => {
-    if (val === undefined || val === null || val === "0" || val === 0 || val === "-") return '';
-    let text = Array.isArray(val) ? val.join(', ') : String(val);
-    text = text.trim();
-    if (!text || text === "0" || text === "-" || text.toLowerCase() === "null") return '';
-    return text;
+// 🌟 UTILIDAD DE EXTRACCIÓN (Igual que en el panel público, pero filtrando ceros)
+const getVal = (v) => {
+    if (v === undefined || v === null) return '';
+    let s = Array.isArray(v) ? v.join(', ') : String(v);
+    s = s.trim();
+    if (s === '0' || s === '-' || s.toLowerCase() === 'null' || s === '') return '';
+    return s;
 };
 
 export function calcularConjurosMasivos(pjNombre) {
@@ -123,19 +122,18 @@ export function calcularConjurosMasivos(pjNombre) {
         const afin = parseInt(fila.afinidad) || 0;
 
         if (hechizo) {
-            // Extraer costo exacto (como en inventario-main.js)
             const costoU = parseInt(hechizo.HEX || hechizo.Hex || hechizo.Costo || hechizo.costo || 0) || 0;
             totalCost += (costoU * cant);
             validSpells += cant;
 
             const nc = dado * afin;
             
-            // 🌟 Extraer propiedades limpias
-            let efeToPrint = parseSpellText(hechizo.Efecto || hechizo.Efecto_desc || hechizo.efecto_desc || hechizo.efecto);
-            const outcastProp = parseSpellText(hechizo.Overcast || hechizo.overcast);
+            // Extracción directa de variables, como en el script público
+            let efeToPrint = getVal(hechizo.Efecto_desc || hechizo.Efecto || hechizo.efecto || hechizo.Desc || hechizo.desc);
+            const outcastProp = getVal(hechizo.Efecto_overcast || hechizo.Overcast || hechizo.overcast);
 
             let outcome = "";
-            // 🌟 Lógica estricta de Overcast (NC >= Costo * 2)
+
             if (nc < costoU) {
                 outcome = "❌ FALLO";
             } else if (outcastProp && costoU > 0 && nc >= (costoU * 2)) {
