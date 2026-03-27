@@ -3,6 +3,7 @@
 // ============================================================
 
 import { stState } from './panel-stats-state.js';
+import { norm } from '../dev-state.js';
 
 export function initStatsDev(statsGlobal, listaEstados) {
     stState.statsDB = JSON.parse(JSON.stringify(statsGlobal || {}));
@@ -21,9 +22,7 @@ export function getPjStat(pjNombre, campoRaiz, subCampo = null) {
     const p = stState.statsDB[pjKey];
     if (!p) return 0;
 
-    if (subCampo) {
-        return (p[campoRaiz] && p[campoRaiz][subCampo] !== undefined) ? p[campoRaiz][subCampo] : 0;
-    }
+    if (subCampo) return (p[campoRaiz] && p[campoRaiz][subCampo] !== undefined) ? p[campoRaiz][subCampo] : 0;
     return p[campoRaiz] !== undefined ? p[campoRaiz] : 0;
 }
 
@@ -38,6 +37,12 @@ export function modPjStat(pjNombre, campoRaiz, subCampo, variacion, allowNegativ
 
     if (!stState.colaStats[pjKey]) stState.colaStats[pjKey] = {};
     stState.colaStats[pjKey][flatKey] = nuevoValor;
+
+    // 🌟 VÍNCULO MÁGICO: Si sube el Límite Rojo, sube la Vida Roja automáticamente
+    if (campoRaiz === 'baseVidaRojaMax' && variacion !== 0) {
+        const vidaActual = getPjStat(pjNombre, 'vidaRojaActual');
+        stState.colaStats[pjKey]['vidaRojaActual'] = Math.max(0, vidaActual + variacion);
+    }
     
     if (reRender) window.dispatchEvent(new Event('devUIUpdate'));
     else window.dispatchEvent(new Event('devDataChanged'));
@@ -56,12 +61,10 @@ export function setPjStat(pjNombre, campoRaiz, subCampo, valor, reRender = true)
 }
 
 export function darAsistencia(pjNombre) {
-    modPjStat(pjNombre, 'asistencia', null, 1);
-    modPjStat(pjNombre, 'hex', null, 200);
-    modPjStat(pjNombre, 'vex', null, 10);
-    
-    stState.logAsistencia += `<${pjNombre} | Asistencia | +200 HEX | +10 VEX>\n`;
-    window.dispatchEvent(new Event('devUIUpdate'));
+    modPjStat(pjNombre, 'asistencia', null, 1, false, false);
+    modPjStat(pjNombre, 'hex', null, 200, false, false);
+    modPjStat(pjNombre, 'vex', null, 10, false, true);
+    window.dispatchEvent(new Event('devUIUpdate')); // Fuerza el log
 }
 
 export function limpiarLogAsistencia() {
@@ -69,7 +72,6 @@ export function limpiarLogAsistencia() {
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
-// 🌟 FÓRMULA PERFECTA: Suma Todo (Base + Alteración + Hechizos + Buffs)
 function getTotalAfinidad(pj, af) {
     return getPjStat(pj, 'afinidadesBase', af) +
            getPjStat(pj, 'hechizos', af) +
@@ -79,19 +81,15 @@ function getTotalAfinidad(pj, af) {
 
 export function recalcularCorazones(pjNombre) {
     const fis = getTotalAfinidad(pjNombre, 'fisica');
-    const ene = getTotalAfinidad(pjNombre, 'energetica');
-    const esp = getTotalAfinidad(pjNombre, 'espiritual');
-    const man = getTotalAfinidad(pjNombre, 'mando');
-    const psi = getTotalAfinidad(pjNombre, 'psiquica');
-    const osc = getTotalAfinidad(pjNombre, 'oscura');
+    const magiaTotal = getTotalAfinidad(pjNombre, 'energetica') + getTotalAfinidad(pjNombre, 'espiritual') + 
+                       getTotalAfinidad(pjNombre, 'mando') + getTotalAfinidad(pjNombre, 'psiquica') + getTotalAfinidad(pjNombre, 'oscura');
 
     const nuevaRojaMax = 10 + Math.floor(fis / 2);
-    const magiaTotal = ene + esp + man + psi + osc;
     const nuevaAzul = Math.floor(magiaTotal / 4);
 
     setPjStat(pjNombre, 'baseVidaRojaMax', null, nuevaRojaMax, false);
     setPjStat(pjNombre, 'baseVidaAzul', null, nuevaAzul, false);
-    setPjStat(pjNombre, 'vidaRojaActual', null, nuevaRojaMax, true); 
+    setPjStat(pjNombre, 'vidaRojaActual', null, nuevaRojaMax + getPjStat(pjNombre, 'buffs', 'vidaRojaMaxExtra') + getPjStat(pjNombre, 'hechizos', 'vidaRojaMaxExtra'), true); 
 }
 
 export function setVistaStats(vista) {
@@ -104,18 +102,36 @@ export function toggleEstado(pjNombre, estadoId) {
     setPjStat(pjNombre, 'estados', estadoId, !actual);
 }
 
-// Color picker envía HEX, le agregamos transparencia 55 a los fondos
-export function guardarNuevoEstado(id, nombre, tipo, bgHex, borderHex, desc) {
-    const safeId = id.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_');
-    if (!safeId) return alert("ID inválido.");
+// 🌟 GESTIÓN DE ESTADOS GLOBALES
+export function guardarNuevoEstado(nombre, tipo, bgHex, borderHex, desc) {
+    const id = norm(nombre); // Se genera solo
+    if (!id) return alert("El nombre no es válido.");
     
-    stState.colaEstadosConfig[safeId] = {
-        nombre: nombre || safeId,
+    stState.colaEstadosConfig[id] = {
+        nombre: nombre,
         tipo: tipo,
-        color_bg: bgHex + '55', 
+        color_bg: bgHex + '55', // Transparencia automática
         color_border: borderHex,
         descripcion: desc
     };
-    alert(`Estado "${nombre}" agregado a la cola de base de datos. Se subirá al guardar.`);
-    window.dispatchEvent(new Event('devDataChanged')); 
+    alert(`Estado "${nombre}" guardado en la cola.`);
+    window.dispatchEvent(new Event('devUIUpdate')); 
+}
+
+export function cargarEstadoParaEditar(id) {
+    const e = stState.estadosDB.find(x => x.id === id) || stState.colaEstadosConfig[id];
+    if (e) {
+        document.getElementById('ne-nom').value = e.nombre;
+        document.getElementById('ne-tipo').value = e.tipo;
+        document.getElementById('ne-b').value = e.border || e.color_border || '#ff4444';
+        document.getElementById('ne-bg').value = (e.bg || e.color_bg || '#800000').slice(0,7); 
+        document.getElementById('ne-desc').value = e.desc || e.descripcion || '';
+    }
+}
+
+export function borrarEstadoGlobal(id) {
+    if (!confirm("¿Seguro que deseas eliminar este estado PARA SIEMPRE de la base de datos?")) return;
+    stState.colaBorrarEstados.push(id);
+    stState.estadosDB = stState.estadosDB.filter(e => e.id !== id);
+    window.dispatchEvent(new Event('devUIUpdate'));
 }
