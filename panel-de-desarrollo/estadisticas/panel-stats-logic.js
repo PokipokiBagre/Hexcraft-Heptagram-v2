@@ -60,11 +60,25 @@ export function setPjStat(pjNombre, campoRaiz, subCampo, valor, reRender = true)
     else window.dispatchEvent(new Event('devDataChanged'));
 }
 
+// 🌟 LÓGICA CORREGIDA DE ASISTENCIA
 export function darAsistencia(pjNombre) {
-    modPjStat(pjNombre, 'asistencia', null, 1, false, false);
-    modPjStat(pjNombre, 'hex', null, 200, false, false);
-    modPjStat(pjNombre, 'vex', null, 10, false, true);
-    window.dispatchEvent(new Event('devUIUpdate')); // Fuerza el log
+    const asistActual = getPjStat(pjNombre, 'asistencia');
+    let nuevaAsist = asistActual + 1;
+    let hexBono = 300;
+    let logMsg = `<${pjNombre} | Asistencia | +300 HEX`;
+
+    if (nuevaAsist >= 8) {
+        nuevaAsist = 1;
+        hexBono += 1000;
+        logMsg += ` | +1000 HEX (Bono 7 Días)`;
+    }
+    logMsg += `>\n`;
+
+    setPjStat(pjNombre, 'asistencia', null, nuevaAsist, false);
+    modPjStat(pjNombre, 'hex', null, hexBono, false, true); // True al final para re-renderizar
+    
+    stState.logAsistencia += logMsg;
+    window.dispatchEvent(new Event('devUIUpdate'));
 }
 
 export function limpiarLogAsistencia() {
@@ -102,15 +116,14 @@ export function toggleEstado(pjNombre, estadoId) {
     setPjStat(pjNombre, 'estados', estadoId, !actual);
 }
 
-// 🌟 GESTIÓN DE ESTADOS GLOBALES
 export function guardarNuevoEstado(nombre, tipo, bgHex, borderHex, desc) {
-    const id = norm(nombre); // Se genera solo
+    const id = norm(nombre); 
     if (!id) return alert("El nombre no es válido.");
     
     stState.colaEstadosConfig[id] = {
         nombre: nombre,
         tipo: tipo,
-        color_bg: bgHex + '55', // Transparencia automática
+        color_bg: bgHex + '55', 
         color_border: borderHex,
         descripcion: desc
     };
