@@ -43,27 +43,30 @@ function genStatRow(pj, label, campoRaiz, subCampo, color = 'var(--gold)', esAfi
     const bgGlow = modified ? `box-shadow: inset 0 0 15px ${color}44; border-color:${color};` : 'border-color:#333;';
 
     let botonesHTML = '';
+    // FIX: subCampo null en template literal se vuelve string "null" — serializar correctamente
+    const scJS = subCampo === null ? 'null' : `'${subCampo}'`;
+
     if (esAfinidad) {
         botonesHTML = `
             <div style="display:flex; gap:2px;">
-                <button onclick="window.devModStat('${pj}','${campoRaiz}','${subCampo}',-10, true)" style="background:#4a0000; color:#fff; border:none; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.7em;">-10</button>
-                <button onclick="window.devModStat('${pj}','${campoRaiz}','${subCampo}',-5, true)" style="background:#660000; color:#fff; border:none; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.7em;">-5</button>
-                <button onclick="window.devModStat('${pj}','${campoRaiz}','${subCampo}',-1, true)" style="background:#a00000; color:#fff; border:none; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.7em;">-1</button>
+                <button onclick="window.devModStat('${pj}','${campoRaiz}',${scJS},-10, true)" style="background:#4a0000; color:#fff; border:none; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.7em;">-10</button>
+                <button onclick="window.devModStat('${pj}','${campoRaiz}',${scJS},-5, true)" style="background:#660000; color:#fff; border:none; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.7em;">-5</button>
+                <button onclick="window.devModStat('${pj}','${campoRaiz}',${scJS},-1, true)" style="background:#a00000; color:#fff; border:none; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.7em;">-1</button>
             </div>
             <div style="display:flex; gap:2px;">
-                <button onclick="window.devModStat('${pj}','${campoRaiz}','${subCampo}',1, true)" style="background:#006600; color:#fff; border:none; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.7em;">+1</button>
-                <button onclick="window.devModStat('${pj}','${campoRaiz}','${subCampo}',5, true)" style="background:#00a000; color:#fff; border:none; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.7em;">+5</button>
-                <button onclick="window.devModStat('${pj}','${campoRaiz}','${subCampo}',10, true)" style="background:#00cc00; color:#fff; border:none; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.7em;">+10</button>
+                <button onclick="window.devModStat('${pj}','${campoRaiz}',${scJS},1, true)" style="background:#006600; color:#fff; border:none; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.7em;">+1</button>
+                <button onclick="window.devModStat('${pj}','${campoRaiz}',${scJS},5, true)" style="background:#00a000; color:#fff; border:none; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.7em;">+5</button>
+                <button onclick="window.devModStat('${pj}','${campoRaiz}',${scJS},10, true)" style="background:#00cc00; color:#fff; border:none; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.7em;">+10</button>
             </div>`;
     } else {
         botonesHTML = `
             <div style="display:flex; gap:2px;">
-                <button onclick="window.devModStat('${pj}','${campoRaiz}','${subCampo}',-5)" style="background:#660000; color:#fff; border:none; padding:4px 8px; cursor:pointer; font-weight:bold; font-size:0.8em;">-5</button>
-                <button onclick="window.devModStat('${pj}','${campoRaiz}','${subCampo}',-1)" style="background:#a00000; color:#fff; border:none; padding:4px 8px; cursor:pointer; font-weight:bold; font-size:0.8em;">-1</button>
+                <button onclick="window.devModStat('${pj}','${campoRaiz}',${scJS},-5)" style="background:#660000; color:#fff; border:none; padding:4px 8px; cursor:pointer; font-weight:bold; font-size:0.8em;">-5</button>
+                <button onclick="window.devModStat('${pj}','${campoRaiz}',${scJS},-1)" style="background:#a00000; color:#fff; border:none; padding:4px 8px; cursor:pointer; font-weight:bold; font-size:0.8em;">-1</button>
             </div>
             <div style="display:flex; gap:2px;">
-                <button onclick="window.devModStat('${pj}','${campoRaiz}','${subCampo}',1)" style="background:#006600; color:#fff; border:none; padding:4px 8px; cursor:pointer; font-weight:bold; font-size:0.8em;">+1</button>
-                <button onclick="window.devModStat('${pj}','${campoRaiz}','${subCampo}',5)" style="background:#00a000; color:#fff; border:none; padding:4px 8px; cursor:pointer; font-weight:bold; font-size:0.8em;">+5</button>
+                <button onclick="window.devModStat('${pj}','${campoRaiz}',${scJS},1)" style="background:#006600; color:#fff; border:none; padding:4px 8px; cursor:pointer; font-weight:bold; font-size:0.8em;">+1</button>
+                <button onclick="window.devModStat('${pj}','${campoRaiz}',${scJS},5)" style="background:#00a000; color:#fff; border:none; padding:4px 8px; cursor:pointer; font-weight:bold; font-size:0.8em;">+5</button>
             </div>`;
     }
 
