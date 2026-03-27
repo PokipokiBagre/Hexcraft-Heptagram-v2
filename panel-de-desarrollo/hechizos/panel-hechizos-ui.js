@@ -44,12 +44,14 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     const costo = hechizo.Hex || hechizo.costo || hechizo.Costo || 0;
     const efecto = hechizo.Efecto || hechizo.efecto_desc || hechizo.efecto || '-';
     
-    const dbConocido = hechizo.es_conocido === true || hechizo.es_conocido === "TRUE" || hechizo.es_conocido === 1;
+    // Lectura correcta de si es público (asume true salvo que diga explícitamente false)
+    const dbConocido = hechizo.es_conocido !== false && hechizo.es_conocido !== "FALSE" && hechizo.es_conocido !== 0 && hechizo.es_conocido !== "0";
     const isKnown = hzState.colaVisibilidad[hId] !== undefined ? hzState.colaVisibilidad[hId] : dbConocido;
 
+    // BOTÓN DEASIGNAR EN ROJO
     const btnAsignar = loTiene 
-        ? `<button onclick="window.devAsignarHz('${pjNombre}', '${hId}')" style="flex:1; background:#4a0000; color:#fff; border:1px solid #ff4444; border-radius:4px; padding:6px; cursor:pointer; font-weight:bold; font-family:'Cinzel';">❌ QUITAR</button>`
-        : `<button onclick="window.devAsignarHz('${pjNombre}', '${hId}')" style="flex:1; background:#004a00; color:#fff; border:1px solid #00ff00; border-radius:4px; padding:6px; cursor:pointer; font-weight:bold; font-family:'Cinzel';">➕ ASIGNAR</button>`;
+        ? `<button onclick="window.devAsignarHz('${pjNombre.replace(/'/g, "\\'")}', '${hId}')" style="width:100%; background:#4a0000; color:#ff4444; border:1px solid #ff4444; border-radius:4px; padding:6px; cursor:pointer; font-weight:bold; font-family:'Cinzel';">❌ DEASIGNAR</button>`
+        : `<button onclick="window.devAsignarHz('${pjNombre.replace(/'/g, "\\'")}', '${hId}')" style="width:100%; background:#004a00; color:#00ff00; border:1px solid #00ff00; border-radius:4px; padding:6px; cursor:pointer; font-weight:bold; font-family:'Cinzel';">➕ ENSEÑAR</button>`;
 
     const btnVisibilidad = `<button onclick="window.devToggleVisibilidadHz('${hId}')" style="background:#111; color:#aaa; border:1px solid #555; border-radius:4px; padding:6px; cursor:pointer; font-size:0.8em; white-space:nowrap;">${isKnown ? '👁️ Ocultar' : '🙈 Hacer Público'}</button>`;
 
@@ -65,9 +67,7 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
         <div style="color:#aaa; font-size:0.85em; font-style:italic; padding:5px; background:#111; border-left:2px solid var(--cyan-magic);">
             ${efecto}
         </div>
-        <div style="display:flex; gap:5px;">
-            ${btnAsignar}
-        </div>
+        ${btnAsignar}
     </div>`;
 }
 
@@ -83,13 +83,13 @@ export function renderColumnaHechizos(pjSeleccionado) {
     const v = hzState.vistaActiva;
     const pjKey = norm(pjSeleccionado);
     
-    // Lista de IDs en tiempo real (DB + Staging)
+    // Lista de IDs normalizada
     const baseIds = hzState.inventariosDB[pjKey] || [];
     const cola = hzState.colaAsignaciones[pjKey] || {};
-    const hechizosDelPj = new Set(baseIds);
+    const hechizosDelPj = new Set(baseIds.map(norm));
     Object.entries(cola).forEach(([id, agregar]) => {
-        if (agregar) hechizosDelPj.add(id);
-        else hechizosDelPj.delete(id);
+        if (agregar) hechizosDelPj.add(norm(id));
+        else hechizosDelPj.delete(norm(id));
     });
 
     let html = `
@@ -100,10 +100,9 @@ export function renderColumnaHechizos(pjSeleccionado) {
     `;
 
     if (v === 'castear') {
-        // FORMULARIO DE CASTEO MASIVO (Igual que en inventario-ui.js)
         const dMode = hzState.casteoManual.datalistModo;
         const opcionesDatalist = dMode === 'local' 
-            ? hzState.catalogoDB.filter(h => hechizosDelPj.has(h.ID || h.id))
+            ? hzState.catalogoDB.filter(h => hechizosDelPj.has(norm(h.ID || h.id)))
             : hzState.catalogoDB;
 
         let dlHtml = `<datalist id="dev-dl-hechizos">` + 
@@ -124,18 +123,23 @@ export function renderColumnaHechizos(pjSeleccionado) {
         </div>
 
         <div style="display:flex; gap:5px; margin-bottom:15px;">
-            <button onclick="window.devSetModoDatalist('local')" style="flex:1; padding:6px; border-radius:4px; background:${dMode==='local'?'var(--cyan-magic)':'#333'}; color:${dMode==='local'?'#000':'#aaa'}; font-weight:bold; cursor:pointer;">Autocompletar: Grimorio</button>
-            <button onclick="window.devSetModoDatalist('global')" style="flex:1; padding:6px; border-radius:4px; background:${dMode==='global'?'#9966ff':'#333'}; color:${dMode==='global'?'#fff':'#aaa'}; font-weight:bold; cursor:pointer;">Autocompletar: Global</button>
+            <button onclick="window.devSetModoDatalist('local')" style="flex:1; padding:6px; border-radius:4px; background:${dMode==='local'?'var(--cyan-magic)':'#333'}; color:${dMode==='local'?'#000':'#aaa'}; font-weight:bold; cursor:pointer;">Auto: Grimorio</button>
+            <button onclick="window.devSetModoDatalist('global')" style="flex:1; padding:6px; border-radius:4px; background:${dMode==='global'?'#9966ff':'#333'}; color:${dMode==='global'?'#fff':'#aaa'}; font-weight:bold; cursor:pointer;">Auto: Global</button>
         </div>
 
         <div style="overflow-y:auto; padding-right:5px; max-height: 450px;">`;
 
+        // 🌟 LAS 4 CASILLAS DE TU SISTEMA 🌟
         for (let i = 0; i < hzState.casteoManual.numFilas; i++) {
             const fila = hzState.casteoManual.filas[i];
+            const escapedPj = pjSeleccionado.replace(/'/g, "\\'");
             html += `
-            <div style="display:flex; gap:5px; margin-bottom:5px;">
-                <input type="text" list="dev-dl-hechizos" placeholder="Nombre del Hechizo..." value="${fila.nombre}" oninput="window.devModFilaCast(${i}, 'nombre', this.value)" style="flex:1; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; outline:none;">
-                <input type="number" value="${fila.cant}" min="1" oninput="window.devModFilaCast(${i}, 'cant', this.value)" style="width:60px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; text-align:center; outline:none;">
+            <div style="display:flex; gap:5px; margin-bottom:5px; align-items:center;">
+                <button onclick="const d=Math.floor(Math.random()*20)+1; document.getElementById('dev-dado-${i}').value=d; window.devModFilaCast(${i}, 'dado', d, '${escapedPj}')" style="background:#333; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; cursor:pointer;" title="Aleatorio">🎲</button>
+                <input type="number" id="dev-dado-${i}" placeholder="Dado" value="${fila.dado}" oninput="window.devModFilaCast(${i}, 'dado', this.value, '${escapedPj}')" style="width:50px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; text-align:center; outline:none;" title="NC Base (Dado)">
+                <input type="text" list="dev-dl-hechizos" placeholder="Nombre Hechizo..." value="${fila.nombre}" oninput="window.devModFilaCast(${i}, 'nombre', this.value, '${escapedPj}')" style="flex:1; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; outline:none;">
+                <input type="number" placeholder="Afinidad" value="${fila.afinidad}" oninput="window.devModFilaCast(${i}, 'afinidad', this.value, '${escapedPj}')" style="width:65px; background:#111; color:var(--gold); border:1px solid var(--gold); border-radius:4px; padding:8px; text-align:center; outline:none;" title="Afinidad Total">
+                <input type="number" placeholder="Cant" value="${fila.cant}" min=\"1\" oninput="window.devModFilaCast(${i}, 'cant', this.value, '${escapedPj}')" style="width:50px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; text-align:center; outline:none;" title="Cantidad">
             </div>`;
         }
 
@@ -150,7 +154,7 @@ export function renderColumnaHechizos(pjSeleccionado) {
         <div style="background:#001a00; border:1px solid #00ff00; border-radius:6px; padding:10px; margin-bottom:15px; text-align:center; font-size:0.85em;">
             <label style="color:#ddd; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:8px;">
                 <input type="checkbox" onchange="window.devToggleConfigHz('cobrarAlAsignar', this.checked)" ${hzState.cobrarAlAsignar ? 'checked' : ''}> 
-                <span style="font-weight:bold; color:#00ff00;">Cobrar HEX automáticamente al Enseñar un Hechizo</span>
+                <span style="font-weight:bold; color:#00ff00;">Cobrar HEX automáticamente al Enseñar</span>
             </label>
         </div>
 
@@ -167,8 +171,8 @@ export function renderColumnaHechizos(pjSeleccionado) {
 
         html += `<div style="overflow-y:auto; padding-right:5px; max-height: 550px;">`;
         const top = mostrar.slice(0, 50); 
-        top.forEach(h => { html += generarTarjetaAsignar(h, pjSeleccionado, hechizosDelPj.has(h.ID || h.id)); });
-        if (mostrar.length > 50) html += `<div style="text-align:center; color:#666; font-size:0.8em; padding:5px;">Mostrando los primeros 50 de ${mostrar.length} resultados. Usa el buscador para afinar.</div>`;
+        top.forEach(h => { html += generarTarjetaAsignar(h, pjSeleccionado, hechizosDelPj.has(norm(h.ID || h.id))); });
+        if (mostrar.length > 50) html += `<div style="text-align:center; color:#666; font-size:0.8em; padding:5px;">Mostrando los primeros 50 resultados.</div>`;
         html += `</div>`;
     }
 
