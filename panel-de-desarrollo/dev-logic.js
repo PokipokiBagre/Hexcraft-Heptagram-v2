@@ -9,7 +9,7 @@ import { objState } from './objetos/panel-objetos-state.js';
 import { stState } from './estadisticas/panel-stats-state.js';
 import { hzState } from './hechizos/panel-hechizos-state.js'; 
 import { getPjStat, calcularVidaRojaMaxTotal, calcularVidaAzulTotal, calcularGuardaDoradaTotal, calcularDanoRojoTotal, calcularDanoAzulTotal, calcularElimDoradaTotal } from './estadisticas/panel-stats-logic.js';
-import { getCantidadActual } from './objetos/panel-objetos-logic.js'; // 🌟 Import necesario para guardar objetos
+import { getCantidadActual } from './objetos/panel-objetos-logic.js'; 
 
 export function revisarCambiosPendientes() {
     const btnSync = document.getElementById('btn-sync-global');
@@ -18,7 +18,7 @@ export function revisarCambiosPendientes() {
     let hayCambios = false;
 
     if (Object.keys(objState.colaInventario).length > 0) hayCambios = true;
-    if (Object.keys(objState.colaEquipados).length > 0) hayCambios = true; // 🌟 NUEVO
+    if (Object.keys(objState.colaEquipados).length > 0) hayCambios = true; // 🌟 
     if (Object.values(objState.colaNuevosObjetos).some(o => o.nombre.trim() !== '')) hayCambios = true;
     if (Object.keys(objState.colaEdicionObjetos).length > 0) hayCambios = true;
     if (Object.keys(stState.colaStats).length > 0) hayCambios = true;
@@ -34,7 +34,6 @@ export function revisarCambiosPendientes() {
 export function actualizarLogGlobal() {
     const logPorPJ = {};
 
-    // --- 1. Objetos ---
     for (const pjKey in objState.colaInventario) {
         const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
         for (const objNombre in objState.colaInventario[pjKey]) {
@@ -49,7 +48,7 @@ export function actualizarLogGlobal() {
         }
     }
 
-    // 🌟 NUEVO: Log de Equipación
+    // 🌟 LOG DE EQUIPACIÓN
     for (const pjKey in objState.colaEquipados) {
         const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
         for (const objNombre in objState.colaEquipados[pjKey]) {
@@ -79,7 +78,6 @@ export function actualizarLogGlobal() {
         }
     }
 
-    // --- 2. Estadísticas ---
     const nomLegibles = {
         'hex':              'HEX',
         'asistencia':       'Asistencia',
@@ -210,7 +208,6 @@ export function actualizarLogGlobal() {
         }
     }
 
-    // --- 3. Hechizos (Integrado bajo el nombre de cada PJ) ---
     if (hzState.logCasteosSession && hzState.logCasteosSession.length > 0) {
         hzState.logCasteosSession.forEach(item => {
             const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(item.pj))?.nombre || item.pj;
@@ -219,7 +216,6 @@ export function actualizarLogGlobal() {
         });
     }
 
-    // --- 4. Ensamblaje Final del Log ---
     let logText = "";
     for (const pj in logPorPJ) {
         if (logPorPJ[pj].length > 0) {
@@ -246,7 +242,6 @@ export async function ejecutarGuardadoGlobal() {
         const estadosUpserts = [];
         const hzUpserts = [];
 
-        // --- OBJETOS ---
         const nuevosArr = Object.values(objState.colaNuevosObjetos).filter(o => o.nombre.trim() !== '');
         for (const obj of nuevosArr) {
             catalogUpserts.push({ nombre: obj.nombre, tipo: obj.tipo, material: obj.mat, rareza: obj.rar, efecto: obj.eff });
@@ -262,7 +257,7 @@ export async function ejecutarGuardadoGlobal() {
                 Object.keys(objState.inventariosDB).forEach(pjKey => {
                     if (objState.inventariosDB[pjKey][oldName] > 0) {
                         const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
-                        const wasEqp = objState.equipadosDB[pjKey]?.[oldName] || false; // Mantenemos el estado de equipación
+                        const wasEqp = objState.equipadosDB[pjKey]?.[oldName] || false; 
                         invUpserts.push({ personaje_nombre: realPj, objeto_nombre: newName, cantidad: objState.inventariosDB[pjKey][oldName], equipado: wasEqp });
                         deletePromises.push(supabase.from('inventario_objetos').delete().eq('personaje_nombre', realPj).eq('objeto_nombre', oldName));
                     }
@@ -271,7 +266,7 @@ export async function ejecutarGuardadoGlobal() {
             }
         }
 
-        // 🌟 NUEVO: Consolidamos las colas de Cantidad y Equipación para guardar en bloque
+        // 🌟 ACÁ SE GUARDAN LAS EQUIPACIONES JUNTAS CON LAS CANTIDADES
         const pjsInvolucradosObj = new Set([...Object.keys(objState.colaInventario), ...Object.keys(objState.colaEquipados)]);
         
         for (const pjKey of pjsInvolucradosObj) {
@@ -293,7 +288,6 @@ export async function ejecutarGuardadoGlobal() {
             }
         }
 
-        // --- ESTADÍSTICAS ---
         for (const pjKey in stState.colaStats) {
             const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
             const cambios = stState.colaStats[pjKey];
@@ -361,7 +355,6 @@ export async function ejecutarGuardadoGlobal() {
             deletePromises.push(supabase.from('estados_config').delete().in('id', stState.colaBorrarEstados));
         }
 
-        // --- HECHIZOS (INVENTARIO) ---
         for (const pjKey in hzState.colaAsignaciones) {
             const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
             for (const hzId in hzState.colaAsignaciones[pjKey]) {
@@ -371,13 +364,11 @@ export async function ejecutarGuardadoGlobal() {
             }
         }
         
-        // --- HECHIZOS (VISIBILIDAD GLOBAL) ---
         const visPromises = [];
         for (const hzId in hzState.colaVisibilidad) {
             visPromises.push(supabase.from('hechizos_nodos').update({ es_conocido: hzState.colaVisibilidad[hzId] }).eq('hechizo_id', hzId));
         }
 
-        // 🔥 LANZAMIENTO A SUPABASE 🔥
         if (deletePromises.length > 0) await Promise.all(deletePromises);
         if (visPromises.length > 0) await Promise.all(visPromises); 
 
@@ -402,8 +393,10 @@ export async function ejecutarGuardadoGlobal() {
             if (errHz) throw new Error("Hechizos: " + errHz.message);
         }
 
+        // LIMPIEZA DE CACHÉ GENERAL
         localStorage.removeItem('hex_obj_v4');
         localStorage.removeItem('hex_stats_v2');
+        localStorage.removeItem('hex_hechizos_cache');
 
         btnSync.innerText = "✅ CAMBIOS APLICADOS";
         btnSync.style.background = "#004a00";
