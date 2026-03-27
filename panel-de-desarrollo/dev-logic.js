@@ -305,12 +305,13 @@ export async function ejecutarGuardadoGlobal() {
         }
 
         // --- HECHIZOS (INVENTARIO) ---
+        // 🔥 CORRECCIÓN: Tabla hechizos_inventario y columna hechizo_nombre
         for (const pjKey in hzState.colaAsignaciones) {
             const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
             for (const hzId in hzState.colaAsignaciones[pjKey]) {
                 const agregar = hzState.colaAsignaciones[pjKey][hzId];
-                if (agregar) hzUpserts.push({ personaje_nombre: realPj, hechizo_id: hzId });
-                else deletePromises.push(supabase.from('inventario_hechizos').delete().eq('personaje_nombre', realPj).eq('hechizo_id', hzId)); 
+                if (agregar) hzUpserts.push({ personaje_nombre: realPj, hechizo_nombre: hzId });
+                else deletePromises.push(supabase.from('hechizos_inventario').delete().eq('personaje_nombre', realPj).eq('hechizo_nombre', hzId)); 
             }
         }
         
@@ -341,7 +342,8 @@ export async function ejecutarGuardadoGlobal() {
             if (errEst) throw new Error("Estados: " + errEst.message);
         }
         if (hzUpserts.length > 0) {
-            const { error: errHz } = await supabase.from('inventario_hechizos').upsert(hzUpserts, { onConflict: 'personaje_nombre,hechizo_id' }); 
+            // 🔥 CORRECCIÓN: Configuración onConflict ajustada a las columnas de la BD antigua
+            const { error: errHz } = await supabase.from('hechizos_inventario').upsert(hzUpserts, { onConflict: 'personaje_nombre,hechizo_nombre' }); 
             if (errHz) throw new Error("Hechizos: " + errHz.message);
         }
 
