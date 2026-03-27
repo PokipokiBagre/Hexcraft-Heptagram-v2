@@ -3,7 +3,7 @@
 // ============================================================
 
 import { db } from '../hex-db.js';
-import { supabase } from '../hex-auth.js'; // 🌟 Importación directa a Supabase
+import { supabase } from '../hex-auth.js'; 
 import { devState } from './dev-state.js';
 import { objState } from './objetos/panel-objetos-state.js';
 // (Aquí importaremos en el futuro los states de Stats y Hechizos)
@@ -15,6 +15,7 @@ export function revisarCambiosPendientes() {
 
     let hayCambios = false;
 
+    // Revisar colas de Objetos
     if (Object.keys(objState.colaInventario).length > 0) hayCambios = true;
     if (Object.values(objState.colaNuevosObjetos).some(o => o.nombre.trim() !== '')) hayCambios = true;
     if (Object.keys(objState.colaEdicionObjetos).length > 0) hayCambios = true;
@@ -93,6 +94,7 @@ export async function ejecutarGuardadoGlobal() {
         for (const obj of nuevosArr) {
             catalogUpserts.push({ nombre: obj.nombre, tipo: obj.tipo, material: obj.mat, rareza: obj.rar, efecto: obj.eff });
             if (obj.cant > 0) {
+                // Aseguramos que se envíe el nombre en mayúsculas exacto del personaje seleccionado
                 invUpserts.push({ personaje_nombre: devState.pjSeleccionado, objeto_nombre: obj.nombre, cantidad: obj.cant });
             }
         }
@@ -102,33 +104,32 @@ export async function ejecutarGuardadoGlobal() {
             const dataEdit = objState.colaEdicionObjetos[oldName];
             const newName = dataEdit.nombre;
 
-            // Siempre actualizamos/creamos el objeto en el catálogo con sus datos nuevos
             catalogUpserts.push({ nombre: newName, tipo: dataEdit.tipo, material: dataEdit.mat, rareza: dataEdit.rar, efecto: dataEdit.eff });
 
-            // ⚠️ MIGRACIÓN: Si el nombre cambió, transferir los inventarios y borrar el objeto viejo
             if (oldName !== newName) {
-                Object.keys(objState.inventariosDB).forEach(pj => {
-                    if (objState.inventariosDB[pj][oldName] > 0) {
-                        // Pasar la cantidad al nombre nuevo
-                        invUpserts.push({ personaje_nombre: pj, objeto_nombre: newName, cantidad: objState.inventariosDB[pj][oldName] });
-                        // Borrar el registro del nombre viejo
-                        deletePromises.push(supabase.from('inventario_objetos').delete().eq('personaje_nombre', pj).eq('objeto_nombre', oldName));
+                Object.keys(objState.inventariosDB).forEach(pjKey => {
+                    if (objState.inventariosDB[pjKey][oldName] > 0) {
+                        // Recuperamos el nombre oficial del personaje para evitar bugs de case sensitivity
+                        const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey)?.nombre || pjKey;
+                        invUpserts.push({ personaje_nombre: realPj, objeto_nombre: newName, cantidad: objState.inventariosDB[pjKey][oldName] });
+                        deletePromises.push(supabase.from('inventario_objetos').delete().eq('personaje_nombre', realPj).eq('objeto_nombre', oldName));
                     }
                 });
-                // Borrar el objeto viejo del catálogo
                 deletePromises.push(supabase.from('objetos').delete().eq('nombre', oldName));
             }
         }
 
         // --- 3. PROCESAR INVENTARIOS (Sumas y Restas desde la interfaz Global o Inv) ---
-        for (const pj in objState.colaInventario) {
-            for (const obj in objState.colaInventario[pj]) {
-                const cantFinal = objState.colaInventario[pj][obj];
+        for (const pjKey in objState.colaInventario) {
+            // 🔥 SOLUCIÓN AL BUG DE MAYÚSCULAS: Extraemos el nombre real exacto
+            const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey)?.nombre || pjKey;
+            
+            for (const obj in objState.colaInventario[pjKey]) {
+                const cantFinal = objState.colaInventario[pjKey][obj];
                 if (cantFinal > 0) {
-                    invUpserts.push({ personaje_nombre: pj, objeto_nombre: obj, cantidad: cantFinal });
+                    invUpserts.push({ personaje_nombre: realPj, objeto_nombre: obj, cantidad: cantFinal });
                 } else {
-                    // Si la cantidad bajó a 0, borramos la fila para no dejar basura en la BD
-                    deletePromises.push(supabase.from('inventario_objetos').delete().eq('personaje_nombre', pj).eq('objeto_nombre', obj));
+                    deletePromises.push(supabase.from('inventario_objetos').delete().eq('personaje_nombre', realPj).eq('objeto_nombre', obj));
                 }
             }
         }
@@ -137,22 +138,24 @@ export async function ejecutarGuardadoGlobal() {
         // 🔥 LANZAMIENTO MASIVO A SUPABASE 🔥
         // =========================================================
 
-        // A. Ejecutar los borrados (vaciados de inventario o cambios de nombre)
         if (deletePromises.length > 0) await Promise.all(deletePromises);
 
-        // B. Actualizar el Catálogo de Objetos
+        // El .select() fuerza a Supabase a confirmar si el RLS permitió la acción
         if (catalogUpserts.length > 0) {
-            const { error: errCat } = await supabase.from('objetos').upsert(catalogUpserts, { onConflict: 'nombre' });
+            const { error: errCat } = await supabase.from('objetos').upsert(catalogUpserts, { onConflict: 'nombre' }).select();
             if (errCat) throw new Error("Error en Catálogo: " + errCat.message);
         }
 
-        // C. Actualizar Inventarios
         if (invUpserts.length > 0) {
-            const { error: errInv } = await supabase.from('inventario_objetos').upsert(invUpserts, { onConflict: 'personaje_nombre,objeto_nombre' });
+            const { error: errInv } = await supabase.from('inventario_objetos').upsert(invUpserts, { onConflict: 'personaje_nombre,objeto_nombre' }).select();
             if (errInv) throw new Error("Error en Inventarios: " + errInv.message);
         }
 
         // --- PROCESAR STATS Y HECHIZOS (AQUÍ IRÁN LUEGO) ---
+
+        // 🔥 DESTRUCTOR DE CACHÉS: Obliga al sistema a descargar la BD fresca
+        localStorage.removeItem('hex_obj_v4');
+        localStorage.removeItem('hex_stats_v2');
 
         // Limpiar memoria
         objState.colaInventario = {}; 
