@@ -11,7 +11,7 @@ export function initHechizosDev(catalogo, inventarios_pj) {
     hzState.inventariosDB = {};
     (inventarios_pj || []).forEach(item => {
         const pj = norm(item.Personaje || item.personaje_nombre || ""); 
-        const hzId = norm(item.Hechizo || item.hechizo_id || item.ID || item.id); // Normalizado para match perfecto
+        const hzId = norm(item.Hechizo || item.hechizo_id || item.ID || item.id);
         
         if (!pj || !hzId) return;
         if (!hzState.inventariosDB[pj]) hzState.inventariosDB[pj] = [];
@@ -19,7 +19,6 @@ export function initHechizosDev(catalogo, inventarios_pj) {
     });
 }
 
-// ── UTILIDAD: SACAR AFINIDAD TOTAL DEL PJ ──
 function obtenerAfinidadTotal(pjNombre, afNombreRaw) {
     const af = norm(afNombreRaw || '');
     const mapa = {
@@ -44,7 +43,6 @@ export function setNumFilasCast(num) {
 export function modFilaCast(index, campo, valor, pjNombre) {
     hzState.casteoManual.filas[index][campo] = valor;
     
-    // Auto-completado de Afinidad al escribir el hechizo
     if (campo === 'nombre' && pjNombre) {
         const hechizo = hzState.catalogoDB.find(h => 
             norm(h.Nombre || h.nombre || '') === norm(valor) || 
@@ -57,9 +55,18 @@ export function modFilaCast(index, campo, valor, pjNombre) {
     }
 }
 
-export function setModoDatalist(modo) {
-    hzState.casteoManual.datalistModo = modo;
-    window.dispatchEvent(new Event('devUIUpdate'));
+export function setModoDatalist(modo) { hzState.casteoManual.datalistModo = modo; window.dispatchEvent(new Event('devUIUpdate')); }
+
+export function copiarPrimerHechizo() {
+    const fila = hzState.casteoManual.filas[0];
+    if (!fila.nombre) return alert("La primera fila está vacía.");
+    navigator.clipboard.writeText(`Casteando: ${fila.nombre}`).then(() => alert("Nombre del Hechizo copiado."));
+}
+
+export function copiarPrimerDado() {
+    const fila = hzState.casteoManual.filas[0];
+    if (!fila.nombre) return alert("La primera fila está vacía.");
+    navigator.clipboard.writeText(`!r 1d20 + ${fila.afinidad || 0} // ${fila.nombre}`).then(() => alert("Comando de Dado copiado."));
 }
 
 export function calcularConjurosMasivos(pjNombre) {
@@ -85,16 +92,16 @@ export function calcularConjurosMasivos(pjNombre) {
             totalCost += (costoU * cant);
             validSpells += cant;
 
-            // MATEMÁTICA EXACTA: NC = Dado x Afinidad
             const nc = dado * afin;
             let outcome = "";
             let efeToPrint = hechizo.Efecto || hechizo.efecto_desc || hechizo.efecto || '';
+            const outcastProp = hechizo.Overcast || hechizo.overcast || hechizo.Overcast_desc || '';
 
             if (nc < costoU) {
                 outcome = "❌ FALLO";
-            } else if (hechizo.Overcast && nc >= (costoU * 2)) {
+            } else if (outcastProp && nc >= (costoU * 2)) {
                 outcome = "🌟 OVERCAST";
-                efeToPrint = hechizo.Overcast; // Imprime el efecto de overcast si lo tiene
+                efeToPrint = outcastProp; 
             } else {
                 outcome = "✅ ÉXITO";
             }
@@ -131,7 +138,6 @@ export function calcularConjurosMasivos(pjNombre) {
     let mainLog = `[${pjNombre}] Lanza ${validSpells} conjuros simultáneos ${stringCobro}\n` + logsArr.join("\n");
     hzState.logCasteosSession.push(mainLog);
 
-    // Limpiar formulario
     hzState.casteoManual.filas = Array.from({ length: 50 }, () => ({ dado: '', nombre: '', afinidad: '', cant: 1 }));
     window.dispatchEvent(new Event('devUIUpdate'));
 }
@@ -142,7 +148,6 @@ export function asignarHechizo(pjNombre, hechizoId) {
     const idNorm = norm(hechizoId);
     if (!hzState.colaAsignaciones[pjKey]) hzState.colaAsignaciones[pjKey] = {};
     
-    // Verificamos con el array normalizado
     const yaLoTiene = hzState.colaAsignaciones[pjKey][idNorm] ?? (hzState.inventariosDB[pjKey] || []).includes(idNorm);
     const accionDar = !yaLoTiene;
     
@@ -168,14 +173,10 @@ export function toggleVisibilidad(hechizoId) {
     const dbHech = hzState.catalogoDB.find(h => (h.ID || h.id) === hechizoId);
     if (!dbHech) return;
 
-    // Si no dice explícitamente "falso", es público.
     const isKnownDb = dbHech.es_conocido !== false && dbHech.es_conocido !== "FALSE" && dbHech.es_conocido !== 0 && dbHech.es_conocido !== "0";
 
-    if (currentQ !== undefined) {
-        delete hzState.colaVisibilidad[hechizoId]; 
-    } else {
-        hzState.colaVisibilidad[hechizoId] = !isKnownDb; 
-    }
+    if (currentQ !== undefined) delete hzState.colaVisibilidad[hechizoId]; 
+    else hzState.colaVisibilidad[hechizoId] = !isKnownDb; 
     
     window.dispatchEvent(new Event('devDataChanged')); 
     window.dispatchEvent(new Event('devUIUpdate'));
