@@ -45,13 +45,24 @@ function generarTarjetaObjeto(objNombre, pjSeleccionado, colorBordeDestacado = '
     const modificado = (objState.colaInventario[pjSeleccionado.toLowerCase()] && objState.colaInventario[pjSeleccionado.toLowerCase()][objNombre] !== undefined);
     const borderGlow = modificado ? `border-color:${colorBordeDestacado}; box-shadow:0 0 8px ${colorBordeDestacado}55;` : 'border-color:#333;';
 
+    // Recuperamos el efecto de la Base de Datos o de la cola de edición si lo estás modificando
+    const dbObj = objState.catalogoDB.find(o => o.nombre === objNombre);
+    const editObj = objState.colaEdicionObjetos[objNombre];
+    const efecto = editObj ? editObj.eff : (dbObj ? dbObj.efecto : '');
+    const efectoStr = efecto ? efecto.replace(/"/g, '&quot;') : 'Sin efecto detallado';
+
     return `
     <div style="background:#050505; border:1px solid; ${borderGlow} border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:8px;">
         <div style="display:flex; align-items:center; gap:10px;">
             <img src="${imgPath}" onerror="${imgError}" style="width:40px; height:40px; border-radius:4px; border:1px solid #444; object-fit:cover;">
             <div style="flex:1; line-height:1.2; overflow:hidden;">
                 <div style="color:#eee; font-weight:bold; font-size:0.95em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${objNombre}">${objNombre}</div>
-                <div style="color:var(--gold); font-size:0.8em; font-family:'Cinzel';">Stock: ${cant}</div>
+                <div style="display:flex; gap:10px; align-items:baseline; margin-top:2px;">
+                    <div style="color:var(--gold); font-size:0.8em; font-family:'Cinzel';">Stock: ${cant}</div>
+                </div>
+                <div style="color:#888; font-size:0.75em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;" title="${efectoStr}">
+                    ${efecto || '<i style="opacity:0.5">Sin efecto detallado</i>'}
+                </div>
             </div>
         </div>
         <div style="display:flex; justify-content:space-between; gap:2px;">
