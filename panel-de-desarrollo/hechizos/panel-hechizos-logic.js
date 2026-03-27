@@ -68,13 +68,29 @@ export function setModoDatalist(modo) { hzState.casteoManual.datalistModo = modo
 export function copiarPrimerHechizo() {
     const fila = hzState.casteoManual.filas[0];
     if (!fila.nombre) return alert("La primera fila está vacía.");
-    navigator.clipboard.writeText(`Casteando: ${fila.nombre}`).then(() => alert("Nombre del Hechizo copiado."));
+    const num = hzState.casteoManual.numFilas;
+    for (let i = 1; i < num; i++) {
+        hzState.casteoManual.filas[i].nombre = fila.nombre;
+        hzState.casteoManual.filas[i].afinidad = fila.afinidad;
+        const elNombre = document.getElementById(`dev-spell-${i}`);
+        const elAf = document.getElementById(`dev-afinidad-${i}`);
+        if (elNombre) elNombre.value = fila.nombre;
+        if (elAf) elAf.value = fila.afinidad;
+    }
+    navigator.clipboard.writeText(`Casteando: ${fila.nombre}`).then(() => alert(`"${fila.nombre}" copiado a todas las filas.`));
 }
 
 export function copiarPrimerDado() {
     const fila = hzState.casteoManual.filas[0];
-    if (!fila.nombre) return alert("La primera fila está vacía.");
-    navigator.clipboard.writeText(`!r 1d20 + ${fila.afinidad || 0} // ${fila.nombre}`).then(() => alert("Comando de Dado copiado."));
+    if (!fila.dado && fila.dado !== 0) return alert("El primer dado está vacío.");
+    const dado = fila.dado;
+    const num = hzState.casteoManual.numFilas;
+    for (let i = 1; i < num; i++) {
+        hzState.casteoManual.filas[i].dado = dado;
+        const el = document.getElementById(`dev-dado-${i}`);
+        if (el) el.value = dado;
+    }
+    navigator.clipboard.writeText(`!r 1d20 + ${fila.afinidad || 0} // ${fila.nombre || '?'}`).then(() => alert(`Dado ${dado} copiado a todas las filas.`));
 }
 
 export function calcularConjurosMasivos(pjNombre) {
