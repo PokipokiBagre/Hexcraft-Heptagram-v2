@@ -8,8 +8,8 @@ import { devState, norm } from './dev-state.js';
 import { objState } from './objetos/panel-objetos-state.js';
 import { stState } from './estadisticas/panel-stats-state.js';
 import { hzState } from './hechizos/panel-hechizos-state.js'; 
-// 🔥 IMPORTAMOS TODAS LAS FUNCIONES MATEMÁTICAS DE ESTADÍSTICAS
 import { getPjStat, calcularVidaRojaMaxTotal, calcularVidaAzulTotal, calcularGuardaDoradaTotal, calcularDanoRojoTotal, calcularDanoAzulTotal, calcularElimDoradaTotal } from './estadisticas/panel-stats-logic.js';
+import { getCantidadActual } from './objetos/panel-objetos-logic.js'; // 🌟 Import necesario para guardar objetos
 
 export function revisarCambiosPendientes() {
     const btnSync = document.getElementById('btn-sync-global');
@@ -18,6 +18,7 @@ export function revisarCambiosPendientes() {
     let hayCambios = false;
 
     if (Object.keys(objState.colaInventario).length > 0) hayCambios = true;
+    if (Object.keys(objState.colaEquipados).length > 0) hayCambios = true; // 🌟 NUEVO
     if (Object.values(objState.colaNuevosObjetos).some(o => o.nombre.trim() !== '')) hayCambios = true;
     if (Object.keys(objState.colaEdicionObjetos).length > 0) hayCambios = true;
     if (Object.keys(stState.colaStats).length > 0) hayCambios = true;
@@ -44,6 +45,27 @@ export function actualizarLogGlobal() {
                 if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
                 if (delta > 0) logPorPJ[realPj].push(`Obj Obt. ${objNombre} x${delta}`);
                 else logPorPJ[realPj].push(`Obj Prd. ${objNombre} x${Math.abs(delta)}`);
+            }
+        }
+    }
+
+    // 🌟 NUEVO: Log de Equipación
+    for (const pjKey in objState.colaEquipados) {
+        const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
+        for (const objNombre in objState.colaEquipados[pjKey]) {
+            const isEqp = objState.colaEquipados[pjKey][objNombre];
+            const dbEqp = objState.equipadosDB[pjKey]?.[objNombre] || false;
+            
+            if (isEqp !== dbEqp) {
+                if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
+                if (isEqp) {
+                    const dbObj = objState.catalogoDB.find(o => o.nombre === objNombre);
+                    const editObj = objState.colaEdicionObjetos[objNombre];
+                    const efecto = (editObj ? editObj.eff : (dbObj ? dbObj.efecto : '')) || 'Sin efecto';
+                    logPorPJ[realPj].push(`Obj. Eqp. | ${objNombre} | ${efecto}`);
+                } else {
+                    logPorPJ[realPj].push(`Obj. Dsqp. | ${objNombre}`);
+                }
             }
         }
     }
@@ -126,7 +148,6 @@ export function actualizarLogGlobal() {
                     }
                 }
                 else {
-                    // 🔥 FIX: Validar las 6 estadísticas compuestas de golpe
                     const isVidaRoja = campoRaiz === 'vidaRojaActual' || campoRaiz === 'baseVidaRojaMax' || subCampo === 'vidaRojaMaxExtra';
                     const isVidaAzul = campoRaiz === 'baseVidaAzul' || subCampo === 'vidaAzulExtra';
                     const isGuarda   = campoRaiz === 'baseGuardaDorada' || subCampo === 'guardaDoradaExtra';
@@ -223,14 +244,13 @@ export async function ejecutarGuardadoGlobal() {
         const deletePromises = []; 
         const statsUpserts = [];
         const estadosUpserts = [];
-        
         const hzUpserts = [];
 
         // --- OBJETOS ---
         const nuevosArr = Object.values(objState.colaNuevosObjetos).filter(o => o.nombre.trim() !== '');
         for (const obj of nuevosArr) {
             catalogUpserts.push({ nombre: obj.nombre, tipo: obj.tipo, material: obj.mat, rareza: obj.rar, efecto: obj.eff });
-            if (obj.cant > 0) invUpserts.push({ personaje_nombre: devState.pjSeleccionado, objeto_nombre: obj.nombre, cantidad: obj.cant });
+            if (obj.cant > 0) invUpserts.push({ personaje_nombre: devState.pjSeleccionado, objeto_nombre: obj.nombre, cantidad: obj.cant, equipado: false });
         }
 
         for (const oldName in objState.colaEdicionObjetos) {
@@ -242,7 +262,8 @@ export async function ejecutarGuardadoGlobal() {
                 Object.keys(objState.inventariosDB).forEach(pjKey => {
                     if (objState.inventariosDB[pjKey][oldName] > 0) {
                         const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
-                        invUpserts.push({ personaje_nombre: realPj, objeto_nombre: newName, cantidad: objState.inventariosDB[pjKey][oldName] });
+                        const wasEqp = objState.equipadosDB[pjKey]?.[oldName] || false; // Mantenemos el estado de equipación
+                        invUpserts.push({ personaje_nombre: realPj, objeto_nombre: newName, cantidad: objState.inventariosDB[pjKey][oldName], equipado: wasEqp });
                         deletePromises.push(supabase.from('inventario_objetos').delete().eq('personaje_nombre', realPj).eq('objeto_nombre', oldName));
                     }
                 });
@@ -250,12 +271,25 @@ export async function ejecutarGuardadoGlobal() {
             }
         }
 
-        for (const pjKey in objState.colaInventario) {
+        // 🌟 NUEVO: Consolidamos las colas de Cantidad y Equipación para guardar en bloque
+        const pjsInvolucradosObj = new Set([...Object.keys(objState.colaInventario), ...Object.keys(objState.colaEquipados)]);
+        
+        for (const pjKey of pjsInvolucradosObj) {
             const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
-            for (const obj in objState.colaInventario[pjKey]) {
-                const cantFinal = objState.colaInventario[pjKey][obj];
-                if (cantFinal > 0) invUpserts.push({ personaje_nombre: realPj, objeto_nombre: obj, cantidad: cantFinal });
-                else deletePromises.push(supabase.from('inventario_objetos').delete().eq('personaje_nombre', realPj).eq('objeto_nombre', obj));
+            
+            const objsInv = objState.colaInventario[pjKey] ? Object.keys(objState.colaInventario[pjKey]) : [];
+            const objsEqp = objState.colaEquipados[pjKey] ? Object.keys(objState.colaEquipados[pjKey]) : [];
+            const objsUnicos = new Set([...objsInv, ...objsEqp]);
+
+            for (const obj of objsUnicos) {
+                const cantFinal = getCantidadActual(pjKey, obj); 
+                const eqpFinal = objState.colaEquipados[pjKey]?.[obj] !== undefined ? objState.colaEquipados[pjKey][obj] : (objState.equipadosDB[pjKey]?.[obj] || false);
+
+                if (cantFinal > 0) {
+                    invUpserts.push({ personaje_nombre: realPj, objeto_nombre: obj, cantidad: cantFinal, equipado: eqpFinal });
+                } else {
+                    deletePromises.push(supabase.from('inventario_objetos').delete().eq('personaje_nombre', realPj).eq('objeto_nombre', obj));
+                }
             }
         }
 
