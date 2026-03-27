@@ -34,11 +34,12 @@ window.onload = async () => {
     }
 
     try {
-        // 🔥 CORRECCIÓN: Apuntamos a la tabla correcta 'hechizos_inventario'
-        const [{data: personajesBD}, catalogoObj, invObj, estadosArr, hechizosData, {data: invHz}] = await Promise.all([
+        // 🔥 CORRECCIÓN: Le pedimos directamente a Supabase todo (*) el inventario de objetos 
+        // para que traiga la nueva columna 'equipado' que db.objetos ignoraba.
+        const [{data: personajesBD}, catalogoObj, {data: invObj}, estadosArr, hechizosData, {data: invHz}] = await Promise.all([
             supabase.from('personajes').select('*'),
             db.objetos.getCatalogo(),
-            db.objetos.getInventarioCompleto(),
+            supabase.from('inventario_objetos').select('*'), // <--- EL CAMBIO CLAVE ESTÁ AQUÍ
             db.estadosConfig.getAll(),
             db.hechizos.getDataCompleta(),
             supabase.from('hechizos_inventario').select('*') 
