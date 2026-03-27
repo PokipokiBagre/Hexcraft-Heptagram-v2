@@ -35,7 +35,6 @@ function obtenerAfinidadTotal(pjNombre, afNombreRaw) {
            (getPjStat(pjNombre, 'buffs', key) || 0);
 }
 
-// ── FORMULARIO DE CASTEO MASIVO ──
 export function setNumFilasCast(num) {
     hzState.casteoManual.numFilas = parseInt(num) || 1;
     window.dispatchEvent(new Event('devUIUpdate'));
@@ -95,14 +94,24 @@ export function copiarPrimerDado() {
     navigator.clipboard.writeText(`!r 1d100 + ${fila.afinidad || 0} // ${fila.nombre || '?'}`).then(() => alert(`Dado ${dado} copiado a todas las filas.`));
 }
 
-// 🌟 Escáner inteligente para extraer propiedades
-const isValidEfe = (v) => v !== undefined && v !== null && v !== "0" && v !== 0 && String(v).trim() !== "" && String(v).trim().toLowerCase() !== "null" && String(v).trim() !== "-";
+// 🌟 EXTRAE ARRAYS JSON Y TEXTOS DE FORMA SEGURA 🌟
+const extractVal = (v) => {
+    if (!v || v === "0" || v === 0 || v === "-") return '';
+    if (Array.isArray(v)) {
+        const text = v.join(" ");
+        return (text && text !== "0" && text !== "-") ? text : '';
+    }
+    const text = String(v).trim();
+    return (text && text !== "0" && text.toLowerCase() !== "null" && text !== "-") ? text : '';
+};
+
 const findProp = (obj, ...names) => {
     if (!obj) return '';
     for (const key of Object.keys(obj)) {
         const cleanKey = key.trim().toLowerCase();
         if (names.some(n => n.toLowerCase() === cleanKey)) {
-            if (isValidEfe(obj[key])) return obj[key];
+            const val = extractVal(obj[key]);
+            if (val) return val;
         }
     }
     return '';
@@ -127,7 +136,6 @@ export function calcularConjurosMasivos(pjNombre) {
         const afin = parseInt(fila.afinidad) || 0;
 
         if (hechizo) {
-            // Buscamos el costo de forma segura
             const costoRaw = findProp(hechizo, 'hex', 'costo');
             const costoU = parseInt(costoRaw) || 0;
             totalCost += (costoU * cant);
@@ -138,9 +146,10 @@ export function calcularConjurosMasivos(pjNombre) {
             let efeToPrint = findProp(hechizo, 'efecto', 'efecto_desc', 'desc', 'descripcion');
             const outcastProp = findProp(hechizo, 'overcast', 'overcast_desc', 'efecto_overcast');
 
+            // 🌟 LÓGICA OVERCAST: Si NC es el doble del Costo
             if (nc < costoU) {
                 outcome = "❌ FALLO";
-            } else if (outcastProp && nc >= (costoU * 2)) {
+            } else if (outcastProp && costoU > 0 && nc >= (costoU * 2)) {
                 outcome = "🌟 OVERCAST";
                 efeToPrint = outcastProp; 
             } else {
@@ -184,7 +193,6 @@ export function calcularConjurosMasivos(pjNombre) {
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
-// ── ASIGNACIÓN Y VISIBILIDAD ──
 export function asignarHechizo(pjNombre, hechizoId) {
     const pjKey = norm(pjNombre);
     const idNorm = norm(hechizoId);
@@ -218,13 +226,10 @@ export function toggleVisibilidad(hechizoId) {
     const dbHech = hzState.catalogoDB.find(h => (h.ID || h.id) === hechizoId);
     if (!dbHech) return;
 
-    const isPublicBase = dbHech.Conocido && dbHech.Conocido.toString().trim().toLowerCase() === 'si';
+    const isKnownDb = dbHech.es_conocido !== false && dbHech.es_conocido !== "FALSE" && dbHech.es_conocido !== 0 && dbHech.es_conocido !== "0";
 
-    if (currentQ !== undefined) {
-        delete hzState.colaVisibilidad[hechizoId]; 
-    } else {
-        hzState.colaVisibilidad[hechizoId] = !isPublicBase; 
-    }
+    if (currentQ !== undefined) delete hzState.colaVisibilidad[hechizoId]; 
+    else hzState.colaVisibilidad[hechizoId] = !isKnownDb; 
     
     window.dispatchEvent(new Event('devDataChanged')); 
     window.dispatchEvent(new Event('devUIUpdate'));
