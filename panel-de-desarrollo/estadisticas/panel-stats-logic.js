@@ -64,11 +64,19 @@ export function darAsistencia(pjNombre) {
     const asistActual = getPjStat(pjNombre, 'asistencia');
     let nuevaAsist = asistActual + 1;
     let hexBono = 300;
+    let esReinicio = false;
 
     if (nuevaAsist >= 8) {
         nuevaAsist = 1;
         hexBono += 1000;
+        esReinicio = true;
     }
+
+    // Guardamos el valor PREVIO real (de cola o DB) para que dev-logic pueda detectar el reinicio
+    if (!stState.colaStats[pjNombre]) stState.colaStats[pjNombre] = {};
+    // Marcamos explícitamente el valor anterior como metadato temporal
+    stState.colaStats[pjNombre].__asistPrevio = asistActual;
+    stState.colaStats[pjNombre].__esReinicio = esReinicio;
 
     setPjStat(pjNombre, 'asistencia', null, nuevaAsist, false);
     modPjStat(pjNombre, 'hex', null, hexBono, false, true); 
