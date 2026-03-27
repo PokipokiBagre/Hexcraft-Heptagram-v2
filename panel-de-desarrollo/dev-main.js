@@ -11,7 +11,9 @@ import { revisarCambiosPendientes, actualizarLogGlobal, ejecutarGuardadoGlobal }
 import { initObjetosDev } from './objetos/panel-objetos-logic.js';
 import { renderColumnaObjetos } from './objetos/panel-objetos-ui.js';
 
-// Exponemos las funciones al objeto window para que el HTML pueda llamarlas
+import { initStatsDev } from './estadisticas/panel-stats-logic.js';
+import { renderColumnaStats } from './estadisticas/panel-stats-ui.js';
+
 window.cambiarFiltroRol = cambiarFiltroRol;
 window.filtrarPorNombre = filtrarPorNombre;
 window.seleccionarPersonajeDev = seleccionarPersonajeDev;
@@ -33,25 +35,59 @@ window.onload = async () => {
     }
 
     try {
-        const [personajesBD, catalogoObj, invObj] = await Promise.all([
+        // 🌟 1. Descargamos absolutamente toda la BD necesaria
+        const [personajesBD, catalogoObj, invObj, estadosArr] = await Promise.all([
             db.personajes.getAll(),
             db.objetos.getCatalogo(),
-            db.objetos.getInventarioCompleto()
+            db.objetos.getInventarioCompleto(),
+            db.estadosConfig.getAll()
         ]);
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
 
-        // Inicializamos los módulos hijos
+        // 🌟 2. Parseo especial para el módulo de Estadísticas (De Snake_Case a CamelCase)
+        const statsGlobalMock = {};
+        personajesBD.forEach(p => {
+            statsGlobalMock[p.nombre] = {
+                isPlayer: p.is_player,
+                isActive: p.is_active,
+                hex: p.hex || 0,
+                asistencia: p.asistencia || 1,
+                vex: p.vex || 0,
+                vidaRojaActual: p.vida_roja_actual || 0,
+                baseVidaRojaMax: p.base_vida_roja_max || 0,
+                baseVidaAzul: p.base_vida_azul || 0,
+                baseGuardaDorada: p.base_guarda_dorada || 0,
+                baseDanoRojo: p.base_dano_rojo || 0,
+                baseDanoAzul: p.base_dano_azul || 0,
+                baseElimDorada: p.base_elim_dorada || 0,
+                afinidadesBase: p.afinidades_base || {},
+                hechizosEfecto: p.hechizos_efecto || {},
+                buffs: p.buffs || {},
+                estados: p.estados || {},
+                iconoOverride: p.icono_override || ''
+            };
+        });
+
+        const estadosListMock = estadosArr.map(e => ({
+            id: e.id, nombre: e.nombre, tipo: e.tipo, bg: e.color_bg, border: e.color_border, desc: e.descripcion
+        }));
+
+        // 🌟 3. Inicializamos los submódulos
         initObjetosDev(catalogoObj, invObj);
+        initStatsDev(statsGlobalMock, estadosListMock);
 
         document.getElementById('pantalla-carga').classList.add('oculto');
         document.getElementById('interfaz-master').classList.remove('oculto');
 
         renderSelectorPersonajes();
 
-        // Eventos disparados por los submódulos cuando algo cambia en su UI
+        // 🌟 4. Escuchadores Universales de Eventos
         window.addEventListener('devUIUpdate', () => {
-            if (devState.pjSeleccionado) renderColumnaObjetos(devState.pjSeleccionado);
+            if (devState.pjSeleccionado) {
+                renderColumnaObjetos(devState.pjSeleccionado);
+                renderColumnaStats(devState.pjSeleccionado);
+            }
             revisarCambiosPendientes();
             actualizarLogGlobal();
         });
@@ -129,11 +165,9 @@ function seleccionarPersonajeDev(nombre) {
 
     document.getElementById('dev-workspace').classList.remove('oculto');
     
-    // Inicia renders de módulos hijos
+    // Iniciar renders
     renderColumnaObjetos(devState.pjSeleccionado);
-    
-    const colStats = document.getElementById('content-stats');
-    if (colStats) colStats.innerHTML = `<div style="color:#666; text-align:center; padding:20px; font-style:italic;">[Módulo Estadísticas Pendiente...]</div>`;
+    renderColumnaStats(devState.pjSeleccionado);
     
     const colSpells = document.getElementById('content-spells');
     if (colSpells) colSpells.innerHTML = `<div style="color:#666; text-align:center; padding:20px; font-style:italic;">[Módulo Hechizos Pendiente...]</div>`;
