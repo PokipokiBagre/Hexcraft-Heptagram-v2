@@ -155,14 +155,12 @@ export function calcularConjurosMasivos(pjNombre) {
 
             if (isFallo) {
                 lineLog += `❌ FALLO`;
-            } else {
+            } else if (hzState.mostrarEfectos) {
                 lineLog += `✅ ÉXITO`;
-                if (hzState.mostrarEfectos && efeToPrint) {
-                    lineLog += ` | ${efeToPrint}`;
-                }
-                if (isOvercast && outcastProp) {
-                    lineLog += ` | 🌟 Overcast: ${outcastProp}`;
-                }
+                if (efeToPrint) lineLog += ` | ${efeToPrint}`;
+                if (isOvercast && outcastProp) lineLog += ` | 🌟 Overcast: ${outcastProp}`;
+            } else {
+                lineLog += isOvercast ? `✅ ÉXITO (Overcast)` : `✅ ÉXITO`;
             }
 
             logsArr.push(lineLog);
