@@ -7,7 +7,7 @@ import { objState } from './panel-objetos-state.js';
 export function initObjetosDev(catalogo, inventarios) {
     objState.catalogoDB = catalogo || [];
     objState.inventariosDB = {};
-    objState.equipadosDB = {}; // 🌟 Inicializar BD Equipados
+    objState.equipadosDB = {}; // 🌟 Inicializar
     (inventarios || []).forEach(item => {
         const pj = item.personaje_nombre.toLowerCase();
         if (!objState.inventariosDB[pj]) {
@@ -15,11 +15,10 @@ export function initObjetosDev(catalogo, inventarios) {
             objState.equipadosDB[pj] = {};
         }
         objState.inventariosDB[pj][item.objeto_nombre] = item.cantidad;
-        objState.equipadosDB[pj][item.objeto_nombre] = item.equipado || false;
+        objState.equipadosDB[pj][item.objeto_nombre] = item.equipado || false; // 🌟 Leer BD
     });
 }
 
-// ── LÓGICA DE INVENTARIO ──
 export function getCantidadActual(pjNombre, objNombre) {
     if (!pjNombre) return 0;
     const pjKey = pjNombre.toLowerCase();
@@ -41,7 +40,7 @@ export function modificarCantidad(pjNombre, objNombre, variacion) {
     if (!objState.colaInventario[pjKey]) objState.colaInventario[pjKey] = {};
     objState.colaInventario[pjKey][objNombre] = nuevaCant;
 
-    // Si la cantidad llega a 0, lo desequipamos automáticamente
+    // Desequipar automático si se acaba
     if (nuevaCant === 0) {
         if (!objState.colaEquipados[pjKey]) objState.colaEquipados[pjKey] = {};
         objState.colaEquipados[pjKey][objNombre] = false;
@@ -80,7 +79,6 @@ export function setBusquedaObjeto(texto, tipo = 'inv') {
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
-// ── LÓGICA DE INTERFAZ Y FORJA ──
 export function cambiarVistaObjetos(vista) {
     objState.vistaActiva = vista;
     objState.objAEditarSeleccionado = ""; 
@@ -97,24 +95,17 @@ export function actualizarFormularioNuevo(index, campo, valor, reRender = true) 
         objState.colaNuevosObjetos[index] = { nombre: '', cant: 1, tipo: 'Consumible', mat: '-', rar: 'Común', eff: '' };
     }
     objState.colaNuevosObjetos[index][campo] = valor;
-    
     if (reRender) window.dispatchEvent(new Event('devUIUpdate'));
     else window.dispatchEvent(new Event('devDataChanged')); 
 }
 
-// ── LÓGICA DE EDICIÓN ──
 export function seleccionarObjetoParaEditar(nombreObj) {
     objState.objAEditarSeleccionado = nombreObj;
-    
     if (nombreObj && !objState.colaEdicionObjetos[nombreObj]) {
         const dbObj = objState.catalogoDB.find(o => o.nombre === nombreObj);
         if (dbObj) {
             objState.colaEdicionObjetos[nombreObj] = {
-                nombre: dbObj.nombre,
-                tipo: dbObj.tipo || 'Consumible',
-                mat: dbObj.material || '-',
-                rar: dbObj.rareza || 'Común',
-                eff: dbObj.efecto || ''
+                nombre: dbObj.nombre, tipo: dbObj.tipo || 'Consumible', mat: dbObj.material || '-', rar: dbObj.rareza || 'Común', eff: dbObj.efecto || ''
             };
         }
     }
@@ -124,9 +115,7 @@ export function seleccionarObjetoParaEditar(nombreObj) {
 export function modificarObjetoEdicion(campo, valor, reRender = true) {
     const objBase = objState.objAEditarSeleccionado;
     if (!objBase || !objState.colaEdicionObjetos[objBase]) return;
-    
     objState.colaEdicionObjetos[objBase][campo] = valor;
-    
     if (reRender) window.dispatchEvent(new Event('devUIUpdate'));
     else window.dispatchEvent(new Event('devDataChanged'));
 }
