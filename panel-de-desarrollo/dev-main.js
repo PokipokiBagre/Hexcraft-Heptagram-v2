@@ -32,8 +32,9 @@ window.onload = async () => {
     }
 
     try {
-        const [personajesBD, catalogoObj, invObj, estadosArr, {data: hecInv}, {data: hecNodos}] = await Promise.all([
-            db.personajes.getAll(),
+        // 🌟 EXTRACCIÓN PURA: Obligamos a Supabase a darnos TODO sin los filtros de hex-db
+        const [{data: personajesBD}, catalogoObj, invObj, estadosArr, {data: hecInv}, {data: hecNodos}] = await Promise.all([
+            supabase.from('personajes').select('*'), // <--- LA CLAVE ESTÁ AQUÍ
             db.objetos.getCatalogo(),
             db.objetos.getInventarioCompleto(),
             db.estadosConfig.getAll(),
@@ -43,6 +44,7 @@ window.onload = async () => {
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
 
+        // Sumatoria de Atributos del Grimorio
         const spellStats = {};
         if (hecInv && hecNodos) {
             hecInv.forEach(h => {
@@ -60,7 +62,7 @@ window.onload = async () => {
             });
         }
 
-        // 🌟 LECTURA PLANA IDÉNTICA A STATS-DATA.JS 🌟
+        // Mapeo Plano Directo
         const statsGlobalMock = {};
         personajesBD.forEach(p => {
             statsGlobalMock[p.nombre] = {
@@ -68,7 +70,6 @@ window.onload = async () => {
                 isActive: p.is_active,
                 hex: Number(p.hex) || 0,
                 asistencia: Number(p.asistencia) || 1,
-                vex: Number(p.vex) || 0,
                 vidaRojaActual: Number(p.vida_roja_actual) || 0,
                 baseVidaRojaMax: Number(p.base_vida_roja_max) || 0,
                 baseVidaAzul: Number(p.base_vida_azul) || 0,
@@ -78,37 +79,19 @@ window.onload = async () => {
                 baseElimDorada: Number(p.base_elim_dorada) || 0,
                 
                 afinidadesBase: {
-                    fisica: Number(p.fisica) || 0,
-                    energetica: Number(p.energetica) || 0,
-                    espiritual: Number(p.espiritual) || 0,
-                    mando: Number(p.mando) || 0,
-                    psiquica: Number(p.psiquica) || 0,
-                    oscura: Number(p.oscura) || 0
+                    fisica: Number(p.fisica) || 0, energetica: Number(p.energetica) || 0, espiritual: Number(p.espiritual) || 0,
+                    mando: Number(p.mando) || 0, psiquica: Number(p.psiquica) || 0, oscura: Number(p.oscura) || 0
                 },
                 hechizosEfecto: {
-                    fisica: Number(p.alt_fisica) || 0,
-                    energetica: Number(p.alt_energetica) || 0,
-                    espiritual: Number(p.alt_espiritual) || 0,
-                    mando: Number(p.alt_mando) || 0,
-                    psiquica: Number(p.alt_psiquica) || 0,
-                    oscura: Number(p.alt_oscura) || 0,
-                    danoRojo: Number(p.alt_dano_rojo) || 0,
-                    danoAzul: Number(p.alt_dano_azul) || 0,
-                    elimDorada: Number(p.alt_elim_dorada) || 0
+                    fisica: Number(p.alt_fisica) || 0, energetica: Number(p.alt_energetica) || 0, espiritual: Number(p.alt_espiritual) || 0,
+                    mando: Number(p.alt_mando) || 0, psiquica: Number(p.alt_psiquica) || 0, oscura: Number(p.alt_oscura) || 0,
+                    danoRojo: Number(p.alt_dano_rojo) || 0, danoAzul: Number(p.alt_dano_azul) || 0, elimDorada: Number(p.alt_elim_dorada) || 0
                 },
                 buffs: {
-                    fisica: Number(p.ext_fisica) || 0,
-                    energetica: Number(p.ext_energetica) || 0,
-                    espiritual: Number(p.ext_espiritual) || 0,
-                    mando: Number(p.ext_mando) || 0,
-                    psiquica: Number(p.ext_psiquica) || 0,
-                    oscura: Number(p.ext_oscura) || 0,
-                    danoRojo: Number(p.ext_dano_rojo) || 0,
-                    danoAzul: Number(p.ext_dano_azul) || 0,
-                    elimDorada: Number(p.ext_elim_dorada) || 0,
-                    vidaRojaMaxExtra: Number(p.ext_vida_roja_max) || 0,
-                    vidaAzulExtra: Number(p.ext_vida_azul) || 0,
-                    guardaDoradaExtra: Number(p.ext_guarda_dorada) || 0
+                    fisica: Number(p.ext_fisica) || 0, energetica: Number(p.ext_energetica) || 0, espiritual: Number(p.ext_espiritual) || 0,
+                    mando: Number(p.ext_mando) || 0, psiquica: Number(p.ext_psiquica) || 0, oscura: Number(p.ext_oscura) || 0,
+                    danoRojo: Number(p.ext_dano_rojo) || 0, danoAzul: Number(p.ext_dano_azul) || 0, elimDorada: Number(p.ext_elim_dorada) || 0,
+                    vidaRojaMaxExtra: Number(p.ext_vida_roja_max) || 0, vidaAzulExtra: Number(p.ext_vida_azul) || 0, guardaDoradaExtra: Number(p.ext_guarda_dorada) || 0
                 },
                 
                 estados: p.estados || {},
@@ -221,8 +204,5 @@ function seleccionarPersonajeDev(nombre) {
 function copiarLogGlobal() {
     const textarea = document.getElementById('log-global-textarea');
     if (!textarea || !textarea.value) return;
-    
-    navigator.clipboard.writeText(textarea.value).then(() => {
-        alert('¡Log copiado al portapapeles!');
-    });
+    navigator.clipboard.writeText(textarea.value).then(() => { alert('¡Log copiado al portapapeles!'); });
 }
