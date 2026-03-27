@@ -9,7 +9,7 @@ import { supabase } from '../hex-auth.js';
 // ── Carga inicial desde Supabase ─────────────────────────────
 export async function cargarTodoDesdeCSV() {
     try {
-        // 🌟 Ahora consultamos inventario_objetos directamente para traer la columna "equipado"
+        // 🌟 Consultamos inventario_objetos directamente para traer la columna "equipado"
         const [personajesArr, objetosArr, inventObjRes] = await Promise.all([
             db.personajes.getAll(),
             db.objetos.getCatalogo(),
@@ -20,7 +20,7 @@ export async function cargarTodoDesdeCSV() {
         for (let k in invGlobal) delete invGlobal[k];
         for (let k in objGlobal) delete objGlobal[k];
         for (let k in statsGlobal) delete statsGlobal[k];
-        for (let k in eqpGlobal) delete eqpGlobal[k]; // 🌟 Limpiamos eqpGlobal
+        for (let k in eqpGlobal) delete eqpGlobal[k];
 
         personajesArr.forEach(p => {
             statsGlobal[p.nombre] = { 
@@ -29,7 +29,7 @@ export async function cargarTodoDesdeCSV() {
                 iconoOverride: p.icono_override || '' 
             };
             invGlobal[p.nombre] = {};
-            eqpGlobal[p.nombre] = {}; // 🌟 Inicializamos equipo
+            eqpGlobal[p.nombre] = {};
         });
 
         // Separar propuestas de objetos aprobados
@@ -98,7 +98,7 @@ export async function sincronizarObjetosBD() {
                     const eqp = eqpGlobal[pj]?.[obj] || false; // 🌟 Leemos el estado equipado
                     if (objGlobal[obj]) {
                         if (cant > 0) {
-                            invUpserts.push({ personaje_nombre: pj, objeto_nombre: obj, cantidad: cant, equipado: eqp }); // 🌟 Sincronizamos eqp
+                            invUpserts.push({ personaje_nombre: pj, objeto_nombre: obj, cantidad: cant, equipado: eqp });
                         } else {
                             deletePromises.push(supabase.from('inventario_objetos').delete().eq('personaje_nombre', pj).eq('objeto_nombre', obj));
                         }
@@ -138,34 +138,77 @@ export async function sincronizarObjetosBD() {
     }
 }
 
-// ... Las funciones de propuestas (proponerObjeto, aprobarPropuesta, etc.) quedan exactamente igual
-export async function proponerObjeto(nombrePj, objName, objTipo, objRar, objMat, objEff, cant) {
+export async function proponerObjeto(d) {
     try {
         const { error } = await supabase.from('objetos').insert([{
-            nombre: objName, tipo: objTipo, rareza: objRar, material: objMat, efecto: objEff,
-            es_propuesta: true, propuesto_por: nombrePj, prop_cantidad: cant
+            nombre: d.nombre, 
+            tipo: d.tipo, 
+            rareza: d.rar, 
+            material: d.mat, 
+            efecto: d.eff,
+            es_propuesta: true, 
+            propuesto_por: d.propuesto_por, 
+            prop_cantidad: d.propuesta_cantidad
         }]);
         if (error) throw error;
+        
+        // Si propusieron para alguien, lo insertamos en inventario_objetos con cantidad 0 (para rastrear destino)
+        if (d.propuesta_para) {
+            await supabase.from('inventario_objetos').upsert({
+                personaje_nombre: d.propuesta_para, 
+                objeto_nombre: d.nombre, 
+                cantidad: 0, 
+                equipado: false
+            }, { onConflict: 'personaje_nombre,objeto_nombre' });
+        }
         return true;
-    } catch (e) { console.error("Error proponiendo:", e); return false; }
+    } catch (e) { 
+        console.error("Error proponiendo:", e); 
+        return false; 
+    }
 }
 
 export async function getPropuestasParaPersonaje(nombrePj) {
-    return propuestasGlobal.filter(p => p.propuesto_por === nombrePj);
+    const res = [];
+    const propuestasFiltradas = propuestasGlobal.filter(p => true); // Traemos todas del estado
+    
+    for (const p of propuestasFiltradas) {
+        // Consultamos a quién va dirigido (cantidad 0)
+        const { data: invData } = await supabase.from('inventario_objetos')
+            .select('personaje_nombre')
+            .eq('objeto_nombre', p.nombre)
+            .eq('cantidad', 0)
+            .single();
+            
+        if (invData && invData.personaje_nombre === nombrePj) {
+            res.push(p);
+        }
+    }
+    return res;
 }
 
-export async function aprobarPropuesta(idPropuesta, nombreObj, cant, propuestoPor) {
+export async function aprobarPropuesta(nombreObj) {
     try {
         const { error: err1 } = await supabase.from('objetos').update({ es_propuesta: false }).eq('nombre', nombreObj);
         if (err1) throw err1;
         
-        const { data: invData } = await supabase.from('inventario_objetos').select('cantidad').eq('personaje_nombre', propuestoPor).eq('objeto_nombre', nombreObj).single();
-        const stockActual = invData ? invData.cantidad : 0;
+        // Buscamos quién lo tiene propuesto
+        const { data: invData } = await supabase.from('inventario_objetos').select('personaje_nombre, cantidad').eq('objeto_nombre', nombreObj);
         
-        const { error: err2 } = await supabase.from('inventario_objetos').upsert({
-            personaje_nombre: propuestoPor, objeto_nombre: nombreObj, cantidad: stockActual + cant, equipado: false
-        }, { onConflict: 'personaje_nombre,objeto_nombre' });
-        if (err2) throw err2;
+        if (invData && invData.length > 0) {
+            for (const row of invData) {
+                if (row.cantidad === 0) {
+                    const propRef = propuestasGlobal.find(p => p.nombre === nombreObj);
+                    const cantToAdd = propRef ? (propRef.prop_cantidad || 1) : 1;
+                    await supabase.from('inventario_objetos').upsert({
+                        personaje_nombre: row.personaje_nombre, 
+                        objeto_nombre: nombreObj, 
+                        cantidad: cantToAdd, 
+                        equipado: false
+                    }, { onConflict: 'personaje_nombre,objeto_nombre' });
+                }
+            }
+        }
         return true;
     } catch (e) { console.error("Error aprobando:", e); return false; }
 }
@@ -176,14 +219,30 @@ export async function aprobarTodasPropuestas() {
         const objsAprobar = [];
         for (const prop of propuestasGlobal) {
             objsAprobar.push(prop.nombre);
-            const { data: invData } = await supabase.from('inventario_objetos').select('cantidad').eq('personaje_nombre', prop.propuesto_por).eq('objeto_nombre', prop.nombre).single();
-            const stockActual = invData ? invData.cantidad : 0;
-            invUpserts.push({ personaje_nombre: prop.propuesto_por, objeto_nombre: prop.nombre, cantidad: stockActual + prop.prop_cantidad, equipado: false });
+            
+            const { data: invData } = await supabase.from('inventario_objetos')
+                .select('personaje_nombre, cantidad')
+                .eq('objeto_nombre', prop.nombre);
+                
+            if (invData && invData.length > 0) {
+                for (const row of invData) {
+                    if (row.cantidad === 0) {
+                        invUpserts.push({ 
+                            personaje_nombre: row.personaje_nombre, 
+                            objeto_nombre: prop.nombre, 
+                            cantidad: prop.prop_cantidad || 1, 
+                            equipado: false 
+                        });
+                    }
+                }
+            }
         }
 
         if (objsAprobar.length > 0) {
             await supabase.from('objetos').update({ es_propuesta: false }).in('nombre', objsAprobar);
-            await supabase.from('inventario_objetos').upsert(invUpserts, { onConflict: 'personaje_nombre,objeto_nombre' });
+            if (invUpserts.length > 0) {
+                await supabase.from('inventario_objetos').upsert(invUpserts, { onConflict: 'personaje_nombre,objeto_nombre' });
+            }
         }
         return true;
     } catch (e) { console.error("Error aprobando todas:", e); return false; }
@@ -193,6 +252,7 @@ export async function rechazarPropuesta(nombreObj) {
     try {
         const { error } = await supabase.from('objetos').delete().eq('nombre', nombreObj);
         if (error) throw error;
+        // Al borrar el objeto, Supabase borra en cascada de inventario_objetos
         return true;
     } catch (e) { console.error("Error rechazando:", e); return false; }
 }
