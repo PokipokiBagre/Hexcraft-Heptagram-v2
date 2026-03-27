@@ -19,54 +19,45 @@ export function revisarCambiosPendientes() {
     if (Object.keys(objState.colaEdicionObjetos).length > 0) hayCambios = true;
     if (Object.keys(stState.colaStats).length > 0) hayCambios = true;
     if (Object.keys(stState.colaEstadosConfig).length > 0) hayCambios = true;
+    if (stState.colaBorrarEstados.length > 0) hayCambios = true;
 
     if (hayCambios) btnSync.classList.remove('oculto');
     else btnSync.classList.add('oculto');
 }
 
-// 🌟 GENERADOR INTELIGENTE DEL PORTAPAPELES (Nomenclaturas Corregidas)
+// 🌟 GENERADOR INTELIGENTE DEL PORTAPAPELES
 export function actualizarLogGlobal() {
     const logPorPJ = {};
 
-    // --- 1. Rastreo de Inventario ---
+    // --- 1. Objetos ---
     for (const pjKey in objState.colaInventario) {
         const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey)?.nombre || pjKey;
-
         for (const objNombre in objState.colaInventario[pjKey]) {
             const cantNueva = objState.colaInventario[pjKey][objNombre];
             const cantVieja = objState.inventariosDB[pjKey]?.[objNombre] || 0;
             const delta = cantNueva - cantVieja; 
-
             if (delta !== 0) {
                 if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
-                const catObj = objState.catalogoDB.find(o => o.nombre === objNombre);
-                const eff = catObj && catObj.efecto ? catObj.efecto.replace(/\r?\n/g, ' ').trim() : '';
-                const effStr = eff ? ` | ${eff}` : '';
-
-                if (delta > 0) logPorPJ[realPj].push(`Obj Obt. ${objNombre} x${delta}${effStr}`);
+                if (delta > 0) logPorPJ[realPj].push(`Obj Obt. ${objNombre} x${delta}`);
                 else logPorPJ[realPj].push(`Obj Prd. ${objNombre} x${Math.abs(delta)}`);
             }
         }
     }
 
-    // --- 2. Rastreo de Forja ---
     const pjActual = devState.pjSeleccionado || "SIN_ASIGNAR";
     const nuevosArr = Object.values(objState.colaNuevosObjetos).filter(o => o.nombre.trim() !== '');
-    
     for (const obj of nuevosArr) {
         if (obj.cant > 0) {
             if (!logPorPJ[pjActual]) logPorPJ[pjActual] = [];
-            const eff = obj.eff ? obj.eff.replace(/\r?\n/g, ' ').trim() : '';
-            const effStr = eff ? ` | ${eff}` : '';
-            logPorPJ[pjActual].push(`Obj Obt. ${obj.nombre} x${obj.cant}${effStr}`);
+            logPorPJ[pjActual].push(`Obj Obt. ${obj.nombre} x${obj.cant}`);
         }
     }
 
-    // --- 3. Rastreo de Estadísticas ---
+    // --- 2. Estadísticas con Formato Elegante ---
     const nomLegibles = {
         'hex': 'HEX', 'asistencia': 'Asistencia', 'vidaRojaActual': 'Vida Roja',
         'baseVidaRojaMax': 'Límite Rojo', 'baseVidaAzul': 'Corazones Azules', 'baseGuardaDorada': 'Guarda Dorada',
-        'baseDanoRojo': 'Daño Rojo', 'baseDanoAzul': 'Daño Azul', 'baseElimDorada': 'Elim. Dorada'
+        'baseDanoRojo': 'Daño Rojo', 'baseDanoAzul': 'Daño Azul', 'baseElimDorada': 'Eliminación Dorada'
     };
 
     for (const pjKey in stState.colaStats) {
@@ -88,17 +79,22 @@ export function actualizarLogGlobal() {
                     const sign = delta > 0 ? '+' : '';
                     let statName = nomLegibles[flatKey] || flatKey;
                     
-                    if (flatKey.includes('afinidadesBase')) statName = `Afinidad Base ${parts[1]}`;
-                    if (flatKey.includes('hechizosEfecto')) statName = `Afinidad Alt. ${parts[1]}`;
-                    if (flatKey.includes('buffs')) statName = `Extra ${parts[1]}`;
+                    if (flatKey.includes('afinidadesBase')) statName = `Afinidad Base ${parts[1].charAt(0).toUpperCase() + parts[1].slice(1)}`;
+                    if (flatKey.includes('hechizosEfecto')) statName = `Afinidad Alt. ${parts[1].charAt(0).toUpperCase() + parts[1].slice(1)}`;
+                    if (flatKey.includes('buffs')) statName = `Buff Extra ${parts[1].charAt(0).toUpperCase() + parts[1].slice(1)}`;
                     
-                    // Manejo de Estados Numéricos
                     if (flatKey.includes('estados')) {
                         const eDef = stState.estadosDB.find(e => e.id === parts[1]);
                         const eName = eDef ? eDef.nombre : parts[1];
                         logPorPJ[realPj].push(`${eName} ${sign}${delta} (${cantNueva})`);
+                    } else if (flatKey === 'vidaRojaActual' || flatKey === 'baseVidaRojaMax') {
+                        // Mostramos el formato 20/20 sumando las auras y los buffs
+                        let maxBase = (flatKey === 'baseVidaRojaMax' ? cantNueva : (dbPj.baseVidaRojaMax||0) + (cambios['baseVidaRojaMax'] !== undefined ? cambios['baseVidaRojaMax'] - (dbPj.baseVidaRojaMax||0) : 0));
+                        let extra = (dbPj.buffs?.vidaRojaMaxExtra||0) + (dbPj.hechizosEfecto?.vidaRojaMaxExtra||0) + (dbPj.hechizos?.vidaRojaMaxExtra||0);
+                        let finalMax = maxBase + extra;
+                        let finalAct = (flatKey === 'vidaRojaActual' ? cantNueva : (dbPj.vidaRojaActual||0) + (cambios['vidaRojaActual'] !== undefined ? cambios['vidaRojaActual'] - (dbPj.vidaRojaActual||0) : 0));
+                        logPorPJ[realPj].push(`${statName} ${sign}${delta} (${finalAct}/${finalMax})`);
                     } else {
-                        // Formato: HEX -10 (1590)
                         logPorPJ[realPj].push(`${statName} ${sign}${delta} (${cantNueva})`);
                     }
                 }
@@ -106,14 +102,12 @@ export function actualizarLogGlobal() {
                 if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
                 const eDef = stState.estadosDB.find(e => e.id === parts[1]);
                 const eName = eDef ? eDef.nombre : parts[1];
-                
                 if (cantNueva) logPorPJ[realPj].push(`Estado adq. ${eName}`);
                 else logPorPJ[realPj].push(`Estado rmv. ${eName}`);
             }
         }
     }
 
-    // --- Formateo Final ---
     let logText = "";
     for (const pj in logPorPJ) {
         if (logPorPJ[pj].length > 0) {
@@ -139,6 +133,7 @@ export async function ejecutarGuardadoGlobal() {
         const statsUpserts = [];
         const estadosUpserts = [];
 
+        // Objetos
         const nuevosArr = Object.values(objState.colaNuevosObjetos).filter(o => o.nombre.trim() !== '');
         for (const obj of nuevosArr) {
             catalogUpserts.push({ nombre: obj.nombre, tipo: obj.tipo, material: obj.mat, rareza: obj.rar, efecto: obj.eff });
@@ -171,7 +166,7 @@ export async function ejecutarGuardadoGlobal() {
             }
         }
 
-        // ================== ESTADÍSTICAS ==================
+        // ================== ESTADÍSTICAS Y MAPEADO A COLUMNAS PLANAS DE POSTGRES ==================
         for (const pjKey in stState.colaStats) {
             const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey.toLowerCase())?.nombre || pjKey;
             const cambios = stState.colaStats[pjKey];
@@ -198,10 +193,15 @@ export async function ejecutarGuardadoGlobal() {
                 base_dano_rojo: updatedPj.baseDanoRojo,
                 base_dano_azul: updatedPj.baseDanoAzul,
                 base_elim_dorada: updatedPj.baseElimDorada,
-                afinidades_base: updatedPj.afinidadesBase,
-                hechizos_efecto: updatedPj.hechizosEfecto,
-                buffs: updatedPj.buffs,
-                estados: updatedPj.estados
+                estados: updatedPj.estados,
+                
+                // Mapeo plano exacto
+                fisica: updatedPj.afinidadesBase.fisica, energetica: updatedPj.afinidadesBase.energetica, espiritual: updatedPj.afinidadesBase.espiritual, mando: updatedPj.afinidadesBase.mando, psiquica: updatedPj.afinidadesBase.psiquica, oscura: updatedPj.afinidadesBase.oscura,
+                alt_fisica: updatedPj.hechizosEfecto.fisica, alt_energetica: updatedPj.hechizosEfecto.energetica, alt_espiritual: updatedPj.hechizosEfecto.espiritual, alt_mando: updatedPj.hechizosEfecto.mando, alt_psiquica: updatedPj.hechizosEfecto.psiquica, alt_oscura: updatedPj.hechizosEfecto.oscura,
+                alt_dano_rojo: updatedPj.hechizosEfecto.danoRojo, alt_dano_azul: updatedPj.hechizosEfecto.danoAzul, alt_elim_dorada: updatedPj.hechizosEfecto.elimDorada,
+                ext_fisica: updatedPj.buffs.fisica, ext_energetica: updatedPj.buffs.energetica, ext_espiritual: updatedPj.buffs.espiritual, ext_mando: updatedPj.buffs.mando, ext_psiquica: updatedPj.buffs.psiquica, ext_oscura: updatedPj.buffs.oscura,
+                ext_dano_rojo: updatedPj.buffs.danoRojo, ext_dano_azul: updatedPj.buffs.danoAzul, ext_elim_dorada: updatedPj.buffs.elimDorada,
+                ext_vida_roja_max: updatedPj.buffs.vidaRojaMaxExtra, ext_vida_azul: updatedPj.buffs.vidaAzulExtra, ext_guarda_dorada: updatedPj.buffs.guardaDoradaExtra
             });
         }
 
@@ -209,47 +209,42 @@ export async function ejecutarGuardadoGlobal() {
         for (const id in stState.colaEstadosConfig) {
             estadosUpserts.push({ id: id, ...stState.colaEstadosConfig[id] });
         }
+        if (stState.colaBorrarEstados.length > 0) {
+            deletePromises.push(supabase.from('estados_config').delete().in('id', stState.colaBorrarEstados));
+        }
 
         // 🔥 LANZAMIENTO MASIVO A SUPABASE 🔥
         if (deletePromises.length > 0) await Promise.all(deletePromises);
 
         if (catalogUpserts.length > 0) {
-            const { error: errCat } = await supabase.from('objetos').upsert(catalogUpserts, { onConflict: 'nombre' }).select();
-            if (errCat) throw new Error("Error Catálogo: " + errCat.message);
+            const { error: errCat } = await supabase.from('objetos').upsert(catalogUpserts, { onConflict: 'nombre' });
+            if (errCat) throw new Error("Catálogo: " + errCat.message);
         }
 
         if (invUpserts.length > 0) {
-            const { error: errInv } = await supabase.from('inventario_objetos').upsert(invUpserts, { onConflict: 'personaje_nombre,objeto_nombre' }).select();
-            if (errInv) throw new Error("Error Inventarios: " + errInv.message);
+            const { error: errInv } = await supabase.from('inventario_objetos').upsert(invUpserts, { onConflict: 'personaje_nombre,objeto_nombre' });
+            if (errInv) throw new Error("Inventarios: " + errInv.message);
         }
 
         if (statsUpserts.length > 0) {
-            const { error: errSt } = await supabase.from('personajes').upsert(statsUpserts, { onConflict: 'nombre' }).select();
-            if (errSt) throw new Error("Error Estadísticas: " + errSt.message);
+            const { error: errSt } = await supabase.from('personajes').upsert(statsUpserts, { onConflict: 'nombre' });
+            if (errSt) throw new Error("Estadísticas: " + errSt.message);
         }
 
         if (estadosUpserts.length > 0) {
-            const { error: errEst } = await supabase.from('estados_config').upsert(estadosUpserts, { onConflict: 'id' }).select();
-            if (errEst) throw new Error("Error Estados: " + errEst.message);
+            const { error: errEst } = await supabase.from('estados_config').upsert(estadosUpserts, { onConflict: 'id' });
+            if (errEst) throw new Error("Estados: " + errEst.message);
         }
 
         localStorage.removeItem('hex_obj_v4');
         localStorage.removeItem('hex_stats_v2');
-
-        objState.colaInventario = {}; 
-        objState.colaNuevosObjetos = {};
-        objState.colaEdicionObjetos = {};
-        stState.colaStats = {};
-        stState.colaEstadosConfig = {};
 
         btnSync.innerText = "✅ CAMBIOS APLICADOS";
         btnSync.style.background = "#004a00";
         btnSync.style.borderColor = "#00ff00";
         btnSync.style.color = "white";
 
-        setTimeout(() => {
-            window.location.reload(); 
-        }, 1000);
+        setTimeout(() => { window.location.reload(); }, 1000);
 
     } catch (e) {
         console.error("Error guardando en BD:", e);
