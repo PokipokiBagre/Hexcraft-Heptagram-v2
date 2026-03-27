@@ -3,7 +3,7 @@
 // ============================================================
 
 import { stState, AFINIDADES_LISTA } from './panel-stats-state.js';
-import { getPjStat, modPjStat, darAsistencia, limpiarLogAsistencia, recalcularCorazones, toggleEstado, setVistaStats, guardarNuevoEstado, cargarEstadoParaEditar, borrarEstadoGlobal, getVexMax } from './panel-stats-logic.js';
+import { getPjStat, modPjStat, darAsistencia, limpiarLogAsistencia, recalcularCorazones, toggleEstado, setVistaStats, guardarNuevoEstado, cargarEstadoParaEditar, borrarEstadoGlobal, getVexMax, calcularVidaRojaMaxTotal, calcularVidaAzulTotal, calcularGuardaDoradaTotal, calcularDanoRojoTotal, calcularDanoAzulTotal, calcularElimDoradaTotal } from './panel-stats-logic.js';
 
 window.devModStat = modPjStat;
 window.devDarAsis = darAsistencia;
@@ -145,18 +145,80 @@ export function renderColumnaStats(pjSeleccionado) {
     }
 
     else if (v === 'vida') {
-        const vAct = getPjStat(pjSeleccionado, 'vidaRojaActual');
-        const topeVida = getPjStat(pjSeleccionado, 'baseVidaRojaMax') + getPjStat(pjSeleccionado, 'buffs', 'vidaRojaMaxExtra') + getPjStat(pjSeleccionado, 'hechizos', 'vidaRojaMaxExtra') + getPjStat(pjSeleccionado, 'hechizosEfecto', 'vidaRojaMaxExtra');
+        // ── TOTALES CALCULADOS (equivalente a stats-logic.js) ──
+        const vAct            = getPjStat(pjSeleccionado, 'vidaRojaActual');
+        const topeVida        = calcularVidaRojaMaxTotal(pjSeleccionado);
+        const vidaAzulTotal   = calcularVidaAzulTotal(pjSeleccionado);
+        const guardaTotal     = calcularGuardaDoradaTotal(pjSeleccionado);
+        const danoRojoTotal   = calcularDanoRojoTotal(pjSeleccionado);
+        const danoAzulTotal   = calcularDanoAzulTotal(pjSeleccionado);
+        const elimTotal       = calcularElimDoradaTotal(pjSeleccionado);
+
+        // Helper: generar corazones/íconos visuales
+        const makeHearts = (actual, max, color, symbol) => {
+            let out = '';
+            for (let i = 1; i <= max; i++) {
+                out += `<span style="color:${i <= actual ? color : '#333'}; font-size:1.1em;">${symbol}</span>`;
+            }
+            return out;
+        };
 
         html += `
+        <!-- ═══ BLOQUE DE TOTALES — SOLO LECTURA ═══ -->
+        <div style="background:#050510; border:2px solid #333; border-radius:10px; padding:14px; margin-bottom:18px;">
+            <h4 style="color:#999; text-align:center; margin:0 0 12px 0; font-family:'Cinzel'; font-size:0.85em; letter-spacing:2px; text-transform:uppercase;">📊 Totales Actuales — Solo Lectura</h4>
+
+            <!-- Vida Roja -->
+            <div style="background:#1a0505; border:1px solid var(--red-life); border-radius:8px; padding:12px; margin-bottom:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <span style="color:var(--red-life); font-weight:bold; font-family:'Cinzel'; font-size:0.9em;">❤️ VIDA ROJA</span>
+                    <span style="color:#fff; font-size:1.6em; font-weight:bold; font-family:'Cinzel';">${vAct} <span style="color:#888; font-size:0.65em;">/ ${topeVida}</span></span>
+                </div>
+                <div style="line-height:1.6; word-break:break-all;">${makeHearts(vAct, topeVida, '#e53935', '♥')}</div>
+            </div>
+
+            <!-- Vida Azul -->
+            <div style="background:#051520; border:1px solid var(--blue-life); border-radius:8px; padding:12px; margin-bottom:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <span style="color:var(--blue-life); font-weight:bold; font-family:'Cinzel'; font-size:0.9em;">💙 VIDA AZUL</span>
+                    <span style="color:#fff; font-size:1.6em; font-weight:bold; font-family:'Cinzel';">${vidaAzulTotal}</span>
+                </div>
+                <div style="line-height:1.6; word-break:break-all;">${makeHearts(vidaAzulTotal, vidaAzulTotal, '#2196f3', '◆')}</div>
+            </div>
+
+            <!-- Guarda Dorada -->
+            <div style="background:#151000; border:1px solid var(--gold); border-radius:8px; padding:12px; margin-bottom:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                    <span style="color:var(--gold); font-weight:bold; font-family:'Cinzel'; font-size:0.9em;">🛡️ GUARDA DORADA</span>
+                    <span style="color:#fff; font-size:1.6em; font-weight:bold; font-family:'Cinzel';">${guardaTotal}</span>
+                </div>
+                <div style="line-height:1.6; word-break:break-all;">${makeHearts(guardaTotal, guardaTotal, '#d4af37', '◆')}</div>
+            </div>
+
+            <!-- Daños totales -->
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:6px;">
+                <div style="background:#1a0505; border:1px solid #a00; border-radius:6px; padding:8px; text-align:center;">
+                    <div style="color:#ff6666; font-size:0.7em; font-weight:bold; margin-bottom:2px;">⚔️ D. ROJO</div>
+                    <div style="color:#fff; font-size:1.4em; font-weight:bold; font-family:'Cinzel';">${danoRojoTotal}</div>
+                </div>
+                <div style="background:#051525; border:1px solid #06f; border-radius:6px; padding:8px; text-align:center;">
+                    <div style="color:#66aaff; font-size:0.7em; font-weight:bold; margin-bottom:2px;">💧 D. AZUL</div>
+                    <div style="color:#fff; font-size:1.4em; font-weight:bold; font-family:'Cinzel';">${danoAzulTotal}</div>
+                </div>
+                <div style="background:#151000; border:1px solid #b8860b; border-radius:6px; padding:8px; text-align:center;">
+                    <div style="color:var(--gold); font-size:0.7em; font-weight:bold; margin-bottom:2px;">✦ ELIM.</div>
+                    <div style="color:#fff; font-size:1.4em; font-weight:bold; font-family:'Cinzel';">${elimTotal}</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ═══ CURAR / DAÑAR ═══ -->
         <div style="background:#1a0505; border:1px solid var(--red-life); border-radius:8px; padding:15px; margin-bottom:15px;">
             <h3 style="margin:0 0 10px 0; color:var(--red-life); font-family:'Cinzel'; text-align:center;">❤️ CURAR / DAÑAR</h3>
-            
             <div style="display:flex; justify-content:center; align-items:baseline; gap:5px; margin-bottom:15px;">
                 <span style="font-size:3em; color:#fff; font-weight:bold;">${vAct}</span>
                 <span style="font-size:1.5em; color:#888; font-weight:bold;">/ ${topeVida}</span>
             </div>
-
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
                 <div style="display:flex; flex-direction:column; gap:5px;">
                     <button onclick="window.devModStat('${sPj}','vidaRojaActual',null,-1)" style="background:#800000; color:#fff; border:none; padding:10px; border-radius:4px; font-weight:bold; cursor:pointer;">-1 Daño</button>
@@ -170,6 +232,7 @@ export function renderColumnaStats(pjSeleccionado) {
             <button onclick="window.devRecalcularVida('${sPj}')" style="width:100%; margin-top:15px; background:var(--gold); color:#000; font-weight:bold; font-family:'Cinzel'; padding:12px; border:none; border-radius:6px; cursor:pointer; box-shadow:0 0 10px rgba(212,175,55,0.4);">⚖️ RECALCULAR LÍMITES Y CURAR AL MÁX</button>
         </div>
 
+        <!-- ═══ EDICIÓN DE BASES ═══ -->
         <h4 style="color:#aaa; border-bottom:1px solid #333; padding-bottom:5px;">Límites Base</h4>
         <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:15px;">
             ${genStatRow(pjSeleccionado, 'Límite Rojo', 'baseVidaRojaMax', null, 'var(--red-life)')}
