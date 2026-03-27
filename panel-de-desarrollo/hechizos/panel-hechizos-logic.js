@@ -13,7 +13,6 @@ export function initHechizosDev(catalogo, inventarios_pj) {
     // Failsafe absoluto para que jamás lance "Cannot read properties of undefined"
     (inventarios_pj || []).forEach(item => {
         const pj = norm(item.personaje_nombre || item.Personaje || ""); 
-        // 🔥 CORRECCIÓN: Priorizamos la columna hechizo_nombre
         const hzId = norm(item.hechizo_nombre || item.hechizo_id || item.Hechizo || item.ID || item.id);
         
         if (!pj || !hzId) return;
@@ -91,7 +90,8 @@ export function calcularConjurosMasivos(pjNombre) {
         const afin = parseInt(fila.afinidad) || 0;
 
         if (hechizo) {
-            const costoU = parseInt(hechizo.Hex || hechizo.costo || hechizo.Costo || 0) || 0;
+            // 🔥 CORRECCIÓN CRÍTICA: Priorizamos hechizo.HEX
+            const costoU = parseInt(hechizo.HEX || hechizo.Hex || hechizo.costo || hechizo.Costo || 0) || 0;
             totalCost += (costoU * cant);
             validSpells += cant;
 
@@ -157,7 +157,8 @@ export function asignarHechizo(pjNombre, hechizoId) {
     hzState.colaAsignaciones[pjKey][idNorm] = accionDar;
 
     const hechizo = hzState.catalogoDB.find(h => norm(h.ID || h.id) === idNorm);
-    const costo = parseInt(hechizo ? (hechizo.Hex || hechizo.costo || hechizo.Costo || 0) : 0) || 0;
+    // 🔥 CORRECCIÓN CRÍTICA
+    const costo = parseInt(hechizo ? (hechizo.HEX || hechizo.Hex || hechizo.costo || hechizo.Costo || 0) : 0) || 0;
     const nombreHechizo = hechizo ? (hechizo.Nombre || hechizo.nombre || hechizoId) : hechizoId;
 
     if (accionDar && hzState.cobrarAlAsignar && costo > 0) {
