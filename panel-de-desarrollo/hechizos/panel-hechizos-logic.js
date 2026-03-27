@@ -9,9 +9,11 @@ import { norm } from '../dev-state.js';
 export function initHechizosDev(catalogo, inventarios_pj) {
     hzState.catalogoDB = catalogo || [];
     hzState.inventariosDB = {};
+    
     (inventarios_pj || []).forEach(item => {
-        const pj = norm(item.Personaje || item.personaje_nombre || ""); 
-        const hzId = norm(item.Hechizo || item.hechizo_id || item.ID || item.id);
+        // Lee directamente los nombres de las columnas en Supabase
+        const pj = norm(item.personaje_nombre || item.Personaje || ""); 
+        const hzId = norm(item.hechizo_id || item.Hechizo || item.ID || item.id);
         
         if (!pj || !hzId) return;
         if (!hzState.inventariosDB[pj]) hzState.inventariosDB[pj] = [];
