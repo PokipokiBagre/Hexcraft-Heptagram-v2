@@ -3,7 +3,7 @@
 // ============================================================
 
 import { stState, AFINIDADES_LISTA } from './panel-stats-state.js';
-import { getPjStat, modPjStat, darAsistencia, limpiarLogAsistencia, recalcularCorazones, toggleEstado, setVistaStats, guardarNuevoEstado } from './panel-stats-logic.js';
+import { getPjStat, modPjStat, darAsistencia, limpiarLogAsistencia, recalcularCorazones, toggleEstado, setVistaStats, guardarNuevoEstado, cargarEstadoParaEditar, borrarEstadoGlobal } from './panel-stats-logic.js';
 
 window.devModStat = modPjStat;
 window.devDarAsis = darAsistencia;
@@ -12,6 +12,8 @@ window.devRecalcularVida = recalcularCorazones;
 window.devToggleEstado = toggleEstado;
 window.devSetVistaStats = setVistaStats;
 window.devGuardarEstadoConfig = guardarNuevoEstado;
+window.devEditarEstadoGlobal = cargarEstadoParaEditar;
+window.devBorrarEstadoGlobal = borrarEstadoGlobal;
 
 function drawnHEXPreserveFocus(containerId, html) {
     const activeEl = document.activeElement;
@@ -73,7 +75,6 @@ function genStatRow(pj, label, campoRaiz, subCampo, color = 'var(--gold)', esAfi
     </div>`;
 }
 
-// 🌟 Fila de Solo-Lectura para la pestaña de Hechizos
 function genStatRowReadOnly(pj, label, campoRaiz, subCampo, color = 'var(--gold)') {
     const val = getPjStat(pj, campoRaiz, subCampo);
     return `
@@ -105,9 +106,6 @@ export function renderColumnaStats(pjSeleccionado) {
         </div>
     `;
 
-    // =========================================================
-    // VISTA 1: HEX Y ASISTENCIA
-    // =========================================================
     if (v === 'hex') {
         const hVal = getPjStat(pjSeleccionado, 'hex');
         const aVal = getPjStat(pjSeleccionado, 'asistencia');
@@ -116,7 +114,6 @@ export function renderColumnaStats(pjSeleccionado) {
         <div style="background:#1a1a00; border:1px solid var(--gold); border-radius:8px; padding:15px; text-align:center; margin-bottom:20px;">
             <h3 style="margin:0 0 10px 0; color:var(--gold); font-family:'Cinzel';">HEX ACTUAL</h3>
             <div style="font-size:2.5em; color:#fff; font-weight:bold; margin-bottom:15px;">${hVal}</div>
-            
             <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
                 <div style="display:flex; flex-direction:column; gap:5px;">
                     ${[10, 50, 100, 300, 500, 1000].map(n => `<button onclick="window.devModStat('${sPj}','hex',null,${n})" style="background:#004a00; color:#fff; border:none; padding:8px; border-radius:4px; font-weight:bold; cursor:pointer;">+${n}</button>`).join('')}
@@ -127,37 +124,20 @@ export function renderColumnaStats(pjSeleccionado) {
             </div>
         </div>
 
-        <div style="background:#0a1a2a; border:1px solid var(--blue-life); border-radius:8px; padding:15px; text-align:center; margin-bottom:20px;">
+        <div style="background:#0a1a2a; border:1px solid var(--blue-life); border-radius:8px; padding:15px; text-align:center;">
             <h3 style="margin:0 0 10px 0; color:var(--blue-life); font-family:'Cinzel';">ASISTENCIA SEMANAL</h3>
             <div style="font-size:2em; color:#fff; font-weight:bold; margin-bottom:10px;">${aVal} / 7</div>
             <div style="display:flex; gap:10px; justify-content:center; margin-bottom:15px;">
                 <button onclick="window.devModStat('${sPj}','asistencia',null,-1)" style="background:#4a0000; color:#fff; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer;">-1</button>
                 <button onclick="window.devModStat('${sPj}','asistencia',null,1)" style="background:#004a00; color:#fff; border:none; padding:10px 20px; border-radius:4px; font-weight:bold; cursor:pointer;">+1</button>
             </div>
-            
             <button onclick="window.devDarAsis('${sPj}')" style="width:100%; background:linear-gradient(135deg, #1a365d, #4a90e2); color:#fff; border:1px solid #00ffff; padding:12px; border-radius:6px; font-weight:bold; font-family:'Cinzel'; font-size:1.1em; cursor:pointer; box-shadow:0 4px 10px rgba(74,144,226,0.3);">⭐ DAR ASISTENCIA (+200 HEX / +10 VEX)</button>
-        </div>
-
-        <div style="background:#000; border:1px dashed #4a90e2; border-radius:8px; padding:10px;">
-            <h4 style="margin:0 0 8px 0; color:#4a90e2;">📋 Portapapeles de Asistencia</h4>
-            <textarea id="log-asistencia-txt" readonly style="width:100%; height:80px; box-sizing:border-box; background:#111; color:#00ff88; border:1px solid #333; padding:8px; font-family:monospace; resize:none;">${stState.logAsistencia}</textarea>
-            <div style="display:flex; gap:10px; margin-top:8px;">
-                <button onclick="navigator.clipboard.writeText(document.getElementById('log-asistencia-txt').value); alert('Copiado');" style="flex:3; background:var(--blue-life); color:#fff; border:none; padding:8px; border-radius:4px; cursor:pointer; font-weight:bold;">COPIAR</button>
-                <button onclick="window.devLimpAsis()" style="flex:1; background:#4a0000; color:#fff; border:none; padding:8px; border-radius:4px; cursor:pointer;">Limpiar</button>
-            </div>
-        </div>
-        `;
+        </div>`;
     }
 
-    // =========================================================
-    // VISTA 2: VIDA Y PUNTOS DE ATAQUE
-    // =========================================================
     else if (v === 'vida') {
-        // 🌟 LÍMITE DE VIDA MÁXIMO CALCULADO
         const vAct = getPjStat(pjSeleccionado, 'vidaRojaActual');
-        const maxRojaBase = getPjStat(pjSeleccionado, 'baseVidaRojaMax');
-        const maxRojaExtra = getPjStat(pjSeleccionado, 'buffs', 'vidaRojaMaxExtra') + getPjStat(pjSeleccionado, 'hechizos', 'vidaRojaMaxExtra') + getPjStat(pjSeleccionado, 'hechizosEfecto', 'vidaRojaMaxExtra');
-        const topeVida = maxRojaBase + maxRojaExtra;
+        const topeVida = getPjStat(pjSeleccionado, 'baseVidaRojaMax') + getPjStat(pjSeleccionado, 'buffs', 'vidaRojaMaxExtra') + getPjStat(pjSeleccionado, 'hechizos', 'vidaRojaMaxExtra') + getPjStat(pjSeleccionado, 'hechizosEfecto', 'vidaRojaMaxExtra');
 
         html += `
         <div style="background:#1a0505; border:1px solid var(--red-life); border-radius:8px; padding:15px; margin-bottom:15px;">
@@ -182,50 +162,40 @@ export function renderColumnaStats(pjSeleccionado) {
             ${genStatRow(pjSeleccionado, 'C. Azules', 'baseVidaAzul', null, 'var(--blue-life)')}
             ${genStatRow(pjSeleccionado, 'G. Dorada', 'baseGuardaDorada', null, 'var(--gold)')}
         </div>
-
         <h4 style="color:#aaa; border-bottom:1px solid #333; padding-bottom:5px;">Límites Extra (Buffs Temporales)</h4>
         <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:15px;">
             ${genStatRow(pjSeleccionado, 'Extra Rojo', 'buffs', 'vidaRojaMaxExtra', '#ff8888')}
             ${genStatRow(pjSeleccionado, 'Extra Azul', 'buffs', 'vidaAzulExtra', '#88ccff')}
             ${genStatRow(pjSeleccionado, 'Extra Dorada', 'buffs', 'guardaDoradaExtra', '#ffea88')}
         </div>
-
         <h4 style="color:#aaa; border-bottom:1px solid #333; padding-bottom:5px;">Puntos de Daño Base</h4>
         <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:15px;">
             ${genStatRow(pjSeleccionado, 'Daño Rojo', 'baseDanoRojo', null, 'var(--red-life)')}
             ${genStatRow(pjSeleccionado, 'Daño Azul', 'baseDanoAzul', null, 'var(--blue-life)')}
             ${genStatRow(pjSeleccionado, 'Elim. Dorada', 'baseElimDorada', null, 'var(--gold)')}
-        </div>
-        `;
+        </div>`;
     }
 
-    // =========================================================
-    // VISTA 3: AFINIDADES
-    // =========================================================
     else if (v === 'afinidades') {
         const sec = (titulo, campoDb, color) => {
             let sHtml = `<h4 style="color:${color}; border-bottom:1px solid ${color}44; padding-bottom:5px; margin-top:20px;">${titulo}</h4><div style="display:flex; flex-direction:column; gap:8px;">`;
-            AFINIDADES_LISTA.forEach(af => { sHtml += genStatRow(pjSeleccionado, af.toUpperCase(), campoDb, af, color, true); });
+            AFINIDADES_LISTA.forEach(af => { sHtml += genStatRow(pjSeleccionado, af.charAt(0).toUpperCase() + af.slice(1), campoDb, af, color, true); });
             sHtml += `</div>`;
             return sHtml;
         };
         const secReadOnly = (titulo, campoDb, color) => {
             let sHtml = `<h4 style="color:${color}; border-bottom:1px solid ${color}44; padding-bottom:5px; margin-top:20px;">${titulo}</h4><div style="display:flex; flex-direction:column; gap:8px;">`;
-            AFINIDADES_LISTA.forEach(af => { sHtml += genStatRowReadOnly(pjSeleccionado, af.toUpperCase(), campoDb, af, color); });
+            AFINIDADES_LISTA.forEach(af => { sHtml += genStatRowReadOnly(pjSeleccionado, af.charAt(0).toUpperCase() + af.slice(1), campoDb, af, color); });
             sHtml += `</div>`;
             return sHtml;
         };
 
         html += sec('✨ Afinidades PERMANENTES (Base)', 'afinidadesBase', '#ffffff');
-        // 🌟 Ahora se leen las afinidades aportadas por el Grimorio
         html += secReadOnly('📖 Aportado por Grimorio (Hcz)', 'hechizos', '#ffaa00');
         html += sec('🔮 Alteración por Hechizos (ALT)', 'hechizosEfecto', 'var(--cyan-magic)');
         html += sec('⏳ Extras Temporales (EXT / Buffs)', 'buffs', '#00ff88');
     }
 
-    // =========================================================
-    // VISTA 4: EFECTOS DE ESTADO
-    // =========================================================
     else if (v === 'estados') {
         html += `<h3 style="color:#9966ff; font-family:'Cinzel'; margin-top:0;">Aplicar al Personaje</h3>
                  <div style="display:flex; flex-direction:column; gap:8px; max-height:300px; overflow-y:auto; padding-right:5px; margin-bottom:20px;">`;
@@ -241,7 +211,6 @@ export function renderColumnaStats(pjSeleccionado) {
                             <div style="color:#888; font-size:0.75em;">${e.desc}</div>
                         </div>`;
             
-            // 🔥 SOLUCIÓN: Buscar "num" detecta "numérico" o "numero" desde Supabase
             if (e.tipo && e.tipo.toLowerCase().includes('num')) {
                 html += `
                 <div style="display:flex; align-items:center; gap:10px;">
@@ -259,44 +228,54 @@ export function renderColumnaStats(pjSeleccionado) {
         });
         html += `</div>`;
 
-        // 🌟 ZONA DE CREACIÓN CON <input type="color">
+        // 🌟 GESTIÓN DE ESTADOS GLOBALES
         html += `
         <div style="border-top:2px dashed #444; padding-top:20px;">
-            <h3 style="color:#ffaa00; font-family:'Cinzel'; margin:0 0 10px 0;">🌍 Crear Nuevo Estado Global</h3>
-            <p style="color:#aaa; font-size:0.8em; margin-top:0;">Aparecerá en la base de datos para todos los jugadores.</p>
+            <h3 style="color:#ffaa00; font-family:'Cinzel'; margin:0 0 10px 0;">🌍 Gestión de Estados Globales</h3>
             
+            <div style="display:flex; flex-direction:column; gap:5px; max-height:150px; overflow-y:auto; margin-bottom: 15px; padding-right:5px;">`;
+            stState.estadosDB.forEach(e => {
+                html += `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#111; padding:6px 10px; border:1px solid #333; border-radius:4px;">
+                    <span style="color:${e.border}; font-weight:bold; font-size:0.9em;">${e.nombre}</span>
+                    <div style="display:flex; gap:5px;">
+                        <button onclick="window.devEditarEstadoGlobal('${e.id}')" style="background:#004a4a; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:0.8em;">✏️ EDITAR</button>
+                        <button onclick="window.devBorrarEstadoGlobal('${e.id}')" style="background:#4a0000; color:#fff; border:none; padding:4px 8px; border-radius:4px; cursor:pointer; font-size:0.8em;">🗑️ BORRAR</button>
+                    </div>
+                </div>`;
+            });
+        html += `</div>
+
             <div style="background:#1a0f00; border:1px solid #ff9900; border-radius:8px; padding:15px;">
-                <input type="text" id="ne-id" placeholder="ID Interno (ej: veneno_fuerte)" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:8px; border-radius:4px; margin-bottom:10px;">
-                <input type="text" id="ne-nom" placeholder="Nombre Visible (ej: Veneno Fuerte)" style="width:100%; box-sizing:border-box; background:#000; color:#ffaa00; border:1px solid #ffaa00; padding:8px; border-radius:4px; font-weight:bold; margin-bottom:10px;">
+                <input type="text" id="ne-nom" placeholder="Nombre Visible (ej: Veneno Fuerte)" style="width:100%; box-sizing:border-box; background:#000; color:#ffaa00; border:1px solid #ffaa00; padding:8px; border-radius:4px; font-weight:bold; margin-bottom:10px; outline:none;">
                 
                 <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Tipo de Efecto</div>
-                <select id="ne-tipo" style="width:100%; background:#000; color:#fff; border:1px solid #444; padding:8px; border-radius:4px; margin-bottom:10px;">
+                <select id="ne-tipo" style="width:100%; background:#000; color:#fff; border:1px solid #444; padding:8px; border-radius:4px; margin-bottom:10px; outline:none;">
                     <option value="booleano">Booleano (Activo/Inactivo)</option>
                     <option value="numero">Numérico (Acumulable 1,2,3...)</option>
                 </select>
 
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
                     <div>
-                        <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Color del Borde</div>
-                        <input type="color" id="ne-b" value="#ff4444" style="width:100%; height:40px; border:1px solid #444; border-radius:4px; padding:0; cursor:pointer;">
+                        <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Color Borde</div>
+                        <input type="color" id="ne-b" value="#ff4444" style="width:100%; height:40px; border:1px solid #444; border-radius:4px; cursor:pointer;">
                     </div>
                     <div>
-                        <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Color del Fondo</div>
-                        <input type="color" id="ne-bg" value="#800000" style="width:100%; height:40px; border:1px solid #444; border-radius:4px; padding:0; cursor:pointer;">
+                        <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Color Fondo</div>
+                        <input type="color" id="ne-bg" value="#800000" style="width:100%; height:40px; border:1px solid #444; border-radius:4px; cursor:pointer;">
                     </div>
                 </div>
 
                 <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Descripción del Efecto</div>
-                <textarea id="ne-desc" rows="2" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:8px; border-radius:4px; resize:vertical; margin-bottom:15px;"></textarea>
+                <textarea id="ne-desc" rows="2" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:8px; border-radius:4px; resize:vertical; margin-bottom:15px; outline:none;"></textarea>
 
                 <button onclick="window.devGuardarEstadoConfig(
-                    document.getElementById('ne-id').value,
                     document.getElementById('ne-nom').value,
                     document.getElementById('ne-tipo').value,
                     document.getElementById('ne-bg').value,
                     document.getElementById('ne-b').value,
                     document.getElementById('ne-desc').value
-                )" style="width:100%; background:linear-gradient(135deg, #804000, #cc6600); color:#fff; font-weight:bold; border:none; padding:10px; border-radius:4px; cursor:pointer; font-family:'Cinzel';">➕ Agregar a Cola BD</button>
+                )" style="width:100%; background:linear-gradient(135deg, #804000, #cc6600); color:#fff; font-weight:bold; border:none; padding:10px; border-radius:4px; cursor:pointer; font-family:'Cinzel';">➕ Guardar Estado en la BD</button>
             </div>
         </div>
         `;
