@@ -28,6 +28,7 @@ export function revisarCambiosPendientes() {
 export function actualizarLogGlobal() {
     const logPorPJ = {};
 
+    // --- 1. Objetos ---
     for (const pjKey in objState.colaInventario) {
         const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey)?.nombre || pjKey;
         for (const objNombre in objState.colaInventario[pjKey]) {
@@ -51,6 +52,7 @@ export function actualizarLogGlobal() {
         }
     }
 
+    // --- 2. Estadísticas ---
     const nomLegibles = {
         'hex': 'HEX', 'asistencia': 'Asistencia', 'vidaRojaActual': 'Vida Roja',
         'baseVidaRojaMax': 'Límite Rojo', 'baseVidaAzul': 'Corazones Azules', 'baseGuardaDorada': 'Guarda Dorada',
@@ -81,22 +83,20 @@ export function actualizarLogGlobal() {
                     if (flatKey.includes('hechizosEfecto')) statName = `Afinidad Alt. ${afinCapital[parts[1]]}`;
                     if (flatKey.includes('buffs')) statName = `Buff Extra ${afinCapital[parts[1]] || parts[1]}`;
                     
-                    // 🌟 REGLA ESPECIAL PARA HEX DE ASISTENCIA (1300 -> 300 y 1000)
-                    if (flatKey === 'hex' && delta === 1300 && cambios['asistencia'] === 1 && dbPj['asistencia'] === 7) {
+                    // 🌟 DIVISION DEL HEX POR BONO DE ASISTENCIA 🌟
+                    if (flatKey === 'hex' && delta >= 1300) {
+                        let extra = delta - 300;
                         logPorPJ[realPj].push(`HEX +300`);
-                        logPorPJ[realPj].push(`HEX +1000 ¡Extra! (${cantNueva})`);
+                        logPorPJ[realPj].push(`HEX +${extra} ¡Extra! (${cantNueva})`);
                     }
-                    // 🌟 REGLA ESPECIAL PARA ASISTENCIA (Reinicio sin restar)
                     else if (flatKey === 'asistencia' && delta < 0 && cantNueva === 1) {
                         logPorPJ[realPj].push(`Asistencia reiniciada (1/7)`);
                     }
-                    // 🌟 REGLA ESPECIAL ESTADOS NUMÉRICOS
                     else if (flatKey.includes('estados')) {
                         const eDef = stState.estadosDB.find(e => e.id === parts[1]);
                         const eName = eDef ? eDef.nombre : parts[1];
                         logPorPJ[realPj].push(`${eName} ${sign}${delta} (${cantNueva})`);
                     } 
-                    // 🌟 REGLA VIDA CON TOPE
                     else if (flatKey === 'vidaRojaActual' || flatKey === 'baseVidaRojaMax') {
                         let maxBase = (flatKey === 'baseVidaRojaMax' ? cantNueva : (dbPj.baseVidaRojaMax||0) + (cambios['baseVidaRojaMax'] !== undefined ? cambios['baseVidaRojaMax'] - (dbPj.baseVidaRojaMax||0) : 0));
                         let extra = (dbPj.buffs?.vidaRojaMaxExtra||0) + (dbPj.hechizosEfecto?.vidaRojaMaxExtra||0) + (dbPj.hechizos?.vidaRojaMaxExtra||0);
@@ -109,7 +109,6 @@ export function actualizarLogGlobal() {
                     }
                 }
             } 
-            // 🌟 REGLA ESTADOS BOOLEANOS (adq / rmv)
             else if (typeof cantNueva === 'boolean' && cantNueva !== cantVieja) {
                 if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
                 const eDef = stState.estadosDB.find(e => e.id === parts[1]);
@@ -177,7 +176,7 @@ export async function ejecutarGuardadoGlobal() {
             }
         }
 
-        // 🌟 MAPEO A COLUMNAS PLANAS PARA SUPABASE
+        // ================== ESTADÍSTICAS Y MAPEADO A COLUMNAS PLANAS ==================
         for (const pjKey in stState.colaStats) {
             const realPj = devState.listaPersonajes.find(p => p.nombre.toLowerCase() === pjKey.toLowerCase())?.nombre || pjKey;
             const cambios = stState.colaStats[pjKey];
@@ -196,7 +195,6 @@ export async function ejecutarGuardadoGlobal() {
                 nombre: realPj,
                 hex: updatedPj.hex,
                 asistencia: updatedPj.asistencia,
-                vex: updatedPj.vex,
                 vida_roja_actual: updatedPj.vidaRojaActual,
                 base_vida_roja_max: updatedPj.baseVidaRojaMax,
                 base_vida_azul: updatedPj.baseVidaAzul,
@@ -206,7 +204,6 @@ export async function ejecutarGuardadoGlobal() {
                 base_elim_dorada: updatedPj.baseElimDorada,
                 estados: updatedPj.estados,
                 
-                // Mapeo plano exacto a la BD
                 fisica: updatedPj.afinidadesBase.fisica || 0,
                 energetica: updatedPj.afinidadesBase.energetica || 0,
                 espiritual: updatedPj.afinidadesBase.espiritual || 0,
