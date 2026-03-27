@@ -1,5 +1,5 @@
 // ============================================================
-// panel-objetos-logic.js — Lógica de asignación, creación y edición
+// panel-objetos-logic.js — Lógica de asignación y edición
 // ============================================================
 
 import { objState } from './panel-objetos-state.js';
@@ -38,14 +38,16 @@ export function modificarCantidad(pjNombre, objNombre, variacion) {
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
-export function setBusquedaObjeto(texto) {
-    objState.busqueda = texto.toLowerCase();
+export function setBusquedaObjeto(texto, tipo = 'inv') {
+    if (tipo === 'edit') objState.busquedaEdit = texto.toLowerCase();
+    else objState.busqueda = texto.toLowerCase();
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
 // ── LÓGICA DE INTERFAZ Y FORJA ──
 export function cambiarVistaObjetos(vista) {
     objState.vistaActiva = vista;
+    objState.objAEditarSeleccionado = ""; // Resetear selección al cambiar de pestaña
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
@@ -54,19 +56,21 @@ export function setCantidadFormularios(num) {
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
-export function actualizarFormularioNuevo(index, campo, valor) {
+export function actualizarFormularioNuevo(index, campo, valor, reRender = true) {
     if (!objState.colaNuevosObjetos[index]) {
         objState.colaNuevosObjetos[index] = { nombre: '', cant: 1, tipo: 'Arma', mat: '-', rar: 'Común', eff: '' };
     }
     objState.colaNuevosObjetos[index][campo] = valor;
-    window.dispatchEvent(new Event('devUIUpdate')); // Disparamos evento para mostrar el botón Guardar
+    
+    // Si estamos escribiendo texto, NO re-renderizamos para evitar LAG. Solo mostramos el botón de Guardar.
+    if (reRender) window.dispatchEvent(new Event('devUIUpdate'));
+    else window.dispatchEvent(new Event('devDataChanged')); 
 }
 
 // ── LÓGICA DE EDICIÓN ──
 export function seleccionarObjetoParaEditar(nombreObj) {
     objState.objAEditarSeleccionado = nombreObj;
     
-    // Si elegimos un objeto y aún no está en la cola de edición, le precargamos los datos originales de la BD
     if (nombreObj && !objState.colaEdicionObjetos[nombreObj]) {
         const dbObj = objState.catalogoDB.find(o => o.nombre === nombreObj);
         if (dbObj) {
@@ -82,10 +86,12 @@ export function seleccionarObjetoParaEditar(nombreObj) {
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
-export function modificarObjetoEdicion(campo, valor) {
+export function modificarObjetoEdicion(campo, valor, reRender = true) {
     const objBase = objState.objAEditarSeleccionado;
     if (!objBase || !objState.colaEdicionObjetos[objBase]) return;
     
     objState.colaEdicionObjetos[objBase][campo] = valor;
-    window.dispatchEvent(new Event('devUIUpdate')); // Disparamos evento para mostrar el botón Guardar
+    
+    if (reRender) window.dispatchEvent(new Event('devUIUpdate'));
+    else window.dispatchEvent(new Event('devDataChanged'));
 }
