@@ -32,7 +32,14 @@
         <div id="interfaz-master" class="oculto">
             
             <div class="selector-section">
-                <input type="text" id="dev-search" class="search-bar-dev" placeholder="🔍 Buscar Jugador o Entidad...">
+                
+                <div style="display:flex; gap:10px; margin-bottom: 10px;">
+                    <button class="tab-rol active" id="tab-jugadores" onclick="window.cambiarFiltroRol('jugadores')" style="background:#004a00; color:white; border:2px solid #00e676; padding:10px 20px; border-radius:6px; cursor:pointer; font-family:'Cinzel'; font-weight:bold;">⚔️ JUGADORES</button>
+                    <button class="tab-rol" id="tab-npcs" onclick="window.cambiarFiltroRol('npcs')" style="background:#111; color:#888; border:2px solid #444; padding:10px 20px; border-radius:6px; cursor:pointer; font-family:'Cinzel'; font-weight:bold; transition:0.2s;">🎭 NPCs</button>
+                </div>
+
+                <input type="text" id="dev-search" class="search-bar-dev" placeholder="🔍 Buscar personaje en esta lista..." oninput="window.filtrarPorNombre(this.value)">
+                
                 <div class="character-selector" id="dev-character-list">
                     </div>
             </div>
@@ -60,6 +67,10 @@
             </div>
         </div>
     </div>
+
+    <button id="btn-sync-global" class="oculto" onclick="window.ejecutarGuardadoGlobal()" style="position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #b8860b 0%, #d4af37 100%); color: #000; border: 2px solid #fff; border-radius: 30px; padding: 15px 30px; font-family: 'Cinzel', serif; font-size: 1.2em; font-weight: bold; cursor: pointer; box-shadow: 0 10px 20px rgba(0,0,0,0.8), 0 0 15px rgba(212,175,55,0.6); z-index: 1000; transition: transform 0.2s;">
+        🔥 GUARDAR TODO AL SERVIDOR 🔥
+    </button>
 
     <script type="module" src="dev-main.js"></script>
 </body>
