@@ -34,18 +34,18 @@ window.onload = async () => {
     }
 
     try {
-        // EXTRACCIÓN PURA DE SUPABASE
-        const [{data: personajesBD}, catalogoObj, invObj, estadosArr, hechizosData] = await Promise.all([
+        // 🔥 AQUÍ ESTÁ LA CORRECCIÓN: Le ordenamos a Supabase descargar el inventario
+        const [{data: personajesBD}, catalogoObj, invObj, estadosArr, hechizosData, {data: invHz}] = await Promise.all([
             supabase.from('personajes').select('*'),
             db.objetos.getCatalogo(),
             db.objetos.getInventarioCompleto(),
             db.estadosConfig.getAll(),
-            db.hechizos.getDataCompleta() // <-- AQUÍ ESTÁ TODO (Nodos e Inventario)
+            db.hechizos.getDataCompleta(),
+            supabase.from('inventario_hechizos').select('*') 
         ]);
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
 
-        // MAPEO PLANO DIRECTO A LA MEMORIA
         const statsGlobalMock = {};
         personajesBD.forEach(p => {
             statsGlobalMock[p.nombre] = {
@@ -102,11 +102,12 @@ window.onload = async () => {
         }));
 
         const catalogoHz = [...(hechizosData.nodos || []), ...(hechizosData.nodosOcultos || [])];
-        const inventarioHz = hechizosData.inventario || []; // 🌟 AQUÍ ESTÁ EL INVENTARIO REAL
 
         initObjetosDev(catalogoObj, invObj);
         initStatsDev(statsGlobalMock, estadosListMock);
-        initHechizosDev(catalogoHz, inventarioHz); 
+        
+        // ¡Enviamos el inventario real de Supabase al módulo!
+        initHechizosDev(catalogoHz, invHz || []); 
 
         document.getElementById('pantalla-carga').classList.add('oculto');
         document.getElementById('interfaz-master').classList.remove('oculto');
