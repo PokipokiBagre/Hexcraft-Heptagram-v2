@@ -35,7 +35,7 @@ window.onload = async () => {
 
     try {
         // EXTRACCIÓN PURA DE SUPABASE
-        // Usamos getDataCompleta() para respetar tu estructura de Nodos y Nodos Ocultos
+        // ¡Esta es la línea clave que estaba causando el error!
         const [{data: personajesBD}, catalogoObj, invObj, estadosArr, hechizosData] = await Promise.all([
             supabase.from('personajes').select('*'),
             db.objetos.getCatalogo(),
