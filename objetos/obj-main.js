@@ -4,7 +4,7 @@
 
 import { invGlobal, objGlobal, statsGlobal, historial, estadoUI, guardar } from './obj-state.js';
 import { cargarTodoDesdeCSV, sincronizarObjetosBD, proponerObjeto, aprobarPropuesta as aprobarProp, rechazarPropuesta as rechazarProp, aprobarTodasPropuestas, getPropuestasParaPersonaje } from './obj-data.js';
-import { modificar, modificarMulti, transferir, descargarLogExcel, descargarEstadoExcel, agregarObjetoManual, agregarObjetosMulti, eliminarObjetoCompletamente, editarObjetoCatalogo } from './obj-logic.js';
+import { modificar, modificarMulti, transferir, descargarLogExcel, descargarEstadoExcel, agregarObjetoManual, agregarObjetosMulti, eliminarObjetoCompletamente, editarObjetoCatalogo, toggleEquipacion } from './obj-logic.js'; // 🌟 IMPORT AÑADIDO
 import { refrescarUI, dibujarMenuOP, dibujarInventarios, dibujarCatalogo, dibujarControl, dibujarCreacionObjeto, dibujarCreacionMulti, dibujarGrillaPersonajes, dibujarPartyLoot, dibujarTransferencia, dibujarResumenVisual, dibujarModalEdicionObjeto, dibujarPropuestas, dibujarFormularioPropuesta } from './obj-ui.js';
 import { hexAuth } from '../hex-auth.js';
 import { db } from '../hex-db.js';
@@ -156,12 +156,17 @@ async function iniciar() {
 
     window.setEditMult = (val) => { estadoUI.editMult = val; refrescarUI(); };
     window.setEditModo = (val) => { estadoUI.editModo = val; refrescarUI(); };
+    
     window.hexMod = (j, o, c) => {
         if (!estadoUI.cambiosSesion[j]) estadoUI.cambiosSesion[j] = {};
         estadoUI.cambiosSesion[j][o] = (estadoUI.cambiosSesion[j][o] || 0) + c;
         actualizarLogSesion();
         modificar(j, o, c, () => { refrescarUI(); window.actualizarBotonSyncObj(); });
     };
+
+    // 🌟 NUEVAS FUNCIONES DE EQUIPACIÓN Y MODIFICACIÓN GLOBAL 🌟
+    window.mod = (c, j, o) => modificar(j, o, c, () => { refrescarUI(); window.actualizarBotonSyncObj(); });
+    window.toggleEqp = (j, o) => toggleEquipacion(j, o, () => { refrescarUI(); window.actualizarBotonSyncObj(); });
 
     window.togglePartyLoot = (player, isChecked) => {
         if (isChecked && !estadoUI.partyLoot.includes(player)) estadoUI.partyLoot.push(player);
