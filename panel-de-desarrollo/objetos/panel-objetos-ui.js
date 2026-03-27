@@ -15,7 +15,6 @@ window.devModFormEdit = modificarObjetoEdicion;
 
 const norm = (str) => str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/\s+/g,'_').replace(/[^a-z0-9_]/g,'');
 
-// 🌟 ALGORITMO ANTI-LAG: Preserva el foco del teclado al reemplazar el HTML
 function drawnHEXPreserveFocus(containerId, html) {
     const activeEl = document.activeElement;
     const activeId = activeEl ? activeEl.id : null;
@@ -35,6 +34,39 @@ function drawnHEXPreserveFocus(containerId, html) {
     }
 }
 
+// 🌟 Función auxiliar para no repetir el HTML de las tarjetas
+function generarTarjetaObjeto(objNombre, pjSeleccionado, colorBordeDestacado = 'var(--cyan-magic)') {
+    const cant = getCantidadActual(pjSeleccionado, objNombre);
+    const imgPath = `${STORAGE_URL}/imgobjetos/${norm(objNombre)}.png`;
+    const imgError = `this.onerror=null; this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png'`;
+    
+    const modificado = (objState.colaInventario[pjSeleccionado.toLowerCase()] && objState.colaInventario[pjSeleccionado.toLowerCase()][objNombre] !== undefined);
+    const borderGlow = modificado ? `border-color:${colorBordeDestacado}; box-shadow:0 0 8px ${colorBordeDestacado}55;` : 'border-color:#333;';
+
+    return `
+    <div style="background:#050505; border:1px solid; ${borderGlow} border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; align-items:center; gap:10px;">
+            <img src="${imgPath}" onerror="${imgError}" style="width:40px; height:40px; border-radius:4px; border:1px solid #444; object-fit:cover;">
+            <div style="flex:1; line-height:1.2; overflow:hidden;">
+                <div style="color:#eee; font-weight:bold; font-size:0.95em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${objNombre}">${objNombre}</div>
+                <div style="color:var(--gold); font-size:0.8em; font-family:'Cinzel';">Stock: ${cant}</div>
+            </div>
+        </div>
+        <div style="display:flex; justify-content:space-between; gap:2px;">
+            <div style="display:flex; gap:2px;">
+                <button onclick="window.devModObjeto('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}', -20)" style="background:#4a0000; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.75em;">-20</button>
+                <button onclick="window.devModObjeto('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}', -5)" style="background:#660000; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.75em;">-5</button>
+                <button onclick="window.devModObjeto('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}', -1)" style="background:#a00000; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.75em;">-1</button>
+            </div>
+            <div style="display:flex; gap:2px;">
+                <button onclick="window.devModObjeto('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}', 1)" style="background:#006600; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.75em;">+1</button>
+                <button onclick="window.devModObjeto('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}', 5)" style="background:#00a000; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.75em;">+5</button>
+                <button onclick="window.devModObjeto('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}', 20)" style="background:#00cc00; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.75em;">+20</button>
+            </div>
+        </div>
+    </div>`;
+}
+
 export function renderColumnaObjetos(pjSeleccionado) {
     const contenedorC = 'content-items';
     if (!document.getElementById(contenedorC)) return;
@@ -44,74 +76,79 @@ export function renderColumnaObjetos(pjSeleccionado) {
         return;
     }
 
+    // 1. TABS DE NAVEGACIÓN (AHORA SON 4)
     let html = `
-        <div style="display:flex; gap:5px; margin-bottom:15px;">
-            <button onclick="window.devSetVistaObj('inventario')" style="flex:1; padding:8px; border-radius:4px; border:1px solid #444; background:${objState.vistaActiva==='inventario'?'var(--cyan-magic)':'#111'}; color:${objState.vistaActiva==='inventario'?'#000':'#aaa'}; font-weight:bold; cursor:pointer; font-family:'Cinzel'; transition:0.2s;">🎒 Inv</button>
-            <button onclick="window.devSetVistaObj('forja')" style="flex:1; padding:8px; border-radius:4px; border:1px solid #444; background:${objState.vistaActiva==='forja'?'var(--gold)':'#111'}; color:${objState.vistaActiva==='forja'?'#000':'#aaa'}; font-weight:bold; cursor:pointer; font-family:'Cinzel'; transition:0.2s;">🛠️ Forjar</button>
-            <button onclick="window.devSetVistaObj('editar')" style="flex:1; padding:8px; border-radius:4px; border:1px solid #444; background:${objState.vistaActiva==='editar'?'#ff4444':'#111'}; color:${objState.vistaActiva==='editar'?'#fff':'#aaa'}; font-weight:bold; cursor:pointer; font-family:'Cinzel'; transition:0.2s;">✏️ Editar</button>
+        <div style="display:flex; gap:5px; margin-bottom:15px; flex-wrap:wrap;">
+            <button onclick="window.devSetVistaObj('inventario')" style="flex:1; padding:6px; border-radius:4px; border:1px solid #444; background:${objState.vistaActiva==='inventario'?'var(--cyan-magic)':'#111'}; color:${objState.vistaActiva==='inventario'?'#000':'#aaa'}; font-weight:bold; cursor:pointer; font-family:'Cinzel'; transition:0.2s;">🎒 Inv</button>
+            <button onclick="window.devSetVistaObj('catalogo')" style="flex:1; padding:6px; border-radius:4px; border:1px solid #444; background:${objState.vistaActiva==='catalogo'?'#00ff88':'#111'}; color:${objState.vistaActiva==='catalogo'?'#000':'#aaa'}; font-weight:bold; cursor:pointer; font-family:'Cinzel'; transition:0.2s;">🌍 Global</button>
+            <button onclick="window.devSetVistaObj('forja')" style="flex:1; padding:6px; border-radius:4px; border:1px solid #444; background:${objState.vistaActiva==='forja'?'var(--gold)':'#111'}; color:${objState.vistaActiva==='forja'?'#000':'#aaa'}; font-weight:bold; cursor:pointer; font-family:'Cinzel'; transition:0.2s;">🛠️ Forjar</button>
+            <button onclick="window.devSetVistaObj('editar')" style="flex:1; padding:6px; border-radius:4px; border:1px solid #444; background:${objState.vistaActiva==='editar'?'#ff4444':'#111'}; color:${objState.vistaActiva==='editar'?'#fff':'#aaa'}; font-weight:bold; cursor:pointer; font-family:'Cinzel'; transition:0.2s;">✏️ Editar</button>
         </div>
     `;
 
     // =========================================================
-    // VISTA 1: INVENTARIO
+    // VISTA 1: INVENTARIO LOCAL (Solo lo que ya tiene)
     // =========================================================
     if (objState.vistaActiva === 'inventario') {
-        html += `<input type="text" id="dev-search-inv" placeholder="🔍 Buscar objeto en la base de datos..." 
+        html += `<input type="text" id="dev-search-inv" placeholder="🔍 Buscar en su inventario..." 
                        value="${objState.busqueda}" 
                        oninput="window.devBusquedaObj(this.value, 'inv')" 
                        style="width:100%; box-sizing:border-box; background:#000; color:var(--cyan-magic); border:1px solid var(--cyan-magic); padding:10px; border-radius:6px; margin-bottom:15px; font-family:'Rajdhani'; outline:none;">
                  <div style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; padding-right:5px;">`;
 
         let listaMostrar = [];
-        if (objState.busqueda === "") {
-            const pjKey = pjSeleccionado.toLowerCase();
-            const itemsBD = objState.inventariosDB[pjKey] ? Object.keys(objState.inventariosDB[pjKey]) : [];
-            const itemsCola = objState.colaInventario[pjKey] ? Object.keys(objState.colaInventario[pjKey]) : [];
-            const setUnico = new Set([...itemsBD, ...itemsCola]);
-            listaMostrar = Array.from(setUnico).filter(obj => getCantidadActual(pjSeleccionado, obj) > 0);
-        } else {
-            listaMostrar = objState.catalogoDB.map(o => o.nombre).filter(nom => nom.toLowerCase().includes(objState.busqueda));
+        const pjKey = pjSeleccionado.toLowerCase();
+        const itemsBD = objState.inventariosDB[pjKey] ? Object.keys(objState.inventariosDB[pjKey]) : [];
+        const itemsCola = objState.colaInventario[pjKey] ? Object.keys(objState.colaInventario[pjKey]) : [];
+        const setUnico = new Set([...itemsBD, ...itemsCola]);
+        listaMostrar = Array.from(setUnico).filter(obj => getCantidadActual(pjSeleccionado, obj) > 0);
+
+        if (objState.busqueda !== "") {
+            listaMostrar = listaMostrar.filter(nom => nom.toLowerCase().includes(objState.busqueda));
         }
 
         if (listaMostrar.length === 0) {
-            html += `<div style="text-align:center; color:#555; padding:10px; font-size:0.9em;">No se encontraron objetos.</div>`;
+            html += `<div style="text-align:center; color:#555; padding:10px; font-size:0.9em;">Inventario vacío. Ve a Global para darle objetos.</div>`;
         } else {
             listaMostrar.forEach(objNombre => {
-                const cant = getCantidadActual(pjSeleccionado, objNombre);
-                const imgPath = `${STORAGE_URL}/imgobjetos/${norm(objNombre)}.png`;
-                const imgError = `this.onerror=null; this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png'`;
-                const modificado = (objState.colaInventario[pjSeleccionado.toLowerCase()] && objState.colaInventario[pjSeleccionado.toLowerCase()][objNombre] !== undefined);
-                const borderGlow = modificado ? 'border-color:var(--cyan-magic); box-shadow:0 0 8px rgba(0,255,255,0.3);' : 'border-color:#333;';
-
-                html += `
-                <div style="background:#050505; border:1px solid; ${borderGlow} border-radius:8px; padding:8px; display:flex; flex-direction:column; gap:8px;">
-                    <div style="display:flex; align-items:center; gap:10px;">
-                        <img src="${imgPath}" onerror="${imgError}" style="width:40px; height:40px; border-radius:4px; border:1px solid #444; object-fit:cover;">
-                        <div style="flex:1; line-height:1.2;">
-                            <div style="color:#eee; font-weight:bold; font-size:0.95em;">${objNombre}</div>
-                            <div style="color:var(--gold); font-size:0.8em; font-family:'Cinzel';">Stock: ${cant}</div>
-                        </div>
-                    </div>
-                    <div style="display:flex; justify-content:space-between; gap:2px;">
-                        <div style="display:flex; gap:2px;">
-                            <button onclick="window.devModObjeto('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}', -20)" style="background:#4a0000; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.75em;">-20</button>
-                            <button onclick="window.devModObjeto('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}', -5)" style="background:#660000; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.75em;">-5</button>
-                            <button onclick="window.devModObjeto('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}', -1)" style="background:#a00000; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.75em;">-1</button>
-                        </div>
-                        <div style="display:flex; gap:2px;">
-                            <button onclick="window.devModObjeto('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}', 1)" style="background:#006600; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.75em;">+1</button>
-                            <button onclick="window.devModObjeto('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}', 5)" style="background:#00a000; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.75em;">+5</button>
-                            <button onclick="window.devModObjeto('${pjSeleccionado}', '${objNombre.replace(/'/g, "\\'")}', 20)" style="background:#00cc00; color:#fff; border:none; border-radius:3px; padding:4px 6px; cursor:pointer; font-weight:bold; font-size:0.75em;">+20</button>
-                        </div>
-                    </div>
-                </div>`;
+                html += generarTarjetaObjeto(objNombre, pjSeleccionado, 'var(--cyan-magic)');
             });
         }
         html += `</div>`;
     }
 
     // =========================================================
-    // VISTA 2: FORJAR NUEVO OBJETO
+    // VISTA 2: CATÁLOGO GLOBAL (Todo lo que existe)
+    // =========================================================
+    else if (objState.vistaActiva === 'catalogo') {
+        html += `<input type="text" id="dev-search-cat" placeholder="🔍 Buscar en el mundo..." 
+                       value="${objState.busquedaCat}" 
+                       oninput="window.devBusquedaObj(this.value, 'cat')" 
+                       style="width:100%; box-sizing:border-box; background:#000; color:#00ff88; border:1px solid #00ff88; padding:10px; border-radius:6px; margin-bottom:15px; font-family:'Rajdhani'; outline:none;">
+                 <div style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; padding-right:5px;">`;
+
+        let listaMostrar = objState.catalogoDB.map(o => o.nombre);
+        if (objState.busquedaCat !== "") {
+            listaMostrar = listaMostrar.filter(nom => nom.toLowerCase().includes(objState.busquedaCat));
+        }
+
+        if (listaMostrar.length === 0) {
+            html += `<div style="text-align:center; color:#555; padding:10px; font-size:0.9em;">No existe en la base de datos. ¡Fórjalo!</div>`;
+        } else {
+            // Optimización: Mostrar solo los primeros 50 para no laguear si no hay búsqueda
+            const topLista = listaMostrar.slice(0, 50);
+            topLista.forEach(objNombre => {
+                html += generarTarjetaObjeto(objNombre, pjSeleccionado, '#00ff88');
+            });
+            if (listaMostrar.length > 50) {
+                html += `<div style="text-align:center; color:#666; font-size:0.8em; padding:5px;">Mostrando 50 de ${listaMostrar.length}. Usa el buscador.</div>`;
+            }
+        }
+        html += `</div>`;
+    }
+
+    // =========================================================
+    // VISTA 3: FORJAR NUEVO OBJETO
     // =========================================================
     else if (objState.vistaActiva === 'forja') {
         html += `
@@ -119,7 +156,7 @@ export function renderColumnaObjetos(pjSeleccionado) {
                 <h4 style="color:var(--gold); margin:0; font-family:'Cinzel';">🛠️ Modelos a Crear</h4>
                 <div style="display:flex; align-items:center; gap:5px;">
                     <input type="number" min="1" max="10" value="${objState.formulariosCreacion}" onchange="window.devSetFormCount(this.value)" 
-                           style="width:50px; background:#000; color:#fff; border:1px solid var(--gold); border-radius:4px; text-align:center; outline:none;">
+                           style="width:50px; background:#000; color:#fff; border:1px solid var(--gold); border-radius:4px; text-align:center; outline:none; font-family:'Rajdhani'; font-weight:bold;">
                 </div>
             </div>
             <div style="overflow-y:auto; padding-right:5px;">
@@ -127,7 +164,6 @@ export function renderColumnaObjetos(pjSeleccionado) {
 
         for (let i = 0; i < objState.formulariosCreacion; i++) {
             const fData = objState.colaNuevosObjetos[i] || { nombre: '', cant: 1, tipo: 'Arma', mat: '-', rar: 'Común', eff: '' };
-            // 🌟 false en oninput = NO re-renderiza el HTML, solo guarda en memoria para evitar LAG
             html += `
                 <div style="background:#0a0514; border:1px solid #4a1880; border-radius:8px; padding:12px; margin-bottom:15px; box-shadow:inset 0 0 10px rgba(74,24,128,0.2);">
                     <input type="text" id="forja-nom-${i}" placeholder="Nombre del Objeto Nuevo" value="${fData.nombre.replace(/"/g, '&quot;')}" 
@@ -172,13 +208,11 @@ export function renderColumnaObjetos(pjSeleccionado) {
     }
 
     // =========================================================
-    // VISTA 3: EDITAR OBJETO EXISTENTE (REDISEÑADO)
+    // VISTA 4: EDITAR OBJETO EXISTENTE
     // =========================================================
     else if (objState.vistaActiva === 'editar') {
-        
         if (!objState.objAEditarSeleccionado) {
-            // MOSTRAR BUSCADOR Y LISTA COMO EN INVENTARIO
-            html += `<input type="text" id="dev-search-edit" placeholder="🔍 Buscar objeto a editar..." 
+            html += `<input type="text" id="dev-search-edit" placeholder="🔍 Buscar en inventario para editar..." 
                            value="${objState.busquedaEdit}" 
                            oninput="window.devBusquedaObj(this.value, 'edit')" 
                            style="width:100%; box-sizing:border-box; background:#000; color:#ff4444; border:1px solid #ff4444; padding:10px; border-radius:6px; margin-bottom:15px; font-family:'Rajdhani'; outline:none;">
@@ -196,7 +230,7 @@ export function renderColumnaObjetos(pjSeleccionado) {
             }
 
             if (listaMostrar.length === 0) {
-                html += `<div style="text-align:center; color:#555; padding:10px; font-size:0.9em;">No se encontraron objetos.</div>`;
+                html += `<div style="text-align:center; color:#555; padding:10px; font-size:0.9em;">No se encontraron objetos para editar.</div>`;
             } else {
                 listaMostrar.forEach(objNombre => {
                     const imgPath = `${STORAGE_URL}/imgobjetos/${norm(objNombre)}.png`;
@@ -217,7 +251,6 @@ export function renderColumnaObjetos(pjSeleccionado) {
             html += `</div>`;
         } 
         else {
-            // FORMULARIO DE EDICIÓN DEL OBJETO SELECCIONADO
             const eData = objState.colaEdicionObjetos[objState.objAEditarSeleccionado];
             if (eData) {
                 html += `
