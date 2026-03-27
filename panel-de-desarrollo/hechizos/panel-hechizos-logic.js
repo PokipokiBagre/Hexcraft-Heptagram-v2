@@ -3,7 +3,8 @@
 // ============================================================
 
 import { hzState } from './panel-hechizos-state.js';
-import { getPjStat, modPjStat, getVexMax } from './estadisticas/panel-stats-logic.js';
+// ¡Ruta corregida aquí abajo!
+import { getPjStat, modPjStat, getVexMax } from '../estadisticas/panel-stats-logic.js';
 
 export function initHechizosDev(catalogo, inventarios_pj) {
     hzState.catalogoDB = catalogo || [];
@@ -27,7 +28,7 @@ export function asignarHechizo(pjNombre, hechizoId, cobrar, costo) {
     hzState.colaAsignaciones[pjKey][hechizoId] = accionDar;
 
     if (accionDar && cobrar) {
-        modPjStat(pjNombre, 'hex', null, -costo, true, false); // Permite negativos, no rerenderiza UI entera
+        modPjStat(pjNombre, 'hex', null, -costo, true, false); 
     }
 
     const accionStr = accionDar ? "Adquirió" : "Olvidó";
