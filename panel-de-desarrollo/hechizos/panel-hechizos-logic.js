@@ -10,8 +10,8 @@ export function initHechizosDev(catalogo, inventarios_pj) {
     hzState.catalogoDB = catalogo || [];
     hzState.inventariosDB = {};
     
+    // Failsafe absoluto para que jamás lance "Cannot read properties of undefined"
     (inventarios_pj || []).forEach(item => {
-        // Lee directamente los nombres de las columnas en Supabase
         const pj = norm(item.personaje_nombre || item.Personaje || ""); 
         const hzId = norm(item.hechizo_id || item.Hechizo || item.ID || item.id);
         
