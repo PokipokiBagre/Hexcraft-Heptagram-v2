@@ -95,12 +95,23 @@ export function copiarPrimerDado() {
     navigator.clipboard.writeText(`!r 1d100 + ${fila.afinidad || 0} // ${fila.nombre || '?'}`).then(() => alert(`Dado ${dado} copiado a todas las filas.`));
 }
 
+// 🌟 Escáner inteligente para extraer propiedades
+const isValidEfe = (v) => v !== undefined && v !== null && v !== "0" && v !== 0 && String(v).trim() !== "" && String(v).trim().toLowerCase() !== "null" && String(v).trim() !== "-";
+const findProp = (obj, ...names) => {
+    if (!obj) return '';
+    for (const key of Object.keys(obj)) {
+        const cleanKey = key.trim().toLowerCase();
+        if (names.some(n => n.toLowerCase() === cleanKey)) {
+            if (isValidEfe(obj[key])) return obj[key];
+        }
+    }
+    return '';
+};
+
 export function calcularConjurosMasivos(pjNombre) {
     let totalCost = 0;
     let logsArr = [];
     let validSpells = 0;
-
-    const isValidEfe = (v) => v !== undefined && v !== null && v !== "0" && v !== 0 && String(v).trim() !== "" && String(v).trim().toLowerCase() !== "null" && String(v).trim() !== "-";
 
     for (let i = 0; i < hzState.casteoManual.numFilas; i++) {
         const fila = hzState.casteoManual.filas[i];
@@ -116,14 +127,16 @@ export function calcularConjurosMasivos(pjNombre) {
         const afin = parseInt(fila.afinidad) || 0;
 
         if (hechizo) {
-            const costoU = parseInt(hechizo.HEX || hechizo.Hex || hechizo.costo || hechizo.Costo || 0) || 0;
+            // Buscamos el costo de forma segura
+            const costoRaw = findProp(hechizo, 'hex', 'costo');
+            const costoU = parseInt(costoRaw) || 0;
             totalCost += (costoU * cant);
             validSpells += cant;
 
             const nc = dado * afin;
             let outcome = "";
-            let efeToPrint = [hechizo.Efecto, hechizo.efecto_desc, hechizo.efecto].find(isValidEfe) || '';
-            const outcastProp = [hechizo.Overcast, hechizo.overcast, hechizo.Overcast_desc, hechizo.overcast_desc].find(isValidEfe) || '';
+            let efeToPrint = findProp(hechizo, 'efecto', 'efecto_desc', 'desc', 'descripcion');
+            const outcastProp = findProp(hechizo, 'overcast', 'overcast_desc', 'efecto_overcast');
 
             if (nc < costoU) {
                 outcome = "❌ FALLO";
