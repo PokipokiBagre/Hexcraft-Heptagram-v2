@@ -36,7 +36,9 @@ export function actualizarLogGlobal() {
     const logPorPJ = {};
 
     for (const pjKey in objState.colaInventario) {
-        const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
+        // Buscar nombre real: primero en listaPersonajes, si no usar el pjKey capitalizado
+        const encontrado = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey));
+        const realPj = encontrado?.nombre || pjKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
         for (const objNombre in objState.colaInventario[pjKey]) {
             const cantNueva = objState.colaInventario[pjKey][objNombre];
             const cantVieja = objState.inventariosDB[pjKey]?.[objNombre] || 0;
@@ -249,6 +251,24 @@ export function actualizarLogGlobal() {
         });
     }
 
+    // 🔀 LOG DE TRANSFERENCIAS (metadata explícita, garantiza aparición en log)
+    for (const t of objState.logTransferencias) {
+        // Entrada en el origen (pérdidas)
+        if (!logPorPJ[t.origen]) logPorPJ[t.origen] = [];
+        t.items.forEach(i => {
+            logPorPJ[t.origen].push(`Obj Trans. → ${t.destino} | ${i.nombre} x${i.cant}`);
+        });
+        // Entrada en el destino (ganancias)
+        if (!logPorPJ[t.destino]) logPorPJ[t.destino] = [];
+        t.items.forEach(i => {
+            const dbObj = objState.catalogoDB.find(o => o.nombre === i.nombre);
+            const editObj = objState.colaEdicionObjetos[i.nombre];
+            const efecto = (editObj ? editObj.eff : (dbObj ? dbObj.efecto : '')) || '';
+            const efectoStr = efecto ? ` | ${efecto}` : '';
+            logPorPJ[t.destino].push(`Obj Rec. ← ${t.origen} | ${i.nombre} x${i.cant}${efectoStr}`);
+        });
+    }
+
     let logText = "";
     // Primero los globales sin cabecera
     if (logPorPJ['__global__'] && logPorPJ['__global__'].length > 0) {
@@ -436,6 +456,7 @@ export async function ejecutarGuardadoGlobal() {
         localStorage.removeItem('hex_obj_v4');
         localStorage.removeItem('hex_stats_v2');
         localStorage.removeItem('hex_hechizos_cache');
+        objState.logTransferencias = [];
 
         btnSync.innerText = "✅ CAMBIOS APLICADOS";
         btnSync.style.background = "#004a00";
