@@ -9,6 +9,7 @@ import { objState } from './objetos/panel-objetos-state.js';
 import { stState } from './estadisticas/panel-stats-state.js';
 import { hzState } from './hechizos/panel-hechizos-state.js'; 
 import { getPjStat, calcularVidaRojaMaxTotal, calcularVidaAzulTotal, calcularGuardaDoradaTotal, calcularDanoRojoTotal, calcularDanoAzulTotal, calcularElimDoradaTotal } from './estadisticas/panel-stats-logic.js';
+import { AFINIDADES_LISTA } from './estadisticas/panel-stats-state.js';
 import { getCantidadActual } from './objetos/panel-objetos-logic.js'; 
 
 export function revisarCambiosPendientes() {
@@ -42,8 +43,15 @@ export function actualizarLogGlobal() {
             const delta = cantNueva - cantVieja; 
             if (delta !== 0) {
                 if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
-                if (delta > 0) logPorPJ[realPj].push(`Obj Obt. ${objNombre} x${delta}`);
-                else logPorPJ[realPj].push(`Obj Prd. ${objNombre} x${Math.abs(delta)}`);
+                if (delta > 0) {
+                    const dbObj = objState.catalogoDB.find(o => o.nombre === objNombre);
+                    const editObj = objState.colaEdicionObjetos[objNombre];
+                    const efecto = (editObj ? editObj.eff : (dbObj ? dbObj.efecto : '')) || '';
+                    const efectoStr = efecto ? ` | ${efecto}` : '';
+                    logPorPJ[realPj].push(`Obj Obt. ${objNombre} x${delta}${efectoStr}`);
+                } else {
+                    logPorPJ[realPj].push(`Obj Prd. ${objNombre} x${Math.abs(delta)}`);
+                }
             }
         }
     }
@@ -74,7 +82,8 @@ export function actualizarLogGlobal() {
     for (const obj of nuevosArr) {
         if (obj.cant > 0) {
             if (!logPorPJ[pjActual]) logPorPJ[pjActual] = [];
-            logPorPJ[pjActual].push(`Obj Obt. ${obj.nombre} x${obj.cant}`);
+            const efectoStr = obj.eff ? ` | ${obj.eff}` : '';
+            logPorPJ[pjActual].push(`Obj Obt. ${obj.nombre} x${obj.cant}${efectoStr}`);
         }
     }
 
@@ -182,7 +191,25 @@ export function actualizarLogGlobal() {
                         logPorPJ[realPj].push(`${eName} ${sign}${delta} (${cantNueva})`);
                     }
                     else if (campoRaiz === 'afinidadesBase' && subCampo) {
-                        logPorPJ[realPj].push(`Af. Base ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
+                        const totalAf = (getPjStat(pjKey, 'afinidadesBase', subCampo) || 0)
+                                      + (getPjStat(pjKey, 'hechizos',       subCampo) || 0)
+                                      + (getPjStat(pjKey, 'hechizosEfecto', subCampo) || 0)
+                                      + (getPjStat(pjKey, 'buffs',          subCampo) || 0);
+                        logPorPJ[realPj].push(`Af. Base ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${totalAf})`);
+                    }
+                    else if (campoRaiz === 'hechizosEfecto' && subCampo && AFINIDADES_LISTA.includes(subCampo)) {
+                        const totalAf = (getPjStat(pjKey, 'afinidadesBase', subCampo) || 0)
+                                      + (getPjStat(pjKey, 'hechizos',       subCampo) || 0)
+                                      + (getPjStat(pjKey, 'hechizosEfecto', subCampo) || 0)
+                                      + (getPjStat(pjKey, 'buffs',          subCampo) || 0);
+                        logPorPJ[realPj].push(`Af. Alt. ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${totalAf})`);
+                    }
+                    else if (campoRaiz === 'buffs' && subCampo && AFINIDADES_LISTA.includes(subCampo)) {
+                        const totalAf = (getPjStat(pjKey, 'afinidadesBase', subCampo) || 0)
+                                      + (getPjStat(pjKey, 'hechizos',       subCampo) || 0)
+                                      + (getPjStat(pjKey, 'hechizosEfecto', subCampo) || 0)
+                                      + (getPjStat(pjKey, 'buffs',          subCampo) || 0);
+                        logPorPJ[realPj].push(`Buff ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${totalAf})`);
                     }
                     else if (campoRaiz === 'hechizosEfecto' && subCampo) {
                         logPorPJ[realPj].push(`Af. Alt. ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
