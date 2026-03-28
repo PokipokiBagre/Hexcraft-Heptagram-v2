@@ -141,7 +141,7 @@ export function setTransferCantidad(objNombre, cantidad) {
     } else {
         objState.colaTransferencias[objNombre] = cant;
     }
-    window.dispatchEvent(new Event('devDataChanged'));
+    window.dispatchEvent(new Event('devUIUpdate')); // re-renderiza panel Y activa btn sync
 }
 
 export function ejecutarTransferencia(pjOrigen) {
