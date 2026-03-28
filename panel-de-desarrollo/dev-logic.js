@@ -268,19 +268,13 @@ export function actualizarLogGlobal() {
 
     // 🔀 LOG DE TRANSFERENCIAS (metadata explícita, garantiza aparición en log)
     for (const t of objState.logTransferencias) {
-        // Entrada en el origen (pérdidas)
-        if (!logPorPJ[t.origen]) logPorPJ[t.origen] = [];
+        // Creamos una "cabecera de personaje" falsa para que agrupe la transferencia
+        const cabeceraTransf = `${t.origen} → ${t.destino}`;
+        
+        if (!logPorPJ[cabeceraTransf]) logPorPJ[cabeceraTransf] = [];
+        
         t.items.forEach(i => {
-            logPorPJ[t.origen].push(`Obj Trans. → ${t.destino} | ${i.nombre} x${i.cant}`);
-        });
-        // Entrada en el destino (ganancias)
-        if (!logPorPJ[t.destino]) logPorPJ[t.destino] = [];
-        t.items.forEach(i => {
-            const dbObj = objState.catalogoDB.find(o => o.nombre === i.nombre);
-            const editObj = objState.colaEdicionObjetos[i.nombre];
-            const efecto = (editObj ? editObj.eff : (dbObj ? dbObj.efecto : '')) || '';
-            const efectoStr = efecto ? ` | ${efecto}` : '';
-            logPorPJ[t.destino].push(`Obj Rec. ← ${t.origen} | ${i.nombre} x${i.cant}${efectoStr}`);
+            logPorPJ[cabeceraTransf].push(`Obj Trans. | ${i.nombre} x${i.cant}`);
         });
     }
 
