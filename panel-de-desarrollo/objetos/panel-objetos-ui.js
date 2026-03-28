@@ -3,7 +3,7 @@
 // ============================================================
 
 import { objState, STORAGE_URL, TIPOS_OBJ, RAREZAS_OBJ, MATERIALES_OBJ } from './panel-objetos-state.js';
-import { getCantidadActual, modificarCantidad, actualizarFormularioNuevo, setCantidadFormularios, setBusquedaObjeto, cambiarVistaObjetos, seleccionarObjetoParaEditar, modificarObjetoEdicion, isEquipado, toggleEquipacion } from './panel-objetos-logic.js';
+import { getCantidadActual, modificarCantidad, actualizarFormularioNuevo, setCantidadFormularios, setBusquedaObjeto, cambiarVistaObjetos, seleccionarObjetoParaEditar, modificarObjetoEdicion, isEquipado, toggleEquipacion, setTransferDestino, setTransferFiltroRol, setTransferCantidad, ejecutarTransferencia } from './panel-objetos-logic.js';
 
 window.devModObjeto = modificarCantidad;
 window.devModFormObj = actualizarFormularioNuevo;
@@ -13,6 +13,10 @@ window.devSetVistaObj = cambiarVistaObjetos;
 window.devSeleccionarObjEdit = seleccionarObjetoParaEditar;
 window.devModFormEdit = modificarObjetoEdicion;
 window.devToggleEqp = toggleEquipacion; // 🌟 BOTON
+window.devSetTransferDestino = setTransferDestino;
+window.devSetTransferFiltroRol = setTransferFiltroRol;
+window.devSetTransferCantidad = setTransferCantidad;
+window.devEjecutarTransferencia = ejecutarTransferencia;
 
 const norm = (str) => str.toString().trim().toLowerCase()
     .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
@@ -102,6 +106,7 @@ export function renderColumnaObjetos(pjSeleccionado) {
             <button onclick="window.devSetVistaObj('catalogo')" style="flex:1; padding:6px; border-radius:4px; border:1px solid #444; background:${objState.vistaActiva==='catalogo'?'#00ff88':'#111'}; color:${objState.vistaActiva==='catalogo'?'#000':'#aaa'}; font-weight:bold; cursor:pointer; font-family:'Cinzel'; transition:0.2s;">🌍 Global</button>
             <button onclick="window.devSetVistaObj('forja')" style="flex:1; padding:6px; border-radius:4px; border:1px solid #444; background:${objState.vistaActiva==='forja'?'var(--gold)':'#111'}; color:${objState.vistaActiva==='forja'?'#000':'#aaa'}; font-weight:bold; cursor:pointer; font-family:'Cinzel'; transition:0.2s;">🛠️ Forjar</button>
             <button onclick="window.devSetVistaObj('editar')" style="flex:1; padding:6px; border-radius:4px; border:1px solid #444; background:${objState.vistaActiva==='editar'?'#ff4444':'#111'}; color:${objState.vistaActiva==='editar'?'#fff':'#aaa'}; font-weight:bold; cursor:pointer; font-family:'Cinzel'; transition:0.2s;">✏️ Editar</button>
+            <button onclick="window.devSetVistaObj('transferir')" style="flex:1; padding:6px; border-radius:4px; border:1px solid #444; background:${objState.vistaActiva==='transferir'?'#ff9900':'#111'}; color:${objState.vistaActiva==='transferir'?'#000':'#aaa'}; font-weight:bold; cursor:pointer; font-family:'Cinzel'; transition:0.2s;">🔀 Trans.</button>
         </div>
     `;
 
@@ -228,6 +233,108 @@ export function renderColumnaObjetos(pjSeleccionado) {
                     <div style="color:#888; font-size:0.7em; margin-bottom:2px;">Efecto / Descripción</div>
                     <textarea id="edit-eff" rows="4" oninput="window.devModFormEdit('eff', this.value, false)" style="width:100%; box-sizing:border-box; background:#000; color:#fff; border:1px solid #444; padding:10px; border-radius:4px; outline:none; resize:vertical;">${eData.eff}</textarea>
                 </div>`;
+            }
+        }
+    }
+
+    else if (objState.vistaActiva === 'transferir') {
+        // Necesitamos la lista global de personajes — viene de devState vía window
+        const listaPersonajes = window.__devListaPersonajes || [];
+        const pjOrigen = pjSeleccionado;
+        const destino = objState.transferDestinoNombre;
+        const filtro = objState.transferFiltroRol;
+
+        // ── Selector de rol destino ──
+        const btnJStyle = filtro === 'jugadores'
+            ? 'background:#004a00; color:white; border:2px solid #00e676;'
+            : 'background:#111; color:#888; border:2px solid #444;';
+        const btnNStyle = filtro === 'npcs'
+            ? 'background:#4a0000; color:white; border:2px solid #ff4444;'
+            : 'background:#111; color:#888; border:2px solid #444;';
+
+        html += `
+        <div style="margin-bottom:12px;">
+            <div style="color:#ff9900; font-size:0.8em; font-weight:bold; margin-bottom:6px; font-family:'Cinzel';">RECEPTOR DE OBJETOS</div>
+            <div style="display:flex; gap:6px; margin-bottom:10px;">
+                <button onclick="window.devSetTransferFiltroRol('jugadores')" style="${btnJStyle} flex:1; padding:7px; border-radius:4px; cursor:pointer; font-family:'Cinzel'; font-weight:bold; font-size:0.8em;">⚔️ Jugadores</button>
+                <button onclick="window.devSetTransferFiltroRol('npcs')" style="${btnNStyle} flex:1; padding:7px; border-radius:4px; cursor:pointer; font-family:'Cinzel'; font-weight:bold; font-size:0.8em;">🎭 NPCs</button>
+            </div>
+            <div style="display:flex; flex-wrap:wrap; gap:6px; max-height:130px; overflow-y:auto; padding-right:3px;">`;
+
+        listaPersonajes
+            .filter(p => {
+                if (norm(p.nombre) === norm(pjOrigen)) return false; // excluir al propio origen
+                return filtro === 'jugadores' ? p.is_player : !p.is_player;
+            })
+            .sort((a, b) => a.nombre.localeCompare(b.nombre))
+            .forEach(p => {
+                const seleccionado = destino && norm(destino) === norm(p.nombre);
+                const borderC = p.is_player ? '#00e676' : '#ff4444';
+                const bgC = seleccionado ? (p.is_player ? '#004a00' : '#4a0000') : '#111';
+                const borderStyle = seleccionado ? `border:2px solid ${borderC};` : 'border:1px solid #333;';
+                html += `
+                <button onclick="window.devSetTransferDestino('${p.nombre.replace(/'/g, "\\'")}')"
+                    style="${borderStyle} background:${bgC}; color:${seleccionado ? '#fff' : '#aaa'}; border-radius:5px; padding:5px 10px; cursor:pointer; font-family:'Rajdhani'; font-weight:bold; font-size:0.85em; transition:0.15s;">
+                    ${p.nombre}
+                </button>`;
+            });
+
+        html += `</div></div>`;
+
+        if (!destino) {
+            html += `<div style="text-align:center; color:#666; padding:20px; font-style:italic; border:1px dashed #333; border-radius:8px;">Selecciona un receptor arriba para elegir qué transferir.</div>`;
+        } else {
+            // Inventario del origen para elegir cantidades
+            const pjKey = pjOrigen.toLowerCase();
+            const itemsBD = objState.inventariosDB[pjKey] ? Object.keys(objState.inventariosDB[pjKey]) : [];
+            const itemsCola = objState.colaInventario[pjKey] ? Object.keys(objState.colaInventario[pjKey]) : [];
+            const setUnico = new Set([...itemsBD, ...itemsCola]);
+            const inventarioOrigen = Array.from(setUnico).filter(obj => getCantidadActual(pjOrigen, obj) > 0);
+
+            html += `<div style="color:#ff9900; font-size:0.8em; font-weight:bold; margin-bottom:8px; font-family:'Cinzel';">📦 OBJETOS A ENVIAR → ${destino}</div>`;
+
+            if (inventarioOrigen.length === 0) {
+                html += `<div style="text-align:center; color:#555; padding:10px; font-size:0.9em;">El inventario de ${pjOrigen} está vacío.</div>`;
+            } else {
+                html += `<div style="display:flex; flex-direction:column; gap:6px; overflow-y:auto; padding-right:5px; margin-bottom:12px;">`;
+                inventarioOrigen.sort((a,b) => a.localeCompare(b)).forEach(objNombre => {
+                    const disponible = getCantidadActual(pjOrigen, objNombre);
+                    const cantTransf = objState.colaTransferencias[objNombre] || 0;
+                    const imgPath = `${STORAGE_URL}/imgobjetos/${norm(objNombre)}.png`;
+                    const imgError = `this.onerror=null; this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png'`;
+                    const resalta = cantTransf > 0 ? 'border-color:#ff9900; box-shadow:0 0 6px rgba(255,153,0,0.3);' : 'border-color:#333;';
+
+                    html += `
+                    <div style="background:#050505; border:1px solid; ${resalta} border-radius:8px; padding:8px; display:flex; align-items:center; gap:10px;">
+                        <img src="${imgPath}" onerror="${imgError}" style="width:36px; height:36px; border-radius:4px; border:1px solid #444; object-fit:cover; flex-shrink:0;">
+                        <div style="flex:1; overflow:hidden;">
+                            <div style="color:#eee; font-weight:bold; font-size:0.88em; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${objNombre}">${objNombre}</div>
+                            <div style="color:#666; font-size:0.75em;">Disponible: ${disponible}</div>
+                        </div>
+                        <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
+                            <button onclick="window.devSetTransferCantidad('${objNombre.replace(/'/g, "\\'")}', ${cantTransf - 1})" style="background:#4a0000; color:#fff; border:none; border-radius:3px; padding:4px 7px; cursor:pointer; font-weight:bold; font-size:0.8em;">-</button>
+                            <input type="number" min="0" max="${disponible}" value="${cantTransf}"
+                                onchange="window.devSetTransferCantidad('${objNombre.replace(/'/g, "\\'")}', Math.min(this.value, ${disponible}))"
+                                style="width:46px; text-align:center; background:#000; color:#ff9900; border:1px solid #ff990066; border-radius:3px; padding:3px; font-weight:bold; outline:none; font-family:'Rajdhani';">
+                            <button onclick="window.devSetTransferCantidad('${objNombre.replace(/'/g, "\\'")}', ${cantTransf + 1})" style="background:#4a2000; color:#fff; border:none; border-radius:3px; padding:4px 7px; cursor:pointer; font-weight:bold; font-size:0.8em;">+</button>
+                            <button onclick="window.devSetTransferCantidad('${objNombre.replace(/'/g, "\\'")}', ${disponible})" style="background:#222; color:#ff9900; border:1px solid #ff990055; border-radius:3px; padding:4px 6px; cursor:pointer; font-size:0.7em; font-weight:bold;">TODO</button>
+                        </div>
+                    </div>`;
+                });
+                html += `</div>`;
+
+                const totalItems = Object.values(objState.colaTransferencias).reduce((a, b) => a + b, 0);
+                const btnActivo = totalItems > 0;
+                html += `
+                <button onclick="${btnActivo ? `window.devEjecutarTransferencia('${pjOrigen.replace(/'/g, "\\'")}')` : ''}"
+                    style="width:100%; padding:12px; border-radius:6px; font-family:'Cinzel'; font-weight:bold; font-size:1em; cursor:${btnActivo ? 'pointer' : 'not-allowed'};
+                           background:${btnActivo ? 'linear-gradient(135deg, #7a3d00, #cc6600)' : '#1a1a1a'};
+                           color:${btnActivo ? '#fff' : '#444'};
+                           border:2px solid ${btnActivo ? '#ff9900' : '#333'};
+                           box-shadow:${btnActivo ? '0 0 12px rgba(255,153,0,0.3)' : 'none'};
+                           transition:0.2s;">
+                    🔀 CONFIRMAR TRANSFERENCIA ${btnActivo ? `(${totalItems} ítem${totalItems !== 1 ? 's' : ''})` : ''}
+                </button>`;
             }
         }
     }
