@@ -11,12 +11,15 @@ export const hzState = {
     
     casteoManual: {
         numFilas: 3,
-        filas: Array.from({ length: 50 }, () => ({ dado: '', nombre: '', afinidad: '', cant: 1 })),
+        // cobrarHex: null = sigue global | true/false = override individual
+        // noFalla: el hechizo siempre acierta, ignora NC (sin overcast)
+        // ajusteCosto: modificador de costo HEX (positivo=sobrecosto, negativo=descuento)
+        filas: Array.from({ length: 50 }, () => ({ dado: '', nombre: '', afinidad: '', cant: 1, cobrarHex: null, noFalla: false, ajusteCosto: 0 })),
         datalistModo: 'local'
     },
     
-    cobrarAuto: false,     // 🌟 Modificado: Por defecto en false
-    mostrarEfectos: false, // 🌟 Modificado: Por defecto en false
+    cobrarAuto: false,     // Global: ¿cobrar hex al castear?
+    mostrarEfectos: false, // Global: ¿imprimir efectos en log?
     cobrarAlAsignar: false,
     
     vexGastadoPorPj: {}, 
