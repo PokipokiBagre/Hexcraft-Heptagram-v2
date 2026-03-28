@@ -46,6 +46,7 @@ window.onload = async () => {
         ]);
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
+        window.__devListaPersonajes = devState.listaPersonajes; // 🔀 Para la vista de transferencia
 
         const statsGlobalMock = {};
         personajesBD.forEach(p => {
