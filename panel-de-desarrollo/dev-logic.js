@@ -210,14 +210,26 @@ export function actualizarLogGlobal() {
 
     if (hzState.logCasteosSession && hzState.logCasteosSession.length > 0) {
         hzState.logCasteosSession.forEach(item => {
-            const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(item.pj))?.nombre || item.pj;
-            if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
-            logPorPJ[realPj].push(item.msg);
+            if (!item.pj || item.pj === '—') {
+                // Log global (ej: visibilidad) — sin cabecera de personaje
+                if (!logPorPJ['__global__']) logPorPJ['__global__'] = [];
+                logPorPJ['__global__'].push(item.msg);
+            } else {
+                const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(item.pj))?.nombre || item.pj;
+                if (!logPorPJ[realPj]) logPorPJ[realPj] = [];
+                logPorPJ[realPj].push(item.msg);
+            }
         });
     }
 
     let logText = "";
+    // Primero los globales sin cabecera
+    if (logPorPJ['__global__'] && logPorPJ['__global__'].length > 0) {
+        logPorPJ['__global__'].forEach(line => { logText += `${line}\n`; });
+        logText += `\n`;
+    }
     for (const pj in logPorPJ) {
+        if (pj === '__global__') continue;
         if (logPorPJ[pj].length > 0) {
             logText += `${pj}\n`;
             logPorPJ[pj].forEach(line => { logText += `${line}\n`; });
