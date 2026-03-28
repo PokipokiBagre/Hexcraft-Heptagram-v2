@@ -13,8 +13,14 @@ export const objState = {
     busqueda: "",
     busquedaCat: "",
     busquedaEdit: "",
+    busquedaTransfer: "",
     formulariosCreacion: 1, 
     objAEditarSeleccionado: "", 
+    
+    // 🔀 TRANSFERENCIA
+    transferDestinoNombre: null,  // PJ/NPC receptor seleccionado
+    transferFiltroRol: 'jugadores', // 'jugadores' o 'npcs'
+    colaTransferencias: {},       // { 'objetoNombre': cantidadATransferir }
     
     // 🔥 LAS COLAS DE CAMBIOS (Staging) 🔥
     colaInventario: {},    
