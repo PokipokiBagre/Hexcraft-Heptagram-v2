@@ -119,3 +119,66 @@ export function modificarObjetoEdicion(campo, valor, reRender = true) {
     if (reRender) window.dispatchEvent(new Event('devUIUpdate'));
     else window.dispatchEvent(new Event('devDataChanged'));
 }
+
+// 🔀 LÓGICA DE TRANSFERENCIA 🔀
+export function setTransferDestino(nombrePj) {
+    objState.transferDestinoNombre = nombrePj || null;
+    objState.colaTransferencias = {}; // limpiar cantidades al cambiar destino
+    window.dispatchEvent(new Event('devUIUpdate'));
+}
+
+export function setTransferFiltroRol(rol) {
+    objState.transferFiltroRol = rol;
+    objState.transferDestinoNombre = null;
+    objState.colaTransferencias = {};
+    window.dispatchEvent(new Event('devUIUpdate'));
+}
+
+export function setTransferCantidad(objNombre, cantidad) {
+    const cant = Math.max(0, parseInt(cantidad) || 0);
+    if (cant === 0) {
+        delete objState.colaTransferencias[objNombre];
+    } else {
+        objState.colaTransferencias[objNombre] = cant;
+    }
+    window.dispatchEvent(new Event('devDataChanged'));
+}
+
+export function ejecutarTransferencia(pjOrigen) {
+    if (!pjOrigen || !objState.transferDestinoNombre) return;
+    const destino = objState.transferDestinoNombre;
+
+    let hayAlgo = false;
+    for (const objNombre in objState.colaTransferencias) {
+        const cantTransferir = objState.colaTransferencias[objNombre];
+        if (cantTransferir <= 0) continue;
+
+        const cantDisponible = getCantidadActual(pjOrigen, objNombre);
+        const cantReal = Math.min(cantTransferir, cantDisponible);
+        if (cantReal <= 0) continue;
+
+        hayAlgo = true;
+        // Restar al origen
+        const origenKey = pjOrigen.toLowerCase();
+        if (!objState.colaInventario[origenKey]) objState.colaInventario[origenKey] = {};
+        objState.colaInventario[origenKey][objNombre] = Math.max(0, cantDisponible - cantReal);
+
+        // Sumar al destino
+        const destinoKey = destino.toLowerCase();
+        if (!objState.colaInventario[destinoKey]) objState.colaInventario[destinoKey] = {};
+        const cantDestinoActual = getCantidadActual(destino, objNombre);
+        objState.colaInventario[destinoKey][objNombre] = cantDestinoActual + cantReal;
+
+        // Si se vacía, desequipar en origen
+        if (objState.colaInventario[origenKey][objNombre] === 0) {
+            if (!objState.colaEquipados[origenKey]) objState.colaEquipados[origenKey] = {};
+            objState.colaEquipados[origenKey][objNombre] = false;
+        }
+    }
+
+    if (!hayAlgo) return alert('No hay cantidades válidas para transferir.');
+
+    objState.colaTransferencias = {};
+    objState.transferDestinoNombre = null;
+    window.dispatchEvent(new Event('devUIUpdate'));
+}
