@@ -42,14 +42,31 @@ function drawnHEXPreserveFocus(containerId, html) {
     const start = activeEl && activeEl.selectionStart !== undefined ? activeEl.selectionStart : null;
     const end = activeEl && activeEl.selectionEnd !== undefined ? activeEl.selectionEnd : null;
     
+    // 🔥 NUEVO: Guardar la posición del scroll de las listas antes de redibujar
+    const scrollIds = ['lista-scroll-inv', 'lista-scroll-cat', 'lista-scroll-transfer', 'lista-scroll-edit'];
+    const savedScrolls = {};
+    scrollIds.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) savedScrolls[id] = el.scrollTop;
+    });
+
     const container = document.getElementById(containerId);
     if (container) {
         container.innerHTML = html;
+        
         if (activeId && document.getElementById(activeId)) {
             const newEl = document.getElementById(activeId);
             newEl.focus();
             if (start !== null && newEl.setSelectionRange) newEl.setSelectionRange(start, end);
         }
+        
+        // 🔥 NUEVO: Restaurar la posición del scroll después de redibujar
+        scrollIds.forEach(id => {
+            const el = document.getElementById(id);
+            if (el && savedScrolls[id] !== undefined) {
+                el.scrollTop = savedScrolls[id];
+            }
+        });
     }
 }
 
@@ -125,7 +142,7 @@ export function renderColumnaObjetos(pjSeleccionado) {
 
     if (objState.vistaActiva === 'inventario') {
         html += `<input type="text" id="dev-search-inv" placeholder="🔍 Buscar en su inventario..." value="${objState.busqueda}" oninput="window.devBusquedaObj(this.value, 'inv')" style="width:100%; box-sizing:border-box; background:#000; color:var(--cyan-magic); border:1px solid var(--cyan-magic); padding:10px; border-radius:6px; margin-bottom:15px; font-family:'Rajdhani'; outline:none;">
-                 <div style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; padding-right:5px;">`;
+                 <div id="lista-scroll-inv" style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; padding-right:5px;">`;
 
         const pjKey = pjSeleccionado.toLowerCase();
         const itemsBD = objState.inventariosDB[pjKey] ? Object.keys(objState.inventariosDB[pjKey]) : [];
@@ -149,7 +166,7 @@ export function renderColumnaObjetos(pjSeleccionado) {
     }
     else if (objState.vistaActiva === 'catalogo') {
         html += `<input type="text" id="dev-search-cat" placeholder="🔍 Buscar en el mundo..." value="${objState.busquedaCat}" oninput="window.devBusquedaObj(this.value, 'cat')" style="width:100%; box-sizing:border-box; background:#000; color:#00ff88; border:1px solid #00ff88; padding:10px; border-radius:6px; margin-bottom:15px; font-family:'Rajdhani'; outline:none;">
-                 <div style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; padding-right:5px;">`;
+                 <div id="lista-scroll-cat" style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; padding-right:5px;">`;
 
         let listaMostrar = objState.catalogoDB.map(o => o.nombre);
         if (objState.busquedaCat !== "") listaMostrar = listaMostrar.filter(nom => nom.toLowerCase().includes(objState.busquedaCat));
@@ -191,7 +208,7 @@ export function renderColumnaObjetos(pjSeleccionado) {
     else if (objState.vistaActiva === 'editar') {
         if (!objState.objAEditarSeleccionado) {
             html += `<input type="text" id="dev-search-edit" placeholder="🔍 Buscar en inventario para editar..." value="${objState.busquedaEdit}" oninput="window.devBusquedaObj(this.value, 'edit')" style="width:100%; box-sizing:border-box; background:#000; color:#ff4444; border:1px solid #ff4444; padding:10px; border-radius:6px; margin-bottom:15px; font-family:'Rajdhani'; outline:none;">
-                     <div style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; padding-right:5px;">`;
+                     <div id="lista-scroll-edit" style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; padding-right:5px;">`;
 
             let listaMostrar = [];
             if (objState.busquedaEdit === "") {
@@ -311,7 +328,6 @@ export function renderColumnaObjetos(pjSeleccionado) {
                 const btnActivo = totalItems > 0;
                 const pjOrigenEsc = pjOrigen.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                 
-                // 🔥 BOTÓN MOVIDO ARRIBA 🔥
                 html += `
                 <div style="margin-bottom:12px;">
                     <button onclick="window.devEjecutarTransferencia('${pjOrigenEsc}')"
@@ -327,8 +343,7 @@ export function renderColumnaObjetos(pjSeleccionado) {
                     </button>
                 </div>`;
 
-                // 🔥 LISTA DE INVENTARIO (CON LÍMITE DE ALTURA) 🔥
-                html += `<div style="display:flex; flex-direction:column; gap:6px; overflow-y:auto; padding-right:5px; margin-bottom:12px; max-height:400px;">`;
+                html += `<div id="lista-scroll-transfer" style="display:flex; flex-direction:column; gap:6px; overflow-y:auto; padding-right:5px; margin-bottom:12px; max-height:400px;">`;
                 inventarioOrigen.sort((a,b) => a.localeCompare(b)).forEach(objNombre => {
                     const disponible = getCantidadActual(pjOrigen, objNombre);
                     const cantTransf = objState.colaTransferencias[objNombre] || 0;
