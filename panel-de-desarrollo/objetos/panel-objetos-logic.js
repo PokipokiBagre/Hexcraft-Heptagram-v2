@@ -149,6 +149,8 @@ export function ejecutarTransferencia(pjOrigen) {
     const destino = objState.transferDestinoNombre;
 
     let hayAlgo = false;
+    const itemsTransferidos = [];
+
     for (const objNombre in objState.colaTransferencias) {
         const cantTransferir = objState.colaTransferencias[objNombre];
         if (cantTransferir <= 0) continue;
@@ -158,6 +160,8 @@ export function ejecutarTransferencia(pjOrigen) {
         if (cantReal <= 0) continue;
 
         hayAlgo = true;
+        itemsTransferidos.push({ nombre: objNombre, cant: cantReal });
+
         // Restar al origen
         const origenKey = pjOrigen.toLowerCase();
         if (!objState.colaInventario[origenKey]) objState.colaInventario[origenKey] = {};
@@ -177,6 +181,9 @@ export function ejecutarTransferencia(pjOrigen) {
     }
 
     if (!hayAlgo) return alert('No hay cantidades válidas para transferir.');
+
+    // Guardar metadata para el log
+    objState.logTransferencias.push({ origen: pjOrigen, destino, items: itemsTransferidos });
 
     objState.colaTransferencias = {};
     objState.transferDestinoNombre = null;
