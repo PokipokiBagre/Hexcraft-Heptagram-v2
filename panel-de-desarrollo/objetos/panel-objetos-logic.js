@@ -148,44 +148,49 @@ export function ejecutarTransferencia(pjOrigen) {
     if (!pjOrigen || !objState.transferDestinoNombre) return;
     const destino = objState.transferDestinoNombre;
 
-    let hayAlgo = false;
     const itemsTransferidos = [];
 
-    for (const objNombre in objState.colaTransferencias) {
-        const cantTransferir = objState.colaTransferencias[objNombre];
+    for (const objNombre of Object.keys(objState.colaTransferencias)) {
+        const cantTransferir = Number(objState.colaTransferencias[objNombre]) || 0;
         if (cantTransferir <= 0) continue;
 
-        const cantDisponible = getCantidadActual(pjOrigen, objNombre);
-        const cantReal = Math.min(cantTransferir, cantDisponible);
+        // Leer cantidad real disponible en este momento (cola o BD)
+        const origenKey = pjOrigen.toLowerCase();
+        const destinoKey = destino.toLowerCase();
+
+        const cantDisponibleOrigen = getCantidadActual(pjOrigen, objNombre);
+        const cantReal = Math.min(cantTransferir, cantDisponibleOrigen);
         if (cantReal <= 0) continue;
 
-        hayAlgo = true;
         itemsTransferidos.push({ nombre: objNombre, cant: cantReal });
 
-        // Restar al origen
-        const origenKey = pjOrigen.toLowerCase();
+        // ── Restar al ORIGEN ──
         if (!objState.colaInventario[origenKey]) objState.colaInventario[origenKey] = {};
-        objState.colaInventario[origenKey][objNombre] = Math.max(0, cantDisponible - cantReal);
-
-        // Sumar al destino
-        const destinoKey = destino.toLowerCase();
-        if (!objState.colaInventario[destinoKey]) objState.colaInventario[destinoKey] = {};
-        const cantDestinoActual = getCantidadActual(destino, objNombre);
-        objState.colaInventario[destinoKey][objNombre] = cantDestinoActual + cantReal;
+        objState.colaInventario[origenKey][objNombre] = cantDisponibleOrigen - cantReal;
 
         // Si se vacía, desequipar en origen
         if (objState.colaInventario[origenKey][objNombre] === 0) {
             if (!objState.colaEquipados[origenKey]) objState.colaEquipados[origenKey] = {};
             objState.colaEquipados[origenKey][objNombre] = false;
         }
+
+        // ── Sumar al DESTINO ──
+        // Leer DESPUÉS de haber escrito el origen, para que getCantidadActual devuelva el correcto
+        if (!objState.colaInventario[destinoKey]) objState.colaInventario[destinoKey] = {};
+        const cantDestinoActual = getCantidadActual(destino, objNombre);
+        objState.colaInventario[destinoKey][objNombre] = cantDestinoActual + cantReal;
     }
 
-    if (!hayAlgo) return alert('No hay cantidades válidas para transferir.');
+    if (itemsTransferidos.length === 0) return alert('No hay cantidades válidas para transferir.');
 
-    // Guardar metadata para el log
+    // Guardar metadata explícita para el log
     objState.logTransferencias.push({ origen: pjOrigen, destino, items: itemsTransferidos });
 
+    // Limpiar cola de transferencia y destino seleccionado
     objState.colaTransferencias = {};
     objState.transferDestinoNombre = null;
+
+    // Disparar ambos eventos: re-render UI + actualizar log y botón sync
     window.dispatchEvent(new Event('devUIUpdate'));
+    window.dispatchEvent(new Event('devDataChanged'));
 }
