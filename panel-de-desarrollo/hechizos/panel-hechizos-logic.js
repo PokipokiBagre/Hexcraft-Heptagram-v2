@@ -227,15 +227,23 @@ export function asignarHechizo(pjNombre, hechizoId) {
 }
 
 export function toggleVisibilidad(hechizoId) {
-    const currentQ = hzState.colaVisibilidad[hechizoId];
     const dbHech = hzState.catalogoDB.find(h => (h.ID || h.id) === hechizoId);
     if (!dbHech) return;
 
-    const isKnownDb = dbHech.es_conocido !== false && dbHech.es_conocido !== "FALSE" && dbHech.es_conocido !== 0 && dbHech.es_conocido !== "0";
+    // Estado real actual: primero la cola, sino la DB
+    const enCola = hzState.colaVisibilidad[hechizoId];
+    const isKnownDb = dbHech.es_conocido !== false && dbHech.es_conocido !== "FALSE" 
+                   && dbHech.es_conocido !== 0    && dbHech.es_conocido !== "0"
+                   && dbHech.es_conocido !== null  && dbHech.es_conocido !== undefined;
+    const estadoActual = enCola !== undefined ? enCola : isKnownDb;
+    const nuevoEstado  = !estadoActual;
 
-    if (currentQ !== undefined) delete hzState.colaVisibilidad[hechizoId]; 
-    else hzState.colaVisibilidad[hechizoId] = !isKnownDb; 
-    
+    hzState.colaVisibilidad[hechizoId] = nuevoEstado;
+
+    const nombreHechizo = dbHech.Nombre || dbHech.nombre || hechizoId;
+    const accionStr = nuevoEstado ? "Hechizo Descubierto" : "Hechizo Sellado";
+    hzState.logCasteosSession.push({ pj: '—', msg: `${accionStr} | ${nombreHechizo}` });
+
     window.dispatchEvent(new Event('devDataChanged')); 
     window.dispatchEvent(new Event('devUIUpdate'));
 }
