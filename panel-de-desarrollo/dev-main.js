@@ -206,5 +206,18 @@ function seleccionarPersonajeDev(nombre) {
 function copiarLogGlobal() {
     const textarea = document.getElementById('log-global-textarea');
     if (!textarea || !textarea.value) return;
-    navigator.clipboard.writeText(textarea.value).then(() => { alert('¡Log copiado al portapapeles!'); });
+    
+    navigator.clipboard.writeText(textarea.value).then(() => { 
+        const btn = document.querySelector('button[onclick="window.copiarLogGlobal()"]');
+        if (btn) {
+            const textoOriginal = btn.innerText;
+            btn.innerText = "📄 ¡LOG COPIADO!";
+            btn.style.filter = "brightness(1.3)";
+            
+            setTimeout(() => { 
+                btn.innerText = textoOriginal; 
+                btn.style.filter = "brightness(1)";
+            }, 1500); 
+        }
+    });
 }
