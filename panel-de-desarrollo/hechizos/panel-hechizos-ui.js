@@ -3,21 +3,28 @@
 // ============================================================
 
 import { hzState } from './panel-hechizos-state.js';
-import { asignarHechizo, toggleVisibilidad, setBusquedaHz, setVistaHz, toggleConfigCasteo, setNumFilasCast, modFilaCast, setModoDatalist, calcularConjurosMasivos, copiarPrimerDado, copiarPrimerHechizo } from './panel-hechizos-logic.js';
+import {
+    asignarHechizo, toggleVisibilidad, setBusquedaHz, setVistaHz, toggleConfigCasteo,
+    setNumFilasCast, modFilaCast, setModoDatalist, calcularConjurosMasivos,
+    copiarPrimerDado, copiarPrimerHechizo,
+    toggleFilaCobrar, toggleFilaNoFalla
+} from './panel-hechizos-logic.js';
 import { norm } from '../dev-state.js';
 
-window.devAsignarHz = asignarHechizo;
-window.devToggleVisibilidadHz = toggleVisibilidad;
-window.devBusquedaHz = setBusquedaHz;
-window.devSetVistaHz = setVistaHz;
-window.devToggleConfigHz = toggleConfigCasteo;
+window.devAsignarHz            = asignarHechizo;
+window.devToggleVisibilidadHz  = toggleVisibilidad;
+window.devBusquedaHz           = setBusquedaHz;
+window.devSetVistaHz           = setVistaHz;
+window.devToggleConfigHz       = toggleConfigCasteo;
 
-window.devSetNumFilasCast = setNumFilasCast;
-window.devModFilaCast = modFilaCast;
-window.devSetModoDatalist = setModoDatalist;
-window.devCalcularConjuros = calcularConjurosMasivos;
-window.devCopiarPrimerDado = copiarPrimerDado;
-window.devCopiarPrimerHechizo = copiarPrimerHechizo;
+window.devSetNumFilasCast      = setNumFilasCast;
+window.devModFilaCast          = modFilaCast;
+window.devSetModoDatalist      = setModoDatalist;
+window.devCalcularConjuros     = calcularConjurosMasivos;
+window.devCopiarPrimerDado     = copiarPrimerDado;
+window.devCopiarPrimerHechizo  = copiarPrimerHechizo;
+window.devToggleFilaCobrar     = toggleFilaCobrar;
+window.devToggleFilaNoFalla    = toggleFilaNoFalla;
 
 // 🌟 UTILIDAD DE EXTRACCIÓN DIRECTA
 const getVal = (v) => {
@@ -28,7 +35,6 @@ const getVal = (v) => {
     return s;
 };
 
-// Busca el primer valor no-vacío entre múltiples claves posibles del objeto
 const getValKeys = (obj, keys) => {
     if (!obj) return '';
     const actualKeys = Object.keys(obj);
@@ -53,10 +59,10 @@ function getSpellDetailsHTML(dbSpell) {
     let dHtml = '';
     if (efe || over || under || esp) {
         dHtml += `<div style="background:#0a0514; border:1px solid #4a1880; border-radius:4px; padding:10px; margin-top:6px; font-size:0.85em; line-height:1.4; box-shadow:inset 0 0 10px rgba(74,24,128,0.2);">`;
-        if (efe) dHtml += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:var(--cyan-magic);">Efecto:</b> ${efe}</div>`;
-        if (over) dHtml += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:var(--gold);">🌟 Overcast:</b> ${over}</div>`;
+        if (efe)   dHtml += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:var(--cyan-magic);">Efecto:</b> ${efe}</div>`;
+        if (over)  dHtml += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:var(--gold);">🌟 Overcast:</b> ${over}</div>`;
         if (under) dHtml += `<div style="color:#ddd; margin-bottom:5px;"><b style="color:#ff4444;">⚠️ Undercast:</b> ${under}</div>`;
-        if (esp) dHtml += `<div style="color:#ddd; margin-bottom:2px;"><b style="color:#00ff88;">✨ Especial:</b> ${esp}</div>`;
+        if (esp)   dHtml += `<div style="color:#ddd; margin-bottom:2px;"><b style="color:#00ff88;">✨ Especial:</b> ${esp}</div>`;
         dHtml += `</div>`;
     }
     return dHtml;
@@ -188,10 +194,6 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     
     const efecto = getValKeys(hechizo, ['efecto_desc', 'efecto', 'desc', 'descripcion']) || '-';
 
-    // es_conocido es el campo de la DB (boolean). Conocido es el campo legacy de la hoja.
-    // Si es_conocido existe y es explícitamente false/0/"FALSE"/"0" → oculto
-    // Si es_conocido no existe → fallback a campo Conocido de la hoja ('si'/'no')
-    // Si ninguno existe → asumir público
     let isPublicBase;
     if (hechizo.es_conocido !== undefined && hechizo.es_conocido !== null) {
         isPublicBase = hechizo.es_conocido !== false && hechizo.es_conocido !== "FALSE"
@@ -206,7 +208,7 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
 
     const col = getColorAfinidad(hAf);
     const borderColor = isHidden ? '#333' : col.b;
-    const titleColor = isHidden ? '#666' : col.t;
+    const titleColor  = isHidden ? '#666' : col.t;
 
     const cardStyle = loTiene
         ? `border: 1px solid #003300; border-top: 3px solid ${borderColor}; box-shadow: inset 0 0 15px rgba(0,255,0,0.08);`
@@ -238,7 +240,7 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     </div>`;
 }
 
-// ── RENDER PRINCIPAL ──
+// ── RENDER PRINCIPAL ──────────────────────────────────────────────────────────
 export function renderColumnaHechizos(pjSeleccionado) {
     const contenedor = 'content-spells';
     if (!document.getElementById(contenedor)) return;
@@ -278,7 +280,7 @@ export function renderColumnaHechizos(pjSeleccionado) {
         const nombresUnicos = new Set();
         fuenteDatalist.forEach(h => {
             const n = h.Nombre || h.nombre || h.ID || h.id;
-            if(n) nombresUnicos.add(n);
+            if (n) nombresUnicos.add(n);
         });
         nombresUnicos.forEach(n => {
             datalistOptions += `<option value="${n.replace(/"/g, '&quot;')}">`;
@@ -286,33 +288,54 @@ export function renderColumnaHechizos(pjSeleccionado) {
 
         html += `<datalist id="dev-spells-list-${pjKey}">${datalistOptions}</datalist>`;
 
+        // ── Panel de controles globales ───────────────────────────────────────
         html += `
-        <div style="background:#1a0f00; border:1px solid var(--gold); border-radius:6px; padding:10px; margin-bottom:15px; text-align:center;">
+        <div style="background:#1a0f00; border:1px solid var(--gold); border-radius:6px; padding:10px; margin-bottom:15px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <label style="color:var(--gold); font-weight:bold; font-size: 0.9em;">
-                    FILAS: 
-                    <input type="number" id="dev-cast-num" value="${hzState.casteoManual.numFilas}" min="1" max="50" onchange="window.devSetNumFilasCast(this.value)" onkeydown="if(event.key === 'ArrowDown'){ event.preventDefault(); document.getElementById('dev-spell-0')?.focus(); }" style="width:50px; background:#000; color:#fff; border:1px solid var(--gold); border-radius:4px; padding:4px; text-align:center; font-weight:bold; outline:none;">
+                <label style="color:var(--gold); font-weight:bold; font-size:0.9em;">
+                    FILAS:&nbsp;
+                    <input type="number" id="dev-cast-num" value="${hzState.casteoManual.numFilas}" min="1" max="50"
+                        onchange="window.devSetNumFilasCast(this.value)"
+                        onkeydown="if(event.key==='ArrowDown'){event.preventDefault();document.getElementById('dev-spell-0')?.focus();}"
+                        style="width:50px; background:#000; color:#fff; border:1px solid var(--gold); border-radius:4px; padding:4px; text-align:center; font-weight:bold; outline:none;">
                 </label>
                 <div style="display:flex; gap:5px;">
                     <button onclick="window.devCopiarPrimerHechizo()" style="background:#333; color:#fff; border:1px solid #555; border-radius:4px; padding:4px 8px; cursor:pointer; font-size:0.8em;">📋 1er Hechizo</button>
-                    <button onclick="window.devCopiarPrimerDado()" style="background:#333; color:#fff; border:1px solid #555; border-radius:4px; padding:4px 8px; cursor:pointer; font-size:0.8em;">📋 1er Dado</button>
+                    <button onclick="window.devCopiarPrimerDado()"    style="background:#333; color:#fff; border:1px solid #555; border-radius:4px; padding:4px 8px; cursor:pointer; font-size:0.8em;">📋 1er Dado</button>
                 </div>
             </div>
             <div style="display:flex; justify-content:center; gap:10px;">
-                <button onclick="window.devToggleConfigHz('cobrarAuto', !${hzState.cobrarAuto}); window.dispatchEvent(new Event('devUIUpdate'));" style="padding:7px 14px; border-radius:6px; cursor:pointer; font-weight:bold; font-family:'Rajdhani'; font-size:0.9em; border:2px solid ${hzState.cobrarAuto ? '#d4af37' : '#444'}; background:${hzState.cobrarAuto ? 'rgba(212,175,55,0.15)' : '#111'}; color:${hzState.cobrarAuto ? '#d4af37' : '#666'}; transition:0.2s;">${hzState.cobrarAuto ? '✅' : '☐'} Cobrar Hex</button>
-                <button onclick="window.devToggleConfigHz('mostrarEfectos', !${hzState.mostrarEfectos}); window.dispatchEvent(new Event('devUIUpdate'));" style="padding:7px 14px; border-radius:6px; cursor:pointer; font-weight:bold; font-family:'Rajdhani'; font-size:0.9em; border:2px solid ${hzState.mostrarEfectos ? '#00e5ff' : '#444'}; background:${hzState.mostrarEfectos ? 'rgba(0,229,255,0.1)' : '#111'}; color:${hzState.mostrarEfectos ? '#00e5ff' : '#666'}; transition:0.2s;">${hzState.mostrarEfectos ? '✅' : '☐'} Imprimir Efectos</button>
+                <button onclick="window.devToggleConfigHz('cobrarAuto', !${hzState.cobrarAuto}); window.dispatchEvent(new Event('devUIUpdate'));"
+                    title="Si está activo, todas las filas cobran por defecto. Puedes desactivarlo individualmente por fila."
+                    style="padding:7px 14px; border-radius:6px; cursor:pointer; font-weight:bold; font-family:'Rajdhani'; font-size:0.9em; border:2px solid ${hzState.cobrarAuto ? '#d4af37' : '#444'}; background:${hzState.cobrarAuto ? 'rgba(212,175,55,0.15)' : '#111'}; color:${hzState.cobrarAuto ? '#d4af37' : '#666'}; transition:0.2s;">
+                    ${hzState.cobrarAuto ? '✅' : '☐'} Cobrar Hex
+                </button>
+                <button onclick="window.devToggleConfigHz('mostrarEfectos', !${hzState.mostrarEfectos}); window.dispatchEvent(new Event('devUIUpdate'));"
+                    style="padding:7px 14px; border-radius:6px; cursor:pointer; font-weight:bold; font-family:'Rajdhani'; font-size:0.9em; border:2px solid ${hzState.mostrarEfectos ? '#00e5ff' : '#444'}; background:${hzState.mostrarEfectos ? 'rgba(0,229,255,0.1)' : '#111'}; color:${hzState.mostrarEfectos ? '#00e5ff' : '#666'}; transition:0.2s;">
+                    ${hzState.mostrarEfectos ? '✅' : '☐'} Imprimir Efectos
+                </button>
             </div>
         </div>
 
         <div style="display:flex; gap:5px; margin-bottom:15px;">
-            <button onclick="window.devSetModoDatalist('local')" style="flex:1; padding:6px; border-radius:4px; background:${dMode === 'local' ? 'var(--cyan-magic)' : '#333'}; color:${dMode === 'local' ? '#000' : '#aaa'}; font-weight:bold; cursor:pointer;">Autocompletar: Grimorio</button>
+            <button onclick="window.devSetModoDatalist('local')"  style="flex:1; padding:6px; border-radius:4px; background:${dMode === 'local'  ? 'var(--cyan-magic)' : '#333'}; color:${dMode === 'local'  ? '#000' : '#aaa'}; font-weight:bold; cursor:pointer;">Autocompletar: Grimorio</button>
             <button onclick="window.devSetModoDatalist('global')" style="flex:1; padding:6px; border-radius:4px; background:${dMode === 'global' ? '#9966ff' : '#333'}; color:${dMode === 'global' ? '#fff' : '#aaa'}; font-weight:bold; cursor:pointer;">Autocompletar: DB Global</button>
         </div>
 
-        <div style="overflow-y:auto; padding-right:5px; max-height: 450px;">`;
+        <div style="overflow-y:auto; padding-right:5px; max-height:450px;">`;
 
+        // ── Filas de hechizos ─────────────────────────────────────────────────
         for (let i = 0; i < hzState.casteoManual.numFilas; i++) {
             const fila = hzState.casteoManual.filas[i];
+
+            // Estado efectivo del cobro para esta fila
+            const efectivoCobrar = fila.cobrarHex !== null ? fila.cobrarHex : hzState.cobrarAuto;
+            // ¿Tiene override explícito respecto al global?
+            const esOverride     = fila.cobrarHex !== null;
+
+            const ajusteCostoVal = parseInt(fila.ajusteCosto) || 0;
+            const ajusteColor    = ajusteCostoVal > 0 ? '#ff8888' : ajusteCostoVal < 0 ? '#88ff88' : '#777';
+            const ajusteBorder   = ajusteCostoVal !== 0 ? (ajusteCostoVal > 0 ? '#aa3333' : '#338833') : '#2a2a2a';
 
             let detallesHTML = '';
             if (fila.nombre) {
@@ -324,47 +347,101 @@ export function renderColumnaHechizos(pjSeleccionado) {
             }
 
             html += `
-            <div style="margin-bottom:12px; border-bottom:1px solid #222; padding-bottom:12px;">
+            <div style="margin-bottom:14px; border:1px solid #1e1e1e; border-radius:6px; padding:8px 10px; background:#080810;">
+
+                <!-- Fila principal: dados + nombre + afinidad + cant -->
                 <div style="display:flex; gap:5px; align-items:center;">
-                    <button onclick="const d=Math.floor(Math.random()*100)+1; document.getElementById('dev-dado-${i}').value=d; window.devModFilaCast(${i}, 'dado', d, '${escapedPj}')" style="background:#333; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; cursor:pointer;" title="Aleatorio">🎲</button>
+                    <button onclick="const d=Math.floor(Math.random()*100)+1; document.getElementById('dev-dado-${i}').value=d; window.devModFilaCast(${i},'dado',d,'${escapedPj}')"
+                        style="background:#333; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; cursor:pointer; flex-shrink:0;" title="Tirar dado aleatorio">🎲</button>
+
                     <input type="number" id="dev-dado-${i}" placeholder="Dado" value="${fila.dado}"
-                        oninput="window.devModFilaCast(${i}, 'dado', this.value, '${escapedPj}')"
-                        onkeydown="window.devOnGridKeydown(event, ${i}, 0, '${escapedPj}')"
-                        style="width:50px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; text-align:center; outline:none;" title="NC Base (Dado)">
+                        oninput="window.devModFilaCast(${i},'dado',this.value,'${escapedPj}')"
+                        onkeydown="window.devOnGridKeydown(event,${i},0,'${escapedPj}')"
+                        style="width:55px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; text-align:center; outline:none; flex-shrink:0;" title="NC Base (Dado)">
 
                     <div style="position:relative; flex:1;">
                         <input type="text" list="dev-spells-list-${pjKey}" id="dev-spell-${i}" placeholder="Nombre Hechizo..." value="${fila.nombre}"
                             autocomplete="off"
-                            oninput="window.devSpellInputHelper(${i}, this.value, '${escapedPj}')"
-                            onkeydown="window.devOnGridKeydown(event, ${i}, 1, '${escapedPj}')"
+                            oninput="window.devSpellInputHelper(${i},this.value,'${escapedPj}')"
+                            onkeydown="window.devOnGridKeydown(event,${i},1,'${escapedPj}')"
                             style="width:100%; box-sizing:border-box; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; outline:none;">
                     </div>
 
-                    <input type="number" id="dev-afinidad-${i}" placeholder="Af.Total" value="${fila.afinidad}"
-                        oninput="window.devModFilaCast(${i}, 'afinidad', this.value, '${escapedPj}')"
-                        onkeydown="window.devOnGridKeydown(event, ${i}, 2, '${escapedPj}')"
-                        style="width:65px; background:#111; color:var(--gold); border:1px solid var(--gold); border-radius:4px; padding:8px; text-align:center; outline:none;" title="Afinidad Total">
-                    <input type="number" id="dev-cant-${i}" placeholder="Cant" value="${fila.cant}" min="1"
-                        oninput="window.devModFilaCast(${i}, 'cant', this.value, '${escapedPj}')"
-                        onkeydown="window.devOnGridKeydown(event, ${i}, 3, '${escapedPj}')"
-                        style="width:45px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; text-align:center; outline:none;" title="Cantidad">
+                    <input type="number" id="dev-afinidad-${i}" placeholder="Af." value="${fila.afinidad}"
+                        oninput="window.devModFilaCast(${i},'afinidad',this.value,'${escapedPj}')"
+                        onkeydown="window.devOnGridKeydown(event,${i},2,'${escapedPj}')"
+                        style="width:58px; background:#111; color:var(--gold); border:1px solid var(--gold); border-radius:4px; padding:8px; text-align:center; outline:none; flex-shrink:0;" title="Afinidad Total">
+
+                    <input type="number" id="dev-cant-${i}" placeholder="x" value="${fila.cant}" min="1"
+                        oninput="window.devModFilaCast(${i},'cant',this.value,'${escapedPj}')"
+                        onkeydown="window.devOnGridKeydown(event,${i},3,'${escapedPj}')"
+                        style="width:40px; background:#111; color:#fff; border:1px solid #555; border-radius:4px; padding:8px; text-align:center; outline:none; flex-shrink:0;" title="Cantidad">
                 </div>
+
+                <!-- Sub-fila: controles individuales por hechizo -->
+                <div style="display:flex; gap:6px; align-items:center; margin-top:6px; padding-top:6px; border-top:1px solid #141414;">
+
+                    <!-- 💰 Cobrar HEX individual -->
+                    <button onclick="window.devToggleFilaCobrar(${i})"
+                        title="${efectivoCobrar
+                            ? (esOverride ? 'Cobro ON (override manual — clic para desactivar)' : 'Cobro ON (sigue global — clic para desactivar solo este)')
+                            : (esOverride ? 'Cobro OFF (override manual — clic para activar)'   : 'Cobro OFF (sigue global — clic para activar solo este)')}"
+                        style="padding:3px 9px; border-radius:4px; cursor:pointer; font-size:0.78em; font-weight:bold; font-family:'Rajdhani'; white-space:nowrap;
+                               border:1px solid ${efectivoCobrar ? (esOverride ? '#ffcc00' : '#a07800') : (esOverride ? '#555' : '#252525')};
+                               background:${efectivoCobrar ? (esOverride ? 'rgba(255,204,0,0.18)' : 'rgba(180,130,0,0.1)') : '#0d0d0d'};
+                               color:${efectivoCobrar ? (esOverride ? '#ffcc00' : '#c49a00') : (esOverride ? '#555' : '#3a3a3a')};
+                               transition:0.15s;">
+                        ${efectivoCobrar ? '💰' : '⬜'} HEX${esOverride ? '*' : ''}
+                    </button>
+
+                    <!-- 🎯 Infalible (No falla) -->
+                    <button onclick="window.devToggleFilaNoFalla(${i})"
+                        title="${fila.noFalla ? 'Infalible ACTIVO — ignora NC, siempre éxito (sin overcast). Clic para desactivar.' : 'Activar Infalible — ignora NC completamente, siempre éxito.'}"
+                        style="padding:3px 9px; border-radius:4px; cursor:pointer; font-size:0.78em; font-weight:bold; font-family:'Rajdhani'; white-space:nowrap;
+                               border:1px solid ${fila.noFalla ? '#00aacc' : '#252525'};
+                               background:${fila.noFalla ? 'rgba(0,180,220,0.12)' : '#0d0d0d'};
+                               color:${fila.noFalla ? '#00ccee' : '#3a3a3a'};
+                               transition:0.15s;">
+                        ${fila.noFalla ? '🎯' : '⬜'} Infalible
+                    </button>
+
+                    <!-- ±HEX: Sobrecosto / Descuento -->
+                    <div style="display:flex; align-items:center; gap:4px; margin-left:auto;">
+                        <span style="color:#444; font-size:0.72em; white-space:nowrap; font-family:'Rajdhani';">±HEX</span>
+                        <input type="number" id="dev-ajuste-${i}"
+                            value="${ajusteCostoVal || ''}" placeholder="0"
+                            oninput="window.devModFilaCast(${i},'ajusteCosto',this.value,'${escapedPj}'); const v=parseInt(this.value)||0; this.style.color=v>0?'#ff8888':v<0?'#88ff88':'#777'; this.style.borderColor=v>0?'#aa3333':v<0?'#338833':'#2a2a2a';"
+                            style="width:60px; background:#0d0d0d; color:${ajusteColor}; border:1px solid ${ajusteBorder}; border-radius:4px; padding:3px 5px; text-align:center; outline:none; font-size:0.82em;"
+                            title="Ajuste de costo HEX: positivo = sobrecosto, negativo = descuento">
+                    </div>
+                </div>
+
+                <!-- Detalles del hechizo (efecto, overcast, etc.) -->
                 <div id="dev-spell-details-${i}">${detallesHTML}</div>
             </div>`;
         }
 
         html += `
         </div>
-        <button onclick="window.devCalcularConjuros('${escapedPj}')" style="width:100%; margin-top:15px; background:linear-gradient(135deg, #4a004a, #800080); color:white; font-size:1.1em; font-weight:bold; font-family:'Cinzel'; padding:12px; border:1px solid #ff00ff; border-radius:6px; cursor:pointer; text-shadow: 0 0 5px #ff00ff; transition:0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">⚡ CALCULAR CONJUROS ⚡</button>
-        `;
+        <button onclick="window.devCalcularConjuros('${escapedPj}')"
+            style="width:100%; margin-top:15px; background:linear-gradient(135deg,#4a004a,#800080); color:white; font-size:1.1em; font-weight:bold; font-family:'Cinzel'; padding:12px; border:1px solid #ff00ff; border-radius:6px; cursor:pointer; text-shadow:0 0 5px #ff00ff; transition:0.2s;"
+            onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">
+            ⚡ CALCULAR CONJUROS ⚡
+        </button>`;
 
     } else {
+        // ── Vista GESTIÓN BD ──────────────────────────────────────────────────
         html += `
         <div style="margin-bottom:15px;">
-            <button onclick="window.devToggleConfigHz('cobrarAlAsignar', !${hzState.cobrarAlAsignar}); window.dispatchEvent(new Event('devUIUpdate'));" style="width:100%; padding:10px; border-radius:6px; cursor:pointer; font-weight:bold; font-family:'Cinzel'; font-size:0.9em; border:2px solid ${hzState.cobrarAlAsignar ? '#00ff00' : '#444'}; background:${hzState.cobrarAlAsignar ? 'rgba(0,255,0,0.08)' : '#111'}; color:${hzState.cobrarAlAsignar ? '#00ff00' : '#666'}; transition:0.2s;">${hzState.cobrarAlAsignar ? '✅' : '☐'} Cobrar HEX automáticamente al Enseñar</button>
+            <button onclick="window.devToggleConfigHz('cobrarAlAsignar', !${hzState.cobrarAlAsignar}); window.dispatchEvent(new Event('devUIUpdate'));"
+                style="width:100%; padding:10px; border-radius:6px; cursor:pointer; font-weight:bold; font-family:'Cinzel'; font-size:0.9em; border:2px solid ${hzState.cobrarAlAsignar ? '#00ff00' : '#444'}; background:${hzState.cobrarAlAsignar ? 'rgba(0,255,0,0.08)' : '#111'}; color:${hzState.cobrarAlAsignar ? '#00ff00' : '#666'}; transition:0.2s;">
+                ${hzState.cobrarAlAsignar ? '✅' : '☐'} Cobrar HEX automáticamente al Enseñar
+            </button>
         </div>
 
-        <input type="text" id="dev-search-hz-asig" placeholder="🔍 Buscar nombre, ID, afinidad o clase..." value="${hzState.busquedaAsignar}" oninput="window.devBusquedaHz(this.value)" style="width:100%; box-sizing:border-box; background:#000; color:#00ff00; border:1px solid #00ff00; padding:10px; border-radius:6px; margin-bottom:15px; font-family:'Rajdhani'; outline:none;">`;
+        <input type="text" id="dev-search-hz-asig" placeholder="🔍 Buscar nombre, ID, afinidad o clase..." value="${hzState.busquedaAsignar}"
+            oninput="window.devBusquedaHz(this.value)"
+            style="width:100%; box-sizing:border-box; background:#000; color:#00ff00; border:1px solid #00ff00; padding:10px; border-radius:6px; margin-bottom:15px; font-family:'Rajdhani'; outline:none;">`;
 
         let mostrar = hzState.catalogoDB;
         if (hzState.busquedaAsignar) {
@@ -377,7 +454,7 @@ export function renderColumnaHechizos(pjSeleccionado) {
             );
         }
 
-        html += `<div style="overflow-y:auto; padding-right:5px; max-height: 550px;">`;
+        html += `<div style="overflow-y:auto; padding-right:5px; max-height:550px;">`;
         const top = mostrar.slice(0, 50);
         top.forEach(h => {
             const loTiene = hechizosDelPj.has(norm(h.ID || h.id)) || hechizosDelPj.has(norm(h.Nombre || h.nombre));
