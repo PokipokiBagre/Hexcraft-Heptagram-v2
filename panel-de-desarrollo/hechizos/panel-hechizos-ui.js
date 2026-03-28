@@ -188,9 +188,19 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     
     const efecto = getValKeys(hechizo, ['efecto_desc', 'efecto', 'desc', 'descripcion']) || '-';
 
-    const isPublicBase = hechizo.es_conocido !== false && hechizo.es_conocido !== "FALSE" 
-                      && hechizo.es_conocido !== 0    && hechizo.es_conocido !== "0"
-                      && hechizo.es_conocido !== null  && hechizo.es_conocido !== undefined;
+    // es_conocido es el campo de la DB (boolean). Conocido es el campo legacy de la hoja.
+    // Si es_conocido existe y es explícitamente false/0/"FALSE"/"0" → oculto
+    // Si es_conocido no existe → fallback a campo Conocido de la hoja ('si'/'no')
+    // Si ninguno existe → asumir público
+    let isPublicBase;
+    if (hechizo.es_conocido !== undefined && hechizo.es_conocido !== null) {
+        isPublicBase = hechizo.es_conocido !== false && hechizo.es_conocido !== "FALSE"
+                    && hechizo.es_conocido !== 0    && hechizo.es_conocido !== "0";
+    } else if (hechizo.Conocido !== undefined && hechizo.Conocido !== null) {
+        isPublicBase = hechizo.Conocido.toString().trim().toLowerCase() === 'si';
+    } else {
+        isPublicBase = true;
+    }
     const isKnown = hzState.colaVisibilidad[hId] !== undefined ? hzState.colaVisibilidad[hId] : isPublicBase;
     const isHidden = !isKnown;
 
