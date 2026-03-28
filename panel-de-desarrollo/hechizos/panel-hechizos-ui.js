@@ -352,14 +352,16 @@ export function renderColumnaHechizos(pjSeleccionado) {
             <button onclick="window.devToggleConfigHz('cobrarAlAsignar', !${hzState.cobrarAlAsignar}); window.dispatchEvent(new Event('devUIUpdate'));" style="width:100%; padding:10px; border-radius:6px; cursor:pointer; font-weight:bold; font-family:'Cinzel'; font-size:0.9em; border:2px solid ${hzState.cobrarAlAsignar ? '#00ff00' : '#444'}; background:${hzState.cobrarAlAsignar ? 'rgba(0,255,0,0.08)' : '#111'}; color:${hzState.cobrarAlAsignar ? '#00ff00' : '#666'}; transition:0.2s;">${hzState.cobrarAlAsignar ? '✅' : '☐'} Cobrar HEX automáticamente al Enseñar</button>
         </div>
 
-        <input type="text" id="dev-search-hz-asig" placeholder="🔍 Buscar nombre o afinidad..." value="${hzState.busquedaAsignar}" oninput="window.devBusquedaHz(this.value)" style="width:100%; box-sizing:border-box; background:#000; color:#00ff00; border:1px solid #00ff00; padding:10px; border-radius:6px; margin-bottom:15px; font-family:'Rajdhani'; outline:none;">`;
+        <input type="text" id="dev-search-hz-asig" placeholder="🔍 Buscar nombre, ID, afinidad o clase..." value="${hzState.busquedaAsignar}" oninput="window.devBusquedaHz(this.value)" style="width:100%; box-sizing:border-box; background:#000; color:#00ff00; border:1px solid #00ff00; padding:10px; border-radius:6px; margin-bottom:15px; font-family:'Rajdhani'; outline:none;">`;
 
         let mostrar = hzState.catalogoDB;
         if (hzState.busquedaAsignar) {
             const bx = norm(hzState.busquedaAsignar);
             mostrar = mostrar.filter(h =>
                 norm(h.Nombre || h.nombre || '').includes(bx) ||
-                norm(h.Afinidad || h.afinidad || '').includes(bx)
+                norm(h.Afinidad || h.afinidad || '').includes(bx) ||
+                norm(h.ID || h.id || '').includes(bx) ||
+                norm(h.Clase || h.clase || '').includes(bx)
             );
         }
 
