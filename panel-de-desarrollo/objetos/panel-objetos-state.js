@@ -18,9 +18,10 @@ export const objState = {
     objAEditarSeleccionado: "", 
     
     // 🔀 TRANSFERENCIA
-    transferDestinoNombre: null,  // PJ/NPC receptor seleccionado
-    transferFiltroRol: 'jugadores', // 'jugadores' o 'npcs'
-    colaTransferencias: {},       // { 'objetoNombre': cantidadATransferir }
+    transferDestinoNombre: null,
+    transferFiltroRol: 'jugadores',
+    colaTransferencias: {},
+    logTransferencias: [],   // [{origen, destino, items:[{nombre, cant}]}]
     
     // 🔥 LAS COLAS DE CAMBIOS (Staging) 🔥
     colaInventario: {},    
