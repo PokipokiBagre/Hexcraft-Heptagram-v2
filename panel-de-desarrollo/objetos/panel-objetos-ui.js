@@ -307,14 +307,34 @@ export function renderColumnaObjetos(pjSeleccionado) {
             if (inventarioOrigen.length === 0) {
                 html += `<div style="text-align:center; color:#555; padding:10px; font-size:0.9em;">El inventario de ${pjOrigen} está vacío.</div>`;
             } else {
-                html += `<div style="display:flex; flex-direction:column; gap:6px; overflow-y:auto; padding-right:5px; margin-bottom:12px;">`;
+                const totalItems = Object.values(objState.colaTransferencias).reduce((a, b) => a + b, 0);
+                const btnActivo = totalItems > 0;
+                const pjOrigenEsc = pjOrigen.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+                
+                // 🔥 BOTÓN MOVIDO ARRIBA 🔥
+                html += `
+                <div style="margin-bottom:12px;">
+                    <button onclick="window.devEjecutarTransferencia('${pjOrigenEsc}')"
+                        ${!btnActivo ? 'disabled' : ''}
+                        style="width:100%; padding:12px; border-radius:6px; font-family:'Cinzel'; font-weight:bold; font-size:1em;
+                               cursor:${btnActivo ? 'pointer' : 'not-allowed'};
+                               background:${btnActivo ? 'linear-gradient(135deg, #7a3d00, #cc6600)' : '#1a1a1a'};
+                               color:${btnActivo ? '#fff' : '#444'};
+                               border:2px solid ${btnActivo ? '#ff9900' : '#333'};
+                               box-shadow:${btnActivo ? '0 0 12px rgba(255,153,0,0.3)' : 'none'};
+                               transition:0.2s;">
+                        🔀 CONFIRMAR TRANSFERENCIA ${btnActivo ? `(${totalItems} ítem${totalItems !== 1 ? 's' : ''})` : ''}
+                    </button>
+                </div>`;
+
+                // 🔥 LISTA DE INVENTARIO (CON LÍMITE DE ALTURA) 🔥
+                html += `<div style="display:flex; flex-direction:column; gap:6px; overflow-y:auto; padding-right:5px; margin-bottom:12px; max-height:400px;">`;
                 inventarioOrigen.sort((a,b) => a.localeCompare(b)).forEach(objNombre => {
                     const disponible = getCantidadActual(pjOrigen, objNombre);
                     const cantTransf = objState.colaTransferencias[objNombre] || 0;
                     const imgPath = `${STORAGE_URL}/imgobjetos/${norm(objNombre)}.png`;
                     const imgError = `this.onerror=null; this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png'`;
                     const resalta = cantTransf > 0 ? 'border-color:#ff9900; box-shadow:0 0 6px rgba(255,153,0,0.3);' : 'border-color:#333;';
-                    // Escapes seguros para usar en atributos onclick
                     const objEsc = objNombre.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
                     html += `
@@ -338,22 +358,6 @@ export function renderColumnaObjetos(pjSeleccionado) {
                     </div>`;
                 });
                 html += `</div>`;
-
-                const totalItems = Object.values(objState.colaTransferencias).reduce((a, b) => a + b, 0);
-                const btnActivo = totalItems > 0;
-                const pjOrigenEsc = pjOrigen.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
-                html += `
-                <button onclick="window.devEjecutarTransferencia('${pjOrigenEsc}')"
-                    ${!btnActivo ? 'disabled' : ''}
-                    style="width:100%; padding:12px; border-radius:6px; font-family:'Cinzel'; font-weight:bold; font-size:1em;
-                           cursor:${btnActivo ? 'pointer' : 'not-allowed'};
-                           background:${btnActivo ? 'linear-gradient(135deg, #7a3d00, #cc6600)' : '#1a1a1a'};
-                           color:${btnActivo ? '#fff' : '#444'};
-                           border:2px solid ${btnActivo ? '#ff9900' : '#333'};
-                           box-shadow:${btnActivo ? '0 0 12px rgba(255,153,0,0.3)' : 'none'};
-                           transition:0.2s;">
-                    🔀 CONFIRMAR TRANSFERENCIA ${btnActivo ? `(${totalItems} ítem${totalItems !== 1 ? 's' : ''})` : ''}
-                </button>`;
             }
         }
     }
