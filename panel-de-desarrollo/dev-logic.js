@@ -35,11 +35,26 @@ export function revisarCambiosPendientes() {
 export function actualizarLogGlobal() {
     const logPorPJ = {};
 
+    // Construir set de objetos ya cubiertos por transferencias para no duplicar
+    const transferCubiertos = {}; // { pjKey: Set<objNombre> }
+    for (const t of objState.logTransferencias) {
+        const ok = t.origen.toLowerCase();
+        const dk = t.destino.toLowerCase();
+        if (!transferCubiertos[ok]) transferCubiertos[ok] = new Set();
+        if (!transferCubiertos[dk]) transferCubiertos[dk] = new Set();
+        t.items.forEach(i => {
+            transferCubiertos[ok].add(i.nombre);
+            transferCubiertos[dk].add(i.nombre);
+        });
+    }
+
     for (const pjKey in objState.colaInventario) {
-        // Buscar nombre real: primero en listaPersonajes, si no usar el pjKey capitalizado
         const encontrado = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey));
         const realPj = encontrado?.nombre || pjKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
         for (const objNombre in objState.colaInventario[pjKey]) {
+            // Saltar si ya lo cubre logTransferencias
+            if (transferCubiertos[pjKey]?.has(objNombre)) continue;
+
             const cantNueva = objState.colaInventario[pjKey][objNombre];
             const cantVieja = objState.inventariosDB[pjKey]?.[objNombre] || 0;
             const delta = cantNueva - cantVieja; 
