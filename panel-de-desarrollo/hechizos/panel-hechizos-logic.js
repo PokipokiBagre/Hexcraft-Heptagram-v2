@@ -63,6 +63,25 @@ export function modFilaCast(index, campo, valor, pjNombre) {
     }
 }
 
+// ── TOGGLE COBRAR HEX INDIVIDUAL ──────────────────────────────────────────────
+// null = sigue el global | true/false = override individual
+// Al hacer click: si el nuevo estado coincide con el global, vuelve a null (sin override).
+export function toggleFilaCobrar(i) {
+    const fila = hzState.casteoManual.filas[i];
+    const efectivo = fila.cobrarHex !== null ? fila.cobrarHex : hzState.cobrarAuto;
+    const nuevo = !efectivo;
+    // Si el nuevo valor iguala al global, no hace falta override → reset a null
+    fila.cobrarHex = (nuevo === hzState.cobrarAuto) ? null : nuevo;
+    window.dispatchEvent(new Event('devUIUpdate'));
+}
+
+// ── TOGGLE INFALIBLE (NO FALLA) INDIVIDUAL ─────────────────────────────────────
+// Cuando está activo el hechizo ignora la lógica de NC: siempre acierta (sin overcast).
+export function toggleFilaNoFalla(i) {
+    hzState.casteoManual.filas[i].noFalla = !hzState.casteoManual.filas[i].noFalla;
+    window.dispatchEvent(new Event('devUIUpdate'));
+}
+
 export function setModoDatalist(modo) { hzState.casteoManual.datalistModo = modo; window.dispatchEvent(new Event('devUIUpdate')); }
 
 export function copiarPrimerHechizo() {
@@ -94,7 +113,7 @@ export function copiarPrimerDado() {
     navigator.clipboard.writeText(`!r 1d100 + ${fila.afinidad || 0} // ${fila.nombre || '?'}`).then(() => alert(`Dado ${dado} copiado a todas las filas.`));
 }
 
-// 🌟 UTILIDAD DE EXTRACCIÓN (Igual que en el panel público, pero filtrando ceros)
+// 🌟 UTILIDAD DE EXTRACCIÓN (Filtrando ceros y vacíos)
 const getVal = (v) => {
     if (v === undefined || v === null) return '';
     let s = Array.isArray(v) ? v.join(', ') : String(v);
@@ -103,7 +122,6 @@ const getVal = (v) => {
     return s;
 };
 
-// Busca el primer valor no-vacío entre múltiples claves posibles del objeto
 const getValKeys = (obj, keys) => {
     if (!obj) return '';
     const actualKeys = Object.keys(obj);
@@ -121,6 +139,7 @@ export function calcularConjurosMasivos(pjNombre) {
     let totalCost = 0;
     let logsArr = [];
     let validSpells = 0;
+    let ajusteNotes = []; // Notas de sobrecosto/descuento para la línea Hexcast
 
     for (let i = 0; i < hzState.casteoManual.numFilas; i++) {
         const fila = hzState.casteoManual.filas[i];
@@ -131,36 +150,62 @@ export function calcularConjurosMasivos(pjNombre) {
             norm(h.ID || h.id || '') === norm(fila.nombre)
         );
 
-        const cant = parseInt(fila.cant) || 1;
-        const dado = parseInt(fila.dado) || 0;
-        const afin = parseInt(fila.afinidad) || 0;
+        const cant       = parseInt(fila.cant)       || 1;
+        const dado       = parseInt(fila.dado)       || 0;
+        const afin       = parseInt(fila.afinidad)   || 0;
+        const noFalla    = fila.noFalla === true;
+        const ajusteCosto = parseInt(fila.ajusteCosto) || 0;
+
+        // ── Cobro efectivo para esta fila ──────────────────────────────────────
+        // null → sigue global | true/false → override individual
+        const debeCobrarse = fila.cobrarHex !== null ? fila.cobrarHex : hzState.cobrarAuto;
 
         if (hechizo) {
-            const costoU = parseInt(hechizo.HEX || hechizo.Hex || hechizo.Costo || hechizo.costo || 0) || 0;
-            totalCost += (costoU * cant);
+            const baseCosto = parseInt(hechizo.HEX || hechizo.Hex || hechizo.Costo || hechizo.costo || 0) || 0;
+            // El costo efectivo nunca baja de 0
+            const costoEfectivo = Math.max(0, baseCosto + ajusteCosto);
+
+            if (debeCobrarse) {
+                totalCost += costoEfectivo * cant;
+                // Registrar nota de ajuste si la hay
+                if (ajusteCosto !== 0) {
+                    const realNameNota = hechizo.Nombre || hechizo.nombre;
+                    const totalAjuste  = ajusteCosto * cant;
+                    const tipoAjuste   = ajusteCosto > 0 ? 'Sobrecosto' : 'Descuento';
+                    const signo        = ajusteCosto > 0 ? '+' : '';
+                    ajusteNotes.push(`${tipoAjuste}: ${signo}${totalAjuste} (${realNameNota})`);
+                }
+            }
             validSpells += cant;
 
             const nc = dado * afin;
-            
-            // Extracción usando claves reales de la DB
-            let efeToPrint = getValKeys(hechizo, ['efecto_desc', 'efecto', 'desc', 'descripcion']);
+
+            let efeToPrint  = getValKeys(hechizo, ['efecto_desc', 'efecto', 'desc', 'descripcion']);
             const outcastProp = getValKeys(hechizo, ['overcast 100%', 'overcast', 'efecto_overcast']);
 
-            const isOvercast = outcastProp && costoU > 0 && nc >= (costoU * 2);
-            const isFallo    = nc < costoU;
+            // El overcast no aplica cuando el hechizo es infalible
+            const isOvercast = !noFalla && !!outcastProp && costoEfectivo > 0 && nc >= (costoEfectivo * 2);
+            const isFallo    = !noFalla && nc < costoEfectivo;
 
             const realName = hechizo.Nombre || hechizo.nombre;
 
-            let lineLog = `Casteo | ${realName} x${cant} | NC: ${nc} | `;
+            let lineLog = `Casteo | ${realName} x${cant} | `;
 
-            if (isFallo) {
-                lineLog += `❌ FALLO`;
-            } else if (hzState.mostrarEfectos) {
-                lineLog += `✅ ÉXITO`;
-                if (efeToPrint) lineLog += ` | ${efeToPrint}`;
-                if (isOvercast && outcastProp) lineLog += ` | 🌟 Overcast: ${outcastProp}`;
+            if (noFalla) {
+                // ── Hechizo Infalible ────────────────────────────────────────────
+                lineLog += `Infalible | ✅ ÉXITO`;
+                if (hzState.mostrarEfectos && efeToPrint) lineLog += ` | ${efeToPrint}`;
+            } else if (isFallo) {
+                lineLog += `NC: ${nc} | ❌ FALLO`;
             } else {
-                lineLog += isOvercast ? `✅ ÉXITO (Overcast)` : `✅ ÉXITO`;
+                lineLog += `NC: ${nc} | `;
+                if (hzState.mostrarEfectos) {
+                    lineLog += `✅ ÉXITO`;
+                    if (efeToPrint) lineLog += ` | ${efeToPrint}`;
+                    if (isOvercast && outcastProp) lineLog += ` | 🌟 Overcast: ${outcastProp}`;
+                } else {
+                    lineLog += isOvercast ? `✅ ÉXITO (Overcast)` : `✅ ÉXITO`;
+                }
             }
 
             logsArr.push(lineLog);
@@ -171,30 +216,38 @@ export function calcularConjurosMasivos(pjNombre) {
 
     if (validSpells === 0 && logsArr.length === 0) return alert("Llena al menos una casilla de hechizo válida.");
 
+    // ── Cobro de Vex/HEX ─────────────────────────────────────────────────────
+    // Ya no depende de cobrarAuto global: totalCost solo acumula filas con debeCobrarse=true
     let stringCobro = "";
-    if (hzState.cobrarAuto && totalCost > 0) {
+    if (totalCost > 0) {
+        const ajusteSuffix = ajusteNotes.length > 0 ? ` | ${ajusteNotes.join(' | ')}` : '';
+
         const vexMax = getVexMax(pjNombre);
         const vexUsado = hzState.vexGastadoPorPj[pjNombre] || 0;
         const vexDisponible = Math.max(0, vexMax - vexUsado);
 
         if (vexDisponible >= totalCost) {
             hzState.vexGastadoPorPj[pjNombre] = vexUsado + totalCost;
-            stringCobro = `Hexcast | -${totalCost} Vex`;
+            stringCobro = `Hexcast | -${totalCost} Vex${ajusteSuffix}`;
         } else {
             const hexAFacturar = totalCost - vexDisponible;
-            hzState.vexGastadoPorPj[pjNombre] = vexMax; 
+            hzState.vexGastadoPorPj[pjNombre] = vexMax;
             modPjStat(pjNombre, 'hex', null, -hexAFacturar, true, false);
             
-            const hexActual = getPjStat(pjNombre, 'hex'); 
-            const textoVex = vexDisponible > 0 ? `-${vexDisponible} Vex y ` : '';
-            stringCobro = `Hexcast | ${textoVex}-${hexAFacturar} Hex (${hexActual})`;
+            const hexActual   = getPjStat(pjNombre, 'hex');
+            const textoVex    = vexDisponible > 0 ? `-${vexDisponible} Vex y ` : '';
+            stringCobro = `Hexcast | ${textoVex}-${hexAFacturar} Hex (${hexActual})${ajusteSuffix}`;
         }
     }
 
     if (stringCobro) hzState.logCasteosSession.push({ pj: pjNombre, msg: stringCobro });
     logsArr.forEach(l => hzState.logCasteosSession.push({ pj: pjNombre, msg: l }));
 
-    hzState.casteoManual.filas = Array.from({ length: 50 }, () => ({ dado: '', nombre: '', afinidad: '', cant: 1 }));
+    // Reset filas con los nuevos campos
+    hzState.casteoManual.filas = Array.from({ length: 50 }, () => ({
+        dado: '', nombre: '', afinidad: '', cant: 1,
+        cobrarHex: null, noFalla: false, ajusteCosto: 0
+    }));
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
@@ -230,7 +283,6 @@ export function toggleVisibilidad(hechizoId) {
     const dbHech = hzState.catalogoDB.find(h => (h.ID || h.id) === hechizoId);
     if (!dbHech) return;
 
-    // Estado real actual: primero la cola, sino la DB
     const enCola = hzState.colaVisibilidad[hechizoId];
     const isKnownDb = dbHech.es_conocido !== false && dbHech.es_conocido !== "FALSE" 
                    && dbHech.es_conocido !== 0    && dbHech.es_conocido !== "0"
