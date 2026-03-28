@@ -18,6 +18,19 @@ window.devSetTransferFiltroRol = setTransferFiltroRol;
 window.devSetTransferCantidad = setTransferCantidad;
 window.devEjecutarTransferencia = ejecutarTransferencia;
 
+// Helpers que leen el estado actual ANTES de sumar/restar (evitan valores hardcodeados en HTML)
+window.devTransferSumar = (objNombre, disponible) => {
+    const actual = objState.colaTransferencias[objNombre] || 0;
+    setTransferCantidad(objNombre, Math.min(actual + 1, disponible));
+};
+window.devTransferRestar = (objNombre) => {
+    const actual = objState.colaTransferencias[objNombre] || 0;
+    setTransferCantidad(objNombre, actual - 1);
+};
+window.devTransferInput = (objNombre, valor, disponible) => {
+    setTransferCantidad(objNombre, Math.min(parseInt(valor) || 0, disponible));
+};
+
 const norm = (str) => str.toString().trim().toLowerCase()
     .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
     .replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/ñ/g,'n').replace(/\s+/g,'_')
@@ -238,7 +251,6 @@ export function renderColumnaObjetos(pjSeleccionado) {
     }
 
     else if (objState.vistaActiva === 'transferir') {
-        // Necesitamos la lista global de personajes — viene de devState vía window
         const listaPersonajes = window.__devListaPersonajes || [];
         const pjOrigen = pjSeleccionado;
         const destino = objState.transferDestinoNombre;
@@ -263,7 +275,7 @@ export function renderColumnaObjetos(pjSeleccionado) {
 
         listaPersonajes
             .filter(p => {
-                if (norm(p.nombre) === norm(pjOrigen)) return false; // excluir al propio origen
+                if (norm(p.nombre) === norm(pjOrigen)) return false;
                 return filtro === 'jugadores' ? p.is_player : !p.is_player;
             })
             .sort((a, b) => a.nombre.localeCompare(b.nombre))
@@ -284,7 +296,6 @@ export function renderColumnaObjetos(pjSeleccionado) {
         if (!destino) {
             html += `<div style="text-align:center; color:#666; padding:20px; font-style:italic; border:1px dashed #333; border-radius:8px;">Selecciona un receptor arriba para elegir qué transferir.</div>`;
         } else {
-            // Inventario del origen para elegir cantidades
             const pjKey = pjOrigen.toLowerCase();
             const itemsBD = objState.inventariosDB[pjKey] ? Object.keys(objState.inventariosDB[pjKey]) : [];
             const itemsCola = objState.colaInventario[pjKey] ? Object.keys(objState.colaInventario[pjKey]) : [];
@@ -303,6 +314,8 @@ export function renderColumnaObjetos(pjSeleccionado) {
                     const imgPath = `${STORAGE_URL}/imgobjetos/${norm(objNombre)}.png`;
                     const imgError = `this.onerror=null; this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png'`;
                     const resalta = cantTransf > 0 ? 'border-color:#ff9900; box-shadow:0 0 6px rgba(255,153,0,0.3);' : 'border-color:#333;';
+                    // Escapes seguros para usar en atributos onclick
+                    const objEsc = objNombre.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
 
                     html += `
                     <div style="background:#050505; border:1px solid; ${resalta} border-radius:8px; padding:8px; display:flex; align-items:center; gap:10px;">
@@ -312,12 +325,15 @@ export function renderColumnaObjetos(pjSeleccionado) {
                             <div style="color:#666; font-size:0.75em;">Disponible: ${disponible}</div>
                         </div>
                         <div style="display:flex; align-items:center; gap:4px; flex-shrink:0;">
-                            <button onclick="window.devSetTransferCantidad('${objNombre.replace(/'/g, "\\'")}', ${cantTransf - 1})" style="background:#4a0000; color:#fff; border:none; border-radius:3px; padding:4px 7px; cursor:pointer; font-weight:bold; font-size:0.8em;">-</button>
+                            <button onclick="window.devTransferRestar('${objEsc}', ${disponible})"
+                                style="background:#4a0000; color:#fff; border:none; border-radius:3px; padding:4px 7px; cursor:pointer; font-weight:bold; font-size:0.8em;">-</button>
                             <input type="number" min="0" max="${disponible}" value="${cantTransf}"
-                                onchange="window.devSetTransferCantidad('${objNombre.replace(/'/g, "\\'")}', Math.min(this.value, ${disponible}))"
+                                oninput="window.devTransferInput('${objEsc}', this.value, ${disponible})"
                                 style="width:46px; text-align:center; background:#000; color:#ff9900; border:1px solid #ff990066; border-radius:3px; padding:3px; font-weight:bold; outline:none; font-family:'Rajdhani';">
-                            <button onclick="window.devSetTransferCantidad('${objNombre.replace(/'/g, "\\'")}', ${cantTransf + 1})" style="background:#4a2000; color:#fff; border:none; border-radius:3px; padding:4px 7px; cursor:pointer; font-weight:bold; font-size:0.8em;">+</button>
-                            <button onclick="window.devSetTransferCantidad('${objNombre.replace(/'/g, "\\'")}', ${disponible})" style="background:#222; color:#ff9900; border:1px solid #ff990055; border-radius:3px; padding:4px 6px; cursor:pointer; font-size:0.7em; font-weight:bold;">TODO</button>
+                            <button onclick="window.devTransferSumar('${objEsc}', ${disponible})"
+                                style="background:#4a2000; color:#fff; border:none; border-radius:3px; padding:4px 7px; cursor:pointer; font-weight:bold; font-size:0.8em;">+</button>
+                            <button onclick="window.devSetTransferCantidad('${objEsc}', ${disponible})"
+                                style="background:#222; color:#ff9900; border:1px solid #ff990055; border-radius:3px; padding:4px 6px; cursor:pointer; font-size:0.7em; font-weight:bold;">TODO</button>
                         </div>
                     </div>`;
                 });
@@ -325,9 +341,12 @@ export function renderColumnaObjetos(pjSeleccionado) {
 
                 const totalItems = Object.values(objState.colaTransferencias).reduce((a, b) => a + b, 0);
                 const btnActivo = totalItems > 0;
+                const pjOrigenEsc = pjOrigen.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
                 html += `
-                <button onclick="${btnActivo ? `window.devEjecutarTransferencia('${pjOrigen.replace(/'/g, "\\'")}')` : ''}"
-                    style="width:100%; padding:12px; border-radius:6px; font-family:'Cinzel'; font-weight:bold; font-size:1em; cursor:${btnActivo ? 'pointer' : 'not-allowed'};
+                <button onclick="window.devEjecutarTransferencia('${pjOrigenEsc}')"
+                    ${!btnActivo ? 'disabled' : ''}
+                    style="width:100%; padding:12px; border-radius:6px; font-family:'Cinzel'; font-weight:bold; font-size:1em;
+                           cursor:${btnActivo ? 'pointer' : 'not-allowed'};
                            background:${btnActivo ? 'linear-gradient(135deg, #7a3d00, #cc6600)' : '#1a1a1a'};
                            color:${btnActivo ? '#fff' : '#444'};
                            border:2px solid ${btnActivo ? '#ff9900' : '#333'};
