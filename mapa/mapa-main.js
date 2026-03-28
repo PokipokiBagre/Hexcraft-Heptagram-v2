@@ -650,14 +650,18 @@ function inicializarBuscador() {
         const q = texto.toLowerCase().trim();
         return estadoMapa.nodos
             .filter(n => {
-                const termino = getNombreBusqueda(n);
-                return termino.startsWith(q) || termino.includes(q);
+                const terminoNombre = getNombreBusqueda(n);
+                const terminoId = n.id ? n.id.toLowerCase() : '';
+                return terminoNombre.startsWith(q) || terminoNombre.includes(q)
+                    || terminoId.startsWith(q) || terminoId.includes(q);
             })
             .sort((a, b) => {
                 const tA = getNombreBusqueda(a);
                 const tB = getNombreBusqueda(b);
-                const startsA = tA.startsWith(q);
-                const startsB = tB.startsWith(q);
+                const idA = a.id ? a.id.toLowerCase() : '';
+                const idB = b.id ? b.id.toLowerCase() : '';
+                const startsA = tA.startsWith(q) || idA.startsWith(q);
+                const startsB = tB.startsWith(q) || idB.startsWith(q);
                 if (startsA && !startsB) return -1;
                 if (!startsA && startsB) return 1;
                 return tA.localeCompare(tB);
