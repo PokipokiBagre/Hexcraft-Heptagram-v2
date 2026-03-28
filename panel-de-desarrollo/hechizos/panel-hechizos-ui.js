@@ -188,7 +188,9 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
     
     const efecto = getValKeys(hechizo, ['efecto_desc', 'efecto', 'desc', 'descripcion']) || '-';
 
-    const isPublicBase = hechizo.Conocido && hechizo.Conocido.toString().trim().toLowerCase() === 'si';
+    const isPublicBase = hechizo.es_conocido !== false && hechizo.es_conocido !== "FALSE" 
+                      && hechizo.es_conocido !== 0    && hechizo.es_conocido !== "0"
+                      && hechizo.es_conocido !== null  && hechizo.es_conocido !== undefined;
     const isKnown = hzState.colaVisibilidad[hId] !== undefined ? hzState.colaVisibilidad[hId] : isPublicBase;
     const isHidden = !isKnown;
 
