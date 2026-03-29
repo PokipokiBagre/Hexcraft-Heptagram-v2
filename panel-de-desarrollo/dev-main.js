@@ -182,8 +182,6 @@ window.onload = async () => {
                 renderColumnaStats(devState.pjSeleccionado);
                 renderColumnaHechizos(devState.pjSeleccionado); 
             }
-            // El panel mapa se re-renderiza siempre (no depende de personaje)
-            renderColumnaMapa();
             revisarCambiosPendientes();
             actualizarLogGlobal();
         });
@@ -191,6 +189,11 @@ window.onload = async () => {
         window.addEventListener('devDataChanged', () => {
             revisarCambiosPendientes();
             actualizarLogGlobal();
+        });
+
+        // 🌟 NUEVO EVENTO: Exclusivo para refrescar el mapa al instante
+        window.addEventListener('devMapaUpdate', () => {
+            renderColumnaMapa();
         });
 
     } catch (error) {
