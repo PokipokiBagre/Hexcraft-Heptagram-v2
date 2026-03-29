@@ -10,7 +10,6 @@ export function initStatsDev(statsGlobal, listaEstados) {
     stState.estadosDB = JSON.parse(JSON.stringify(listaEstados || []));
 }
 
-// ── ¿Es un NPC tipo sistema? (sin Grimorio en los totales) ──
 export function esSistema(pjNombre) {
     return !!(stState.statsDB[pjNombre]?.isSistema);
 }
@@ -68,19 +67,56 @@ export function setPjStat(pjNombre, campoRaiz, subCampo, valor, reRender = true)
 export function setNotaAfinidad(pjNombre, flatKey, nota) {
     if (!stState.notasAfinidad[pjNombre]) stState.notasAfinidad[pjNombre] = {};
     stState.notasAfinidad[pjNombre][flatKey] = nota;
-    // No re-render: el textarea ya se actualiza solo
 }
 
-export function toggleNotaAbierta(pjNombre, flatKey) {
+export function toggleNotaOculta(pjNombre, flatKey) {
     const k = `${pjNombre}|${flatKey}`;
-    if (stState.notasAbiertasSet.has(k)) stState.notasAbiertasSet.delete(k);
-    else stState.notasAbiertasSet.add(k);
+    if (stState.notasOcultasSet.has(k)) stState.notasOcultasSet.delete(k);
+    else stState.notasOcultasSet.add(k);
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
 export function setSubVistaAfinidades(sub) {
     stState.subVistaAfinidades = sub;
     window.dispatchEvent(new Event('devUIUpdate'));
+}
+
+export function setSubVistaVida(sub) {
+    stState.subVistaVida = sub;
+    window.dispatchEvent(new Event('devUIUpdate'));
+}
+
+// ── LÓGICA DE CASCADA PARA VIDA AZUL Y GUARDA ──────────────────────────────
+export function modVidaGuardaCascada(pjNombre, tipo, variacion) {
+    if (!pjNombre) return;
+    const baseKey = tipo === 'vidaAzul' ? 'baseVidaAzul' : 'baseGuardaDorada';
+    const extraKey = tipo === 'vidaAzul' ? 'vidaAzulExtra' : 'guardaDoradaExtra';
+
+    if (variacion > 0) {
+        // Curación / Ganancia se suma a la base
+        modPjStat(pjNombre, baseKey, null, variacion);
+    } else if (variacion < 0) {
+        // Daño / Pérdida: Orden de consumo (Hcz -> Buff -> Alt -> Base)
+        let restante = Math.abs(variacion);
+        const orden = [
+            { raiz: 'hechizos', sub: extraKey },
+            { raiz: 'buffs', sub: extraKey },
+            { raiz: 'hechizosEfecto', sub: extraKey },
+            { raiz: baseKey, sub: null }
+        ];
+
+        for (const nodo of orden) {
+            if (restante <= 0) break;
+            const actual = getPjStat(pjNombre, nodo.raiz, nodo.sub);
+            if (actual > 0) {
+                const aRestar = Math.min(actual, restante);
+                // Usamos false para no re-renderizar hasta terminar
+                modPjStat(pjNombre, nodo.raiz, nodo.sub, -aRestar, false, false);
+                restante -= aRestar;
+            }
+        }
+        window.dispatchEvent(new Event('devUIUpdate'));
+    }
 }
 
 // ── ASISTENCIA ───────────────────────────────────────────────────────────────
@@ -116,7 +152,6 @@ function getTotalAfinidad(pj, af) {
            Number(getPjStat(pj, 'buffs', af) || 0);
 }
 
-// 🌟 Total de afinidad respetando regla de sistema (sin grimorio) 🌟
 export function getTotalAfinidadSmart(pjNombre, af) {
     const base = getPjStat(pjNombre, 'afinidadesBase', af) || 0;
     const hcz  = esSistema(pjNombre) ? 0 : (getPjStat(pjNombre, 'hechizos', af) || 0);
@@ -153,7 +188,6 @@ export function toggleEstado(pjNombre, estadoId) {
     setPjStat(pjNombre, 'estados', estadoId, !actual);
 }
 
-// ── SIN ALERTAS: usa el div #stats-feedback para mensajes ──
 function mostrarFeedback(msg, color = '#ffaa00') {
     const el = document.getElementById('stats-feedback');
     if (!el) return;
@@ -190,7 +224,6 @@ export function cargarEstadoParaEditar(id) {
     }
 }
 
-// ── FUNCIONES DE TOTALES ────────────────────────────────────────────────────
 export function calcularVidaRojaMaxTotal(pjNombre) {
     const base   = getPjStat(pjNombre, 'baseVidaRojaMax');
     const hcz    = getPjStat(pjNombre, 'hechizos', 'vidaRojaMaxExtra');
