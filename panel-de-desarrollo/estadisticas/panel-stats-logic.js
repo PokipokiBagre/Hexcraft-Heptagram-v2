@@ -8,6 +8,14 @@ import { norm } from '../dev-state.js';
 export function initStatsDev(statsGlobal, listaEstados) {
     stState.statsDB = JSON.parse(JSON.stringify(statsGlobal || {}));
     stState.estadosDB = JSON.parse(JSON.stringify(listaEstados || []));
+    
+    // 🌟 Cargar las notas desde la base de datos al estado local
+    stState.notasAfinidad = {};
+    for (const pj in stState.statsDB) {
+        if (stState.statsDB[pj].notasAfinidad) {
+            stState.notasAfinidad[pj] = JSON.parse(JSON.stringify(stState.statsDB[pj].notasAfinidad));
+        }
+    }
 }
 
 export function esSistema(pjNombre) {
@@ -67,6 +75,12 @@ export function setPjStat(pjNombre, campoRaiz, subCampo, valor, reRender = true)
 export function setNotaAfinidad(pjNombre, flatKey, nota) {
     if (!stState.notasAfinidad[pjNombre]) stState.notasAfinidad[pjNombre] = {};
     stState.notasAfinidad[pjNombre][flatKey] = nota;
+    
+    // 🌟 Enviar a la cola para guardar en BD
+    if (!stState.colaNotas[pjNombre]) stState.colaNotas[pjNombre] = {};
+    stState.colaNotas[pjNombre][flatKey] = nota;
+    
+    window.dispatchEvent(new Event('devDataChanged')); // Despierta el botón de Sincronizar
 }
 
 export function toggleNotaOculta(pjNombre, flatKey) {
@@ -93,10 +107,8 @@ export function modVidaGuardaCascada(pjNombre, tipo, variacion) {
     const extraKey = tipo === 'vidaAzul' ? 'vidaAzulExtra' : 'guardaDoradaExtra';
 
     if (variacion > 0) {
-        // Curación / Ganancia se suma a la base
         modPjStat(pjNombre, baseKey, null, variacion);
     } else if (variacion < 0) {
-        // Daño / Pérdida: Orden de consumo (Hcz -> Buff -> Alt -> Base)
         let restante = Math.abs(variacion);
         const orden = [
             { raiz: 'hechizos', sub: extraKey },
@@ -110,7 +122,6 @@ export function modVidaGuardaCascada(pjNombre, tipo, variacion) {
             const actual = getPjStat(pjNombre, nodo.raiz, nodo.sub);
             if (actual > 0) {
                 const aRestar = Math.min(actual, restante);
-                // Usamos false para no re-renderizar hasta terminar
                 modPjStat(pjNombre, nodo.raiz, nodo.sub, -aRestar, false, false);
                 restante -= aRestar;
             }
