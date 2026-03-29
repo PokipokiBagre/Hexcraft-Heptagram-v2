@@ -8,14 +8,15 @@ export const stState = {
     
     vistaActiva: 'hex', 
     subVistaAfinidades: 'totales', 
-    subVistaVida: 'totales', // 🌟 Sub-tab de Vida
+    subVistaVida: 'totales',
     logAsistencia: "",
     
     notasAfinidad: {},
-    // 🌟 Set que almacena qué notas ESTÁN OCULTAS. Si no está aquí, se muestra.
     notasOcultasSet: new Set(),
     
+    // 🔥 COLAS DE CAMBIOS (Staging) 🔥
     colaStats: {},         
+    colaNotas: {},         // 🌟 Cola para las notas de afinidades
     colaEstadosConfig: {}, 
     colaBorrarEstados: []  
 };
