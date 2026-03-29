@@ -1,6 +1,7 @@
 // ============================================================
 // panel-mapa-ui.js — Canvas editor embebido (Panel Dev)
-// Siempre en modo edición: selección, arrastrar, crear/editar/borrar nodos y flechas
+// v2: colores fijos (lila/dorado), buscador, selector de personaje,
+//     asignación de hechizos integrada, sin tab de colores.
 // ============================================================
 
 import { mapaDevState } from './panel-mapa-state.js';
@@ -13,7 +14,6 @@ import {
     setFiltroAfinidad,
     setFiltroVisibilidad,
     setVistaMapaDev,
-    editarColorAfinidad,
     contarCambiosPendientes,
     crearNodoDev,
     crearEnlaceDev,
@@ -21,6 +21,16 @@ import {
     eliminarNodosDev,
     actualizarDatoNodoDev,
 } from './panel-mapa-logic.js';
+
+import { hzState } from '../hechizos/panel-hechizos-state.js';
+import { asignarHechizo } from '../hechizos/panel-hechizos-logic.js';
+import { norm } from '../dev-state.js';
+
+// ── Colores fijos (ya no viene de mapaColores por afinidad para el canvas) ──
+const COLOR_DESCUBIERTO = 'rgba(180, 140, 255, 1)';     // lila
+const COLOR_OCULTO      = 'rgba(212, 175, 55, 0.75)';   // dorado suave
+const COLOR_BORDE_DESC  = 'rgba(200, 160, 255, 0.9)';
+const COLOR_BORDE_OCU   = 'rgba(180, 148, 40, 0.6)';
 
 // ── Estado interno del canvas ─────────────────────────────────
 const miniMapa = {
@@ -38,13 +48,22 @@ const miniMapa = {
     rafId: null,
 };
 
+// ── Estado del selector de personaje para asignación ─────────
+const asignState = {
+    pjSeleccionado: null,   // nombre del personaje activo en este panel
+    filtroRol: 'jugadores', // 'jugadores' | 'npcs'
+    // Sets calculados al seleccionar un personaje
+    posesiones: new Set(),  // nodos que tiene
+    aprendibles: new Set(), // nodos 1 paso adelante
+    rastreo:     new Set(), // nodos predecesores necesarios
+};
+
 // ── API pública expuesta al HTML inline ───────────────────────
 window.devMapa = {
     setVista:    (v) => { setVistaMapaDev(v); renderColumnaMapa(); },
-    setBusqueda: (t) => setBusquedaMapa(t),
+    setBusqueda: (t) => { setBusquedaMapa(t); _actualizarBuscadorCanvas(t); },
     setFiltroAf: (v) => setFiltroAfinidad(v),
     setFiltroVis:(v) => setFiltroVisibilidad(v),
-    editarColor: (af, hex) => editarColorAfinidad(af, hex),
     abrirMapa:   () => window.open('../mapa/index.html', '_blank'),
     centrarCamara: () => _centrarCamaraAuto(),
 
@@ -97,7 +116,104 @@ window.devMapa = {
         _renderPropiedades();
         _marcarGuardar();
     },
+
+    // ── Asignación de personaje ───────────────────────────────
+    setFiltroRolAsign: (rol) => {
+        asignState.filtroRol = rol;
+        _renderPanelAsignacion();
+    },
+
+    seleccionarPjAsign: (nombre) => {
+        asignState.pjSeleccionado = nombre;
+        _calcularVistaPj(nombre);
+        _renderPanelAsignacion();
+    },
+
+    // Asignar/quitar hechizo desde el panel de asignación
+    asignarDesdeNodo: (hechizoId, cobrarHex) => {
+        const pj = asignState.pjSeleccionado;
+        if (!pj) return;
+        // Usamos la misma lógica que panel-hechizos-logic.js
+        const pjKey  = norm(pj);
+        const idNorm = norm(hechizoId);
+        const yaLoTiene = (hzState.colaAsignaciones[pjKey]?.[hechizoId] !== undefined)
+            ? hzState.colaAsignaciones[pjKey][hechizoId]
+            : (hzState.inventariosDB[pjKey] || []).includes(idNorm);
+
+        // Forzamos el cobro según el checkbox
+        const cobrarOriginal = hzState.cobrarAlAsignar;
+        hzState.cobrarAlAsignar = cobrarHex;
+        asignarHechizo(pj, hechizoId);
+        hzState.cobrarAlAsignar = cobrarOriginal;
+
+        // Recalcular vista
+        _calcularVistaPj(pj);
+        _renderPanelAsignacion();
+        _marcarGuardar();
+    },
 };
+
+// ── Calcular posesiones/aprendibles/rastreo para el personaje ─
+function _calcularVistaPj(nombre) {
+    asignState.posesiones.clear();
+    asignState.aprendibles.clear();
+    asignState.rastreo.clear();
+    if (!nombre) return;
+
+    const pjKey = norm(nombre);
+    const inv   = hzState.inventariosDB[pjKey] || [];
+
+    // Determinar posesiones
+    mapaDevState.nodosDB.forEach(n => {
+        const idNorm  = norm(n.id);
+        const nomNorm = norm(n.nombreOriginal || '');
+        const inCola  = hzState.colaAsignaciones[pjKey]?.[n.id];
+        const tieneDB = inv.includes(idNorm) || inv.includes(nomNorm);
+        const tiene   = inCola !== undefined ? inCola : tieneDB;
+        if (tiene) asignState.posesiones.add(n);
+    });
+
+    // Aprendibles (1 paso adelante)
+    mapaDevState.enlacesDB.forEach(e => {
+        if (asignState.posesiones.has(e.source) && !asignState.posesiones.has(e.target)) {
+            asignState.aprendibles.add(e.target);
+        }
+    });
+
+    // Rastreo recursivo hacia atrás
+    const rastrear = (n) => {
+        mapaDevState.enlacesDB.forEach(e => {
+            if (e.target === n && !asignState.rastreo.has(e.source) && !asignState.posesiones.has(e.source)) {
+                asignState.rastreo.add(e.source);
+                rastrear(e.source);
+            }
+        });
+    };
+    asignState.aprendibles.forEach(n => rastrear(n));
+    asignState.posesiones.forEach(n => rastrear(n));
+}
+
+// ── Buscador del canvas (busca y centra la cámara en el nodo) ─
+let _busquedaCanvas = '';
+function _actualizarBuscadorCanvas(texto) {
+    _busquedaCanvas = (texto || '').toLowerCase().trim();
+    if (!_busquedaCanvas) return;
+    // Buscar por ID o nombre real
+    const nodo = mapaDevState.nodosDB.find(n =>
+        (n.id || '').toLowerCase().includes(_busquedaCanvas) ||
+        (n.nombreOriginal || '').toLowerCase().includes(_busquedaCanvas)
+    );
+    if (nodo && miniMapa.canvas) {
+        const c    = miniMapa.canvas.getBoundingClientRect();
+        const zoom = miniMapa.camara.zoom;
+        miniMapa.camara.x = (c.width  / 2) - (nodo.x * zoom);
+        miniMapa.camara.y = (c.height / 2) - (nodo.y * zoom);
+        // Seleccionar para destacar
+        mapaDevState.seleccionMultiple.clear();
+        mapaDevState.seleccionMultiple.add(nodo);
+        _renderPropiedades();
+    }
+}
 
 // ── RENDER PRINCIPAL ──────────────────────────────────────────
 export function renderColumnaMapa() {
@@ -116,23 +232,21 @@ export function renderColumnaMapa() {
     <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;flex-wrap:wrap;">
         <button onclick="window.devMapa.setVista('canvas')" style="${tabStyle(esCanvas)}padding:6px 12px;border:1px solid;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.78em;font-weight:bold;">🗺️ Mapa Visual</button>
         <button onclick="window.devMapa.setVista('lista')"  style="${tabStyle(vistaActiva==='lista')}padding:6px 12px;border:1px solid;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.78em;font-weight:bold;">📋 Lista</button>
-        <button onclick="window.devMapa.setVista('colores')" style="${tabStyle(vistaActiva==='colores')}padding:6px 12px;border:1px solid;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.78em;font-weight:bold;">🎨 Colores</button>
         <button onclick="window.devMapa.abrirMapa()" style="margin-left:auto;background:#003366;color:#00ffff;border:1px solid #00ffff;padding:6px 12px;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.78em;font-weight:bold;">↗️ Mapa Completo</button>
     </div>
     <div id="mm-pendientes" style="background:rgba(74,24,128,0.25);border:1px dashed #b060ff;border-radius:6px;padding:7px 12px;margin-bottom:8px;font-size:0.78em;color:#cc88ff;display:${pendientes > 0 ? 'block' : 'none'};">
         ⏳ ${pendientes} cambio${pendientes !== 1 ? 's' : ''} pendiente${pendientes !== 1 ? 's' : ''} — usa 🔥 GUARDAR TODO
     </div>`;
 
-    if (esCanvas)                       html += _htmlVistaCanvas();
-    else if (vistaActiva === 'lista')   html += _htmlVistaLista();
-    else if (vistaActiva === 'colores') html += _htmlVistaColores();
+    if (esCanvas)                     html += _htmlVistaCanvas();
+    else if (vistaActiva === 'lista') html += _htmlVistaLista();
 
     contenedor.innerHTML = html;
 
     if (esCanvas) requestAnimationFrame(() => _montarCanvas());
 }
 
-// ── HTML DEL CANVAS (con toolbar y panel de propiedades) ──────
+// ── HTML DEL CANVAS ───────────────────────────────────────────
 function _htmlVistaCanvas() {
     const nodos     = mapaDevState.nodosDB;
     const total     = nodos.length;
@@ -142,17 +256,29 @@ function _htmlVistaCanvas() {
             : n.esConocido
     ).length;
 
+    // Lista de todos los personajes activos para el selector
+    const listaPersonajes = window.__devListaPersonajes || [];
+    const jugadores = listaPersonajes.filter(p => p.is_player && p.is_active);
+    const npcs      = listaPersonajes.filter(p => !p.is_player && p.is_active);
+    const fuentePj  = asignState.filtroRol === 'jugadores' ? jugadores : npcs;
+
     return `
-    <!-- Estadísticas rápidas -->
-    <div style="display:flex;gap:8px;margin-bottom:8px;font-size:0.78em;text-align:center;align-items:center;">
-        <div style="flex:1;background:#0a0020;border:1px solid #333;border-radius:6px;padding:6px;">
+    <!-- Estadísticas rápidas + buscador -->
+    <div style="display:flex;gap:8px;margin-bottom:8px;font-size:0.78em;align-items:center;">
+        <div style="flex:0 0 auto;background:#0a0020;border:1px solid #333;border-radius:6px;padding:6px 10px;">
             <span style="color:#b060ff;font-weight:bold;">${total}</span> <span style="color:#555;">Total</span>
         </div>
-        <div style="flex:1;background:#0a0020;border:1px solid #00cc88;border-radius:6px;padding:6px;">
-            <span style="color:#00cc88;font-weight:bold;">${conocidos}</span> <span style="color:#555;">Desc.</span>
+        <div style="flex:0 0 auto;background:#0a0020;border:1px solid #b896ff;border-radius:6px;padding:6px 10px;">
+            <span style="color:#b896ff;font-weight:bold;">${conocidos}</span> <span style="color:#555;">Desc.</span>
         </div>
-        <div style="flex:1;background:#0a0020;border:1px solid #555;border-radius:6px;padding:6px;">
-            <span style="color:#888;font-weight:bold;">${total - conocidos}</span> <span style="color:#555;">Sellados</span>
+        <div style="flex:0 0 auto;background:#0a0020;border:1px solid #d4af37;border-radius:6px;padding:6px 10px;">
+            <span style="color:#d4af37;font-weight:bold;">${total - conocidos}</span> <span style="color:#555;">Sellados</span>
+        </div>
+        <!-- Buscador del canvas -->
+        <div style="flex:1;position:relative;">
+            <input id="mm-buscador" type="text" placeholder="🔍 Buscar por ID o nombre..."
+                oninput="window.devMapa.setBusqueda(this.value)"
+                style="width:100%;box-sizing:border-box;background:#0a0020;color:#fff;border:1px solid #4a1880;border-radius:6px;padding:6px 10px;font-family:'Rajdhani';font-size:0.9em;outline:none;">
         </div>
         <button onclick="window.devMapa.centrarCamara()"
             style="background:#111;color:#aaa;border:1px solid #444;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:1em;" title="Centrar vista">⌖</button>
@@ -161,6 +287,7 @@ function _htmlVistaCanvas() {
     <!-- Barra de herramientas -->
     <div style="display:flex;gap:6px;margin-bottom:8px;background:rgba(8,0,18,0.85);padding:8px;border-radius:8px;border:1px solid #2a1060;">
         <button id="mm-tool-cursor" onclick="window.devMapa.setHerramienta('cursor')"
+            title="Seleccionar y mover nodos"
             style="flex:1;padding:8px 4px;border-radius:6px;background:#00ffff;color:#000;border:2px solid #00ffff;cursor:pointer;font-weight:bold;font-size:0.74em;font-family:'Cinzel';">
             👆<br>Select
         </button>
@@ -189,7 +316,7 @@ function _htmlVistaCanvas() {
                 Scroll: zoom<br>Drag: mover<br>SHIFT+drag fondo: caja
             </div>
         </div>
-        <!-- Panel de propiedades -->
+        <!-- Panel de propiedades (arriba) -->
         <div id="mm-props-panel"
             style="width:255px;flex-shrink:0;background:rgba(8,0,18,0.95);border:1px solid #4a1880;border-radius:8px;overflow-y:auto;max-height:450px;font-size:0.82em;">
             <div style="padding:20px;text-align:center;color:#3a3a4a;line-height:1.8;">
@@ -198,6 +325,178 @@ function _htmlVistaCanvas() {
                 <p style="margin:0;font-size:0.85em;">SHIFT + arrastra el fondo para seleccionar varios.</p>
             </div>
         </div>
+    </div>
+
+    <!-- ══ PANEL DE ASIGNACIÓN DE PERSONAJE (debajo del canvas) ══ -->
+    <div id="mm-asign-panel" style="margin-top:14px;background:rgba(5,0,15,0.9);border:1px solid #3a1060;border-radius:10px;padding:14px;">
+        <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+            <span style="color:#b060ff;font-family:'Cinzel';font-weight:bold;font-size:0.85em;">👤 ASIGNAR HECHIZOS A PERSONAJE</span>
+            <div style="display:flex;gap:6px;margin-left:auto;">
+                <button onclick="window.devMapa.setFiltroRolAsign('jugadores')"
+                    id="mm-tab-jug"
+                    style="padding:5px 12px;border-radius:5px;cursor:pointer;font-family:'Cinzel';font-size:0.72em;font-weight:bold;
+                    ${asignState.filtroRol==='jugadores'?'background:#004a00;color:#fff;border:1px solid #00e676;':'background:#111;color:#888;border:1px solid #444;'}">
+                    ⚔️ Jugadores
+                </button>
+                <button onclick="window.devMapa.setFiltroRolAsign('npcs')"
+                    id="mm-tab-npcs"
+                    style="padding:5px 12px;border-radius:5px;cursor:pointer;font-family:'Cinzel';font-size:0.72em;font-weight:bold;
+                    ${asignState.filtroRol==='npcs'?'background:#4a0000;color:#fff;border:1px solid #ff4444;':'background:#111;color:#888;border:1px solid #444;'}">
+                    🎭 NPCs
+                </button>
+            </div>
+        </div>
+
+        <!-- Lista de personajes -->
+        <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;">
+            ${fuentePj.map(p => {
+                const activo = asignState.pjSeleccionado === p.nombre;
+                return `<button onclick="window.devMapa.seleccionarPjAsign('${p.nombre.replace(/'/g,"\\'")}')\"
+                    style="padding:5px 11px;border-radius:20px;cursor:pointer;font-family:'Rajdhani';font-size:0.82em;font-weight:bold;transition:0.2s;
+                    ${activo
+                        ? 'background:#4a1880;color:#fff;border:1px solid #b060ff;'
+                        : 'background:#0a0018;color:#888;border:1px solid #333;'}">
+                    ${_esc(p.nombre)}
+                </button>`;
+            }).join('')}
+            ${fuentePj.length === 0 ? `<span style="color:#555;font-style:italic;font-size:0.8em;">Sin personajes activos en esta categoría.</span>` : ''}
+        </div>
+
+        <!-- Panel de asignación del personaje seleccionado -->
+        <div id="mm-asign-nodo-panel">
+            ${asignState.pjSeleccionado
+                ? _htmlAsignNodo()
+                : `<div style="color:#3a3a4a;text-align:center;padding:15px;font-size:0.8em;">Selecciona un personaje arriba para ver sus hechizos y asignar.</div>`
+            }
+        </div>
+    </div>`;
+}
+
+// ── Re-render solo del panel de asignación (sin reconstruir todo) ──
+function _renderPanelAsignacion() {
+    // Intentar actualizar sin reconstruir el canvas
+    const panel = document.getElementById('mm-asign-panel');
+    if (!panel) { renderColumnaMapa(); return; }
+
+    const listaPersonajes = window.__devListaPersonajes || [];
+    const jugadores = listaPersonajes.filter(p => p.is_player && p.is_active);
+    const npcs      = listaPersonajes.filter(p => !p.is_player && p.is_active);
+    const fuentePj  = asignState.filtroRol === 'jugadores' ? jugadores : npcs;
+
+    const tabJug = document.getElementById('mm-tab-jug');
+    const tabNpc = document.getElementById('mm-tab-npcs');
+    if (tabJug) {
+        tabJug.style.background    = asignState.filtroRol === 'jugadores' ? '#004a00' : '#111';
+        tabJug.style.color         = asignState.filtroRol === 'jugadores' ? '#fff' : '#888';
+        tabJug.style.borderColor   = asignState.filtroRol === 'jugadores' ? '#00e676' : '#444';
+    }
+    if (tabNpc) {
+        tabNpc.style.background    = asignState.filtroRol === 'npcs' ? '#4a0000' : '#111';
+        tabNpc.style.color         = asignState.filtroRol === 'npcs' ? '#fff' : '#888';
+        tabNpc.style.borderColor   = asignState.filtroRol === 'npcs' ? '#ff4444' : '#444';
+    }
+
+    // Reconstruir lista de personajes
+    const listContainer = panel.querySelector('.mm-pj-lista');
+    if (listContainer) {
+        listContainer.innerHTML = fuentePj.map(p => {
+            const activo = asignState.pjSeleccionado === p.nombre;
+            return `<button onclick="window.devMapa.seleccionarPjAsign('${p.nombre.replace(/'/g,"\\'")}')\"
+                style="padding:5px 11px;border-radius:20px;cursor:pointer;font-family:'Rajdhani';font-size:0.82em;font-weight:bold;transition:0.2s;
+                ${activo
+                    ? 'background:#4a1880;color:#fff;border:1px solid #b060ff;'
+                    : 'background:#0a0018;color:#888;border:1px solid #333;'}">
+                ${_esc(p.nombre)}
+            </button>`;
+        }).join('') || `<span style="color:#555;font-style:italic;font-size:0.8em;">Sin personajes activos.</span>`;
+    }
+
+    const nodoPanel = document.getElementById('mm-asign-nodo-panel');
+    if (nodoPanel) {
+        nodoPanel.innerHTML = asignState.pjSeleccionado
+            ? _htmlAsignNodo()
+            : `<div style="color:#3a3a4a;text-align:center;padding:15px;font-size:0.8em;">Selecciona un personaje arriba para ver sus hechizos y asignar.</div>`;
+    }
+}
+
+// ── HTML del nodo seleccionado + panel de asignación ─────────
+function _htmlAsignNodo() {
+    if (!mapaDevState.seleccionMultiple.size) {
+        return `<div style="color:#3a3a4a;text-align:center;padding:15px;font-size:0.8em;">
+            Haz clic en un nodo del mapa para ver opciones de asignación para <strong style="color:#b060ff;">${_esc(asignState.pjSeleccionado)}</strong>.
+        </div>`;
+    }
+
+    const cands = Array.from(mapaDevState.seleccionMultiple);
+    if (cands.length > 1) {
+        return `<div style="color:#888;text-align:center;padding:15px;font-size:0.8em;">
+            Selección múltiple (${cands.length} nodos). Selecciona uno solo para asignar.
+        </div>`;
+    }
+
+    const n       = cands[0];
+    const pj      = asignState.pjSeleccionado;
+    const pjKey   = norm(pj);
+    const idNorm  = norm(n.id);
+    const inv     = hzState.inventariosDB[pjKey] || [];
+    const inCola  = hzState.colaAsignaciones[pjKey]?.[n.id];
+    const tieneDB = inv.includes(idNorm) || inv.includes(norm(n.nombreOriginal || ''));
+    const tiene   = inCola !== undefined ? inCola : tieneDB;
+    const cambioEnCola = inCola !== undefined && inCola !== tieneDB;
+
+    const esConocido  = getVisibilidadActual(n.id);
+    const esPosesion  = asignState.posesiones.has(n);
+    const esAprendible = asignState.aprendibles.has(n);
+    const esRastreo   = asignState.rastreo.has(n);
+
+    let estadoLabel = '';
+    if (esPosesion)    estadoLabel = `<span style="background:rgba(180,140,255,0.2);color:#b896ff;border:1px solid #b060ff;border-radius:4px;padding:2px 7px;font-size:0.75em;">● Posee</span>`;
+    else if (esAprendible) estadoLabel = `<span style="background:rgba(212,175,55,0.15);color:#d4af37;border:1px solid #d4af37;border-radius:4px;padding:2px 7px;font-size:0.75em;">✦ Aprendible</span>`;
+    else if (esRastreo) estadoLabel = `<span style="background:rgba(100,100,80,0.2);color:#888;border:1px solid #555;border-radius:4px;padding:2px 7px;font-size:0.75em;">○ Prereq.</span>`;
+
+    // Texto del hechizo: tachado si está oculto (no conocido)
+    let textoNombre = '';
+    if (esConocido) {
+        textoNombre = `<span style="color:#ddd;font-weight:bold;">${_esc(n.nombreOriginal || n.id)}</span> <span style="color:#888;font-size:0.85em;">(${n.hex} HEX)</span>`;
+    } else {
+        textoNombre = `<span style="color:#888;">Hechizo ${_extractNum(n.id)}</span> <span style="color:#888;font-size:0.85em;">(${n.hex} HEX)</span> <span style="color:#555;text-decoration:line-through;font-size:0.8em;">${_esc(n.nombreOriginal || n.id)}</span>`;
+    }
+
+    const safeId  = n.id.replace(/'/g, "\\'");
+    const hexCost = n.hex || 0;
+
+    return `
+    <div style="background:rgba(10,0,25,0.8);border:1px solid #3a1060;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:10px;">
+        <!-- Info del nodo -->
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+            <div style="flex:1;min-width:0;">
+                <div style="font-size:0.85em;margin-bottom:4px;">${textoNombre}</div>
+                <div style="font-size:0.72em;color:#555;">${_esc(n.afinidad || '—')} · ${_esc(n.clase)}</div>
+            </div>
+            ${estadoLabel}
+            ${cambioEnCola ? `<span style="color:#ffaa00;font-size:0.72em;">● cola</span>` : ''}
+        </div>
+
+        <!-- Botones de asignación -->
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            ${!tiene ? `
+            <button onclick="window.devMapa.asignarDesdeNodo('${safeId}', false)"
+                style="flex:1;padding:8px;background:rgba(0,180,100,0.15);color:#00cc88;border:1px solid #00aa66;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
+                ✅ DAR (sin cobrar)
+            </button>
+            ${hexCost > 0 ? `
+            <button onclick="window.devMapa.asignarDesdeNodo('${safeId}', true)"
+                style="flex:1;padding:8px;background:rgba(180,140,0,0.15);color:#d4af37;border:1px solid #b09030;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
+                💰 DAR (−${hexCost} HEX)
+            </button>` : ''}
+            ` : `
+            <button onclick="window.devMapa.asignarDesdeNodo('${safeId}', false)"
+                style="flex:1;padding:8px;background:rgba(180,0,0,0.15);color:#ff6666;border:1px solid #aa3333;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
+                ❌ QUITAR HECHIZO
+            </button>
+            `}
+        </div>
+        ${n.efecto ? `<div style="font-size:0.75em;color:#888;border-top:1px dashed #2a1060;padding-top:8px;line-height:1.4;">${_esc(n.efecto)}</div>` : ''}
     </div>`;
 }
 
@@ -219,8 +518,6 @@ function _montarCanvas() {
     _centrarCamaraAuto();
     _engacharEventos(canvas);
     _iniciarLoop();
-
-    // Actualizar toolbar al montar (por si la herramienta cambió)
     _actualizarToolbar();
 }
 
@@ -271,7 +568,6 @@ function _engacharEventos(canvas) {
         return null;
     };
 
-    // ── mousedown ────────────────────────────────────────────
     canvas.addEventListener('mousedown', (e) => {
         const wp   = toWorld(e.clientX, e.clientY);
         const nodo = hitNodo(wp.x, wp.y);
@@ -286,7 +582,6 @@ function _engacharEventos(canvas) {
                 mapaDevState.tempLink = { source: nodo, endX: nodo.x, endY: nodo.y };
             }
         } else {
-            // cursor
             if (nodo) {
                 if (e.shiftKey) {
                     if (mapaDevState.seleccionMultiple.has(nodo)) mapaDevState.seleccionMultiple.delete(nodo);
@@ -299,6 +594,11 @@ function _engacharEventos(canvas) {
                 }
                 miniMapa.inter.draggedNode = nodo;
                 _renderPropiedades();
+                // Actualizar panel de asignación si hay personaje seleccionado
+                if (asignState.pjSeleccionado) {
+                    const np = document.getElementById('mm-asign-nodo-panel');
+                    if (np) np.innerHTML = _htmlAsignNodo();
+                }
             } else {
                 if (e.shiftKey) {
                     mapaDevState.seleccionMultiple.clear();
@@ -312,7 +612,6 @@ function _engacharEventos(canvas) {
         canvas.style.cursor = 'grabbing';
     });
 
-    // ── mousemove ────────────────────────────────────────────
     canvas.addEventListener('mousemove', (e) => {
         const dx = e.clientX - miniMapa.inter.lastMouseX;
         const dy = e.clientY - miniMapa.inter.lastMouseY;
@@ -331,7 +630,6 @@ function _engacharEventos(canvas) {
             mapaDevState.seleccionMultiple.forEach(n => {
                 n.x += dx / z;
                 n.y += dy / z;
-                // Registrar posición en cola
                 if (!mapaDevState.colaMetadatos[n.id]) mapaDevState.colaMetadatos[n.id] = {};
                 mapaDevState.colaMetadatos[n.id].x = n.x;
                 mapaDevState.colaMetadatos[n.id].y = n.y;
@@ -352,7 +650,6 @@ function _engacharEventos(canvas) {
         miniMapa.inter.lastMouseY = e.clientY;
     });
 
-    // ── mouseup ──────────────────────────────────────────────
     canvas.addEventListener('mouseup', (e) => {
         const wp   = toWorld(e.clientX, e.clientY);
         const nodo = hitNodo(wp.x, wp.y);
@@ -383,10 +680,13 @@ function _engacharEventos(canvas) {
             _renderPropiedades();
         } else if (miniMapa.inter.draggedNode) {
             if (miniMapa.inter.hasDragged) _marcarGuardar();
-            // La selección ya se actualizó en mousedown
         } else if (miniMapa.inter.isDraggingBg && !miniMapa.inter.hasDragged && !e.shiftKey) {
             mapaDevState.seleccionMultiple.clear();
             _renderPropiedades();
+            if (asignState.pjSeleccionado) {
+                const np = document.getElementById('mm-asign-nodo-panel');
+                if (np) np.innerHTML = _htmlAsignNodo();
+            }
         }
 
         miniMapa.inter.isDraggingBg = false;
@@ -402,7 +702,6 @@ function _engacharEventos(canvas) {
         canvas.style.cursor = 'grab';
     });
 
-    // Zoom
     canvas.addEventListener('wheel', (e) => {
         e.preventDefault(); e.stopPropagation();
         const f  = e.deltaY > 0 ? 0.88 : 1.14;
@@ -415,7 +714,6 @@ function _engacharEventos(canvas) {
         miniMapa.camara.zoom = nz;
     }, { passive: false });
 
-    // Touch (sólo pan básico en móvil)
     let pinchDist = 0;
     canvas.addEventListener('touchstart', (e) => {
         e.preventDefault();
@@ -482,7 +780,8 @@ function _dibujarFrame() {
     ctx.translate(miniMapa.camara.x, miniMapa.camara.y);
     ctx.scale(miniMapa.camara.zoom, miniMapa.camara.zoom);
 
-    const sf = Math.max(miniMapa.camara.zoom, 0.04);
+    const sf       = Math.max(miniMapa.camara.zoom, 0.04);
+    const hayPj    = !!asignState.pjSeleccionado;
 
     // ── ENLACES ───────────────────────────────────────────────
     mapaDevState.enlacesDB.forEach(link => {
@@ -494,11 +793,24 @@ function _dibujarFrame() {
         const tx    = t.x - Math.cos(angle) * (r + 3 / sf);
         const ty    = t.y - Math.sin(angle) * (r + 3 / sf);
 
-        const sV    = getVisibilidadActual(s.id);
-        const tV    = getVisibilidadActual(t.id);
-        const color = sV && tV  ? 'rgba(210,190,230,0.22)'
-                    : sV || tV  ? 'rgba(212,175,55,0.28)'
-                                : 'rgba(200,60,100,0.15)';
+        let color;
+        if (hayPj) {
+            const sP = asignState.posesiones.has(s);
+            const tP = asignState.posesiones.has(t);
+            const tA = asignState.aprendibles.has(t);
+            const sT = asignState.rastreo.has(s) || sP;
+            const tT = asignState.rastreo.has(t) || tP || tA;
+            if (sP && tP)       color = 'rgba(180,140,255,0.5)';
+            else if (sP && tA)  color = 'rgba(212,175,55,0.5)';
+            else if (sT && tT)  color = 'rgba(140,120,80,0.25)';
+            else                color = 'rgba(60,60,70,0.15)';
+        } else {
+            const sV = getVisibilidadActual(s.id);
+            const tV = getVisibilidadActual(t.id);
+            color = sV && tV  ? 'rgba(180,140,255,0.22)'
+                  : sV || tV  ? 'rgba(212,175,55,0.28)'
+                              : 'rgba(100,100,120,0.12)';
+        }
 
         ctx.beginPath();
         ctx.moveTo(s.x, s.y); ctx.lineTo(tx, ty);
@@ -515,17 +827,48 @@ function _dibujarFrame() {
 
     // ── NODOS ─────────────────────────────────────────────────
     mapaDevState.nodosDB.forEach(nodo => {
-        const esConocido = getVisibilidadActual(nodo.id);
-        const isHovered  = miniMapa.inter.hoveredNode  === nodo;
-        const isSel      = mapaDevState.seleccionMultiple.has(nodo);
-        const colorAf    = _colorAf(nodo.afinidad);
+        const esConocido  = getVisibilidadActual(nodo.id);
+        const isHovered   = miniMapa.inter.hoveredNode  === nodo;
+        const isSel       = mapaDevState.seleccionMultiple.has(nodo);
+
+        // Determinar colores según modo (con personaje / sin personaje)
+        let colorCore, colorBorde, alpha;
+        if (hayPj) {
+            const esPosesion   = asignState.posesiones.has(nodo);
+            const esAprendible = asignState.aprendibles.has(nodo);
+            const esRastreo    = asignState.rastreo.has(nodo);
+            if (esPosesion) {
+                colorCore  = 'rgba(180,140,255,0.9)';
+                colorBorde = 'rgba(200,160,255,1)';
+                alpha      = 1.0;
+            } else if (esAprendible) {
+                colorCore  = 'rgba(212,175,55,0.85)';
+                colorBorde = 'rgba(230,195,75,0.95)';
+                alpha      = 1.0;
+            } else if (esRastreo) {
+                colorCore  = 'rgba(130,110,60,0.5)';
+                colorBorde = 'rgba(160,140,80,0.55)';
+                // Ocultos en rastreo: ligeramente más visibles (opacidad aumentada)
+                alpha      = esConocido ? 0.65 : 0.45;
+            } else {
+                colorCore  = 'rgba(50,50,55,0.3)';
+                colorBorde = 'rgba(80,80,85,0.3)';
+                // Ocultos irrelevantes: levemente más visibles que antes para que se vean en asignación
+                alpha      = esConocido ? 0.35 : 0.25;
+            }
+        } else {
+            // Sin personaje seleccionado: lila = descubierto, dorado = oculto
+            colorCore  = esConocido ? COLOR_DESCUBIERTO : COLOR_OCULTO;
+            colorBorde = esConocido ? COLOR_BORDE_DESC  : COLOR_BORDE_OCU;
+            alpha      = esConocido ? 1.0 : 0.55;
+        }
 
         const r     = nodo.radio || (esConocido ? 35 : 28);
         const rCore = Math.max(1, r - 7);
 
-        ctx.globalAlpha = esConocido ? 1.0 : 0.55;
+        ctx.globalAlpha = alpha;
         ctx.shadowBlur  = (isHovered || isSel) ? 22 / sf : (esConocido ? 4 / sf : 0);
-        ctx.shadowColor = esConocido ? colorAf : '#888';
+        ctx.shadowColor = colorBorde;
 
         // Fondo
         ctx.beginPath(); ctx.arc(nodo.x, nodo.y, r, 0, Math.PI * 2);
@@ -533,29 +876,23 @@ function _dibujarFrame() {
 
         // Core
         ctx.beginPath(); ctx.arc(nodo.x, nodo.y, rCore, 0, Math.PI * 2);
-        if (esConocido) {
-            ctx.fillStyle   = colorAf;
-            ctx.globalAlpha = 0.88;
-            ctx.fill();
-            ctx.globalAlpha = 1.0;
-        } else {
-            ctx.fillStyle = '#111'; ctx.fill();
-            ctx.fillStyle = colorAf; ctx.globalAlpha = 0.12; ctx.fill();
-            ctx.globalAlpha = 0.55;
-        }
+        ctx.fillStyle   = colorCore;
+        ctx.globalAlpha = alpha * 0.88;
+        ctx.fill();
+        ctx.globalAlpha = alpha;
 
         ctx.shadowBlur = 0;
 
-        // Borde normal
+        // Borde
         ctx.beginPath(); ctx.arc(nodo.x, nodo.y, r, 0, Math.PI * 2);
         ctx.lineWidth   = 1.8 / sf;
-        ctx.strokeStyle = esConocido ? colorAf : 'rgba(150,150,150,0.35)';
+        ctx.strokeStyle = colorBorde;
         if (!esConocido) ctx.setLineDash([5 / sf, 4 / sf]);
         ctx.stroke();
         ctx.setLineDash([]);
         ctx.globalAlpha = 1.0;
 
-        // ── Anillo de selección (cyan) ────────────────────────
+        // Anillo de selección
         if (isSel) {
             ctx.beginPath(); ctx.arc(nodo.x, nodo.y, r + 6 / sf, 0, Math.PI * 2);
             ctx.strokeStyle = 'rgba(0,255,255,0.85)';
@@ -565,8 +902,8 @@ function _dibujarFrame() {
             ctx.setLineDash([]);
         }
 
-        // Etiqueta de sellado (🔒) si está oculto
-        if (!esConocido) {
+        // Icono 🔒 si está sellado (solo sin personaje activo, para no saturar)
+        if (!esConocido && !hayPj) {
             ctx.font      = `bold ${Math.round(18 + 2)}px sans-serif`;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
             ctx.globalAlpha = 0.45;
@@ -574,24 +911,41 @@ function _dibujarFrame() {
             ctx.globalAlpha = 1.0;
         }
 
-        // Texto
+        // Texto de etiqueta
         if (miniMapa.camara.zoom > 0.05 || isHovered || isSel) {
             const fs = Math.round((esConocido ? 26 : 20) + (isHovered ? 4 : 0));
             ctx.font        = `bold ${fs}px sans-serif`;
             ctx.textAlign   = 'center';
             ctx.textBaseline = 'top';
+
+            // Formato: si conocido → "Nombre (HEX)", si oculto → "Hechizo N (HEX) ~~Nombre~~"
+            // En canvas no podemos tachar, así que mostramos "Hechizo N (HEX)" a secas
+            // El nombre tachado se muestra en el panel HTML, no en canvas.
             const texto = esConocido
                 ? `${nodo.nombreOriginal} (${nodo.hex})`
-                : `${nodo.id} (${nodo.hex})`;
+                : `Hechizo ${_extractNum(nodo.id)} (${nodo.hex})`;
+
             const ty2 = nodo.y + r + 8 / sf;
             ctx.lineWidth   = 5 / sf;
             ctx.strokeStyle = 'rgba(0,0,0,0.95)'; ctx.strokeText(texto, nodo.x, ty2);
-            ctx.fillStyle   = esConocido ? (isSel ? '#00ffff' : isHovered ? '#fff' : colorAf) : 'rgba(130,130,130,0.65)';
+
+            let fillColor;
+            if (isSel) fillColor = '#00ffff';
+            else if (isHovered) fillColor = '#fff';
+            else if (hayPj) {
+                if (asignState.posesiones.has(nodo))    fillColor = 'rgba(200,170,255,0.95)';
+                else if (asignState.aprendibles.has(nodo)) fillColor = 'rgba(230,200,80,0.95)';
+                else fillColor = esConocido ? 'rgba(160,160,180,0.6)' : 'rgba(130,120,80,0.45)';
+            } else {
+                fillColor = esConocido ? COLOR_DESCUBIERTO : 'rgba(180,150,60,0.7)';
+            }
+
+            ctx.fillStyle = fillColor;
             ctx.fillText(texto, nodo.x, ty2);
         }
     });
 
-    // ── LINK TEMPORAL (mientras arrastra herramienta flecha/cortar) ──
+    // ── LINK TEMPORAL ─────────────────────────────────────────
     if (mapaDevState.tempLink) {
         const { source, endX, endY } = mapaDevState.tempLink;
         const isDelete = mapaDevState.herramienta === 'eliminar-enlace';
@@ -602,7 +956,6 @@ function _dibujarFrame() {
         ctx.setLineDash([8 / sf, 4 / sf]);
         ctx.stroke();
         ctx.setLineDash([]);
-        // Punta
         const angle = Math.atan2(endY - source.y, endX - source.x);
         const hl    = 12 / sf;
         ctx.beginPath();
@@ -683,26 +1036,29 @@ function _renderPropiedades() {
         return;
     }
 
-    // ── 1 nodo seleccionado → form completo ───────────────────
     const n          = cands[0];
     const esConocido = getVisibilidadActual(n.id);
-    const colorAf    = _colorAf(n.afinidad);
     const sid        = n.id.replace(/'/g, "\\'");
 
-    // Guardamos referencia global para los onchange
     window.__devEditNodo = n;
 
     const visStyle = esConocido
         ? 'background:rgba(0,180,100,0.2);color:#00cc88;border:1px solid #00aa66;'
         : 'background:rgba(80,80,80,0.2);color:#888;border:1px solid #555;';
 
+    // Mostrar nombre tachado si está oculto
+    const headerNombre = esConocido
+        ? `<div style="font-weight:bold;color:#b896ff;font-size:0.88em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_esc(n.nombreOriginal || n.id)}</div>`
+        : `<div style="font-size:0.85em;">
+               <span style="color:#888;">Hechizo ${_extractNum(n.id)}</span>
+               <span style="color:#555;text-decoration:line-through;font-size:0.82em;margin-left:4px;">${_esc(n.nombreOriginal || n.id)}</span>
+           </div>`;
+
     panel.innerHTML = `${dlHTML}
     <div style="padding:12px;">
-
-        <!-- Header: nombre + badge de visibilidad -->
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #2a1060;">
             <div style="min-width:0;">
-                <div style="font-weight:bold;color:${colorAf || '#ddd'};font-size:0.88em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${_esc(n.nombreOriginal || n.id)}</div>
+                ${headerNombre}
                 <div style="color:#555;font-size:0.7em;margin-top:2px;">${_esc(n.afinidad || '—')} · ${n.hex} HEX · ${_esc(n.clase)}</div>
             </div>
             <button onclick="window.devMapa.toggleVis('${sid}')"
@@ -712,22 +1068,16 @@ function _renderPropiedades() {
         </div>
 
         <div style="display:flex;flex-direction:column;gap:9px;">
-
-            <!-- ID (sólo lectura) -->
             <div>
                 <label style="${lbl}">ID</label>
                 <div style="background:#0a0020;color:#555;border:1px solid #222;border-radius:4px;padding:6px;font-size:0.85em;">${_esc(n.id)}</div>
             </div>
-
-            <!-- Nombre -->
             <div>
                 <label style="${lbl}">NOMBRE</label>
                 <input type="text" value="${_esc(n.nombreOriginal)}"
                     onchange="window.__devEditNodo && window.devMapa.actualizarCampo(window.__devEditNodo.id, 'nombreOriginal', this.value)"
                     style="${inp}">
             </div>
-
-            <!-- HEX + Clase -->
             <div style="display:flex;gap:6px;">
                 <div style="flex:1;">
                     <label style="${lbl}">HEX</label>
@@ -744,53 +1094,40 @@ function _renderPropiedades() {
                     </select>
                 </div>
             </div>
-
-            <!-- Afinidad -->
             <div>
                 <label style="${lbl}">AFINIDAD</label>
                 <input type="text" list="mm-dl-af" value="${_esc(n.afinidad)}"
                     onchange="window.__devEditNodo && window.devMapa.actualizarCampo(window.__devEditNodo.id, 'afinidad', this.value)"
                     style="${inp}">
             </div>
-
-            <!-- Resumen -->
             <div>
                 <label style="${lbl}">RESUMEN</label>
                 <textarea onchange="window.__devEditNodo && window.devMapa.actualizarCampo(window.__devEditNodo.id, 'resumen', this.value)"
                     style="${inp}height:42px;resize:none;">${_esc(n.resumen)}</textarea>
             </div>
-
-            <!-- Efecto -->
             <div>
                 <label style="${lbl}">EFECTO MECÁNICO</label>
                 <textarea onchange="window.__devEditNodo && window.devMapa.actualizarCampo(window.__devEditNodo.id, 'efecto', this.value)"
                     style="${inp}height:55px;resize:none;">${_esc(n.efecto)}</textarea>
             </div>
-
-            <!-- Overcast -->
             <div>
                 <label style="${lbl};color:#ff9999;">OVERCAST (100%)</label>
                 <input type="text" value="${_esc(n.overcast)}"
                     onchange="window.__devEditNodo && window.devMapa.actualizarCampo(window.__devEditNodo.id, 'overcast', this.value)"
                     style="${inp}">
             </div>
-
-            <!-- Undercast -->
             <div>
                 <label style="${lbl};color:#99aaff;">UNDERCAST (50%)</label>
                 <input type="text" value="${_esc(n.undercast)}"
                     onchange="window.__devEditNodo && window.devMapa.actualizarCampo(window.__devEditNodo.id, 'undercast', this.value)"
                     style="${inp}">
             </div>
-
-            <!-- Especial -->
             <div>
                 <label style="${lbl};color:#d4af37;">REGLA ESPECIAL</label>
                 <input type="text" value="${_esc(n.especial)}"
                     onchange="window.__devEditNodo && window.devMapa.actualizarCampo(window.__devEditNodo.id, 'especial', this.value)"
                     style="${inp}">
             </div>
-
             <button onclick="window.devMapa.eliminarSeleccion()"
                 style="width:100%;background:#4a0000;border:1px solid #ff0000;border-radius:6px;color:white;padding:10px;font-weight:bold;margin-top:6px;cursor:pointer;font-family:'Cinzel';font-size:0.78em;">
                 🗑️ DESTRUIR NODO
@@ -799,11 +1136,10 @@ function _renderPropiedades() {
     </div>`;
 }
 
-// ── TOOLBAR: actualizar visual de herramienta activa ──────────
+// ── TOOLBAR ───────────────────────────────────────────────────
 function _actualizarToolbar() {
     const herr = mapaDevState.herramienta;
     const ids  = { cursor: 'mm-tool-cursor', enlace: 'mm-tool-enlace', 'eliminar-enlace': 'mm-tool-cortar' };
-
     Object.values(ids).forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -811,7 +1147,6 @@ function _actualizarToolbar() {
         el.style.background = '#111';
         el.style.color = isCut ? '#ff4444' : '#00ffff';
     });
-
     const activeId = ids[herr];
     if (activeId) {
         const el = document.getElementById(activeId);
@@ -822,7 +1157,7 @@ function _actualizarToolbar() {
     }
 }
 
-// ── ACTUALIZAR CONTADOR DE PENDIENTES ─────────────────────────
+// ── CONTADOR DE PENDIENTES ────────────────────────────────────
 function _marcarGuardar() {
     window.dispatchEvent(new Event('devDataChanged'));
     const p   = contarCambiosPendientes();
@@ -847,12 +1182,12 @@ function _htmlVistaLista() {
     <div style="display:flex;gap:8px;margin-bottom:8px;font-size:0.78em;text-align:center;">
         <div style="flex:1;background:#0a0020;border:1px solid #333;border-radius:6px;padding:6px;">
             <span style="color:#b060ff;font-weight:bold;">${total}</span> <span style="color:#555;">Total</span></div>
-        <div style="flex:1;background:#0a0020;border:1px solid #00cc88;border-radius:6px;padding:6px;">
-            <span style="color:#00cc88;font-weight:bold;">${conocidos}</span> <span style="color:#555;">Desc.</span></div>
-        <div style="flex:1;background:#0a0020;border:1px solid #555;border-radius:6px;padding:6px;">
-            <span style="color:#888;font-weight:bold;">${total-conocidos}</span> <span style="color:#555;">Sellados</span></div>
+        <div style="flex:1;background:#0a0020;border:1px solid #b896ff;border-radius:6px;padding:6px;">
+            <span style="color:#b896ff;font-weight:bold;">${conocidos}</span> <span style="color:#555;">Desc.</span></div>
+        <div style="flex:1;background:#0a0020;border:1px solid #d4af37;border-radius:6px;padding:6px;">
+            <span style="color:#d4af37;font-weight:bold;">${total-conocidos}</span> <span style="color:#555;">Sellados</span></div>
     </div>
-    <input type="text" value="${busqueda}" placeholder="🔍 Buscar nodo..."
+    <input type="text" value="${busqueda}" placeholder="🔍 Buscar por ID o nombre real..."
         oninput="window.devMapa.setBusqueda(this.value)"
         style="width:100%;box-sizing:border-box;background:#000;color:#fff;border:1px solid #444;border-radius:6px;padding:7px 10px;margin-bottom:7px;font-family:'Rajdhani';font-size:0.92em;outline:none;">
     <div style="display:flex;gap:6px;margin-bottom:8px;">
@@ -876,15 +1211,22 @@ function _htmlVistaLista() {
         nodos.forEach(nodo => {
             const esConocido = getVisibilidadActual(nodo.id);
             const cambio     = mapaDevState.colaVisibilidad[nodo.id] !== undefined;
-            const colorAf    = _colorAf(nodo.afinidad);
+            // Color fijo: lila si conocido, dorado si oculto
+            const colorBorde = esConocido ? '#b896ff' : '#d4af37';
             const safeId     = nodo.id.replace(/'/g, "\\'");
+
+            // Texto con nombre tachado si oculto
+            const textoMostrado = esConocido
+                ? `<span style="color:#ddd;font-weight:bold;">${_esc(nodo.nombreOriginal || nodo.id)}</span>`
+                : `<span style="color:#888;">Hechizo ${_extractNum(nodo.id)}</span> <span style="color:#555;text-decoration:line-through;font-size:0.82em;margin-left:4px;">${_esc(nodo.nombreOriginal || nodo.id)}</span>`;
+
             html += `
-            <div style="background:#0a0020;border:1px solid ${esConocido?'#2a1060':'#1a1a1a'};border-left:3px solid ${colorAf};border-radius:6px;padding:7px 11px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
-                <div style="min-width:0;">
-                    <div style="font-weight:bold;color:${esConocido?'#ddd':'#666'};font-size:0.84em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
-                        ${_esc(nodo.nombreOriginal||nodo.id)}${cambio?' <span style="color:#ffaa00;font-size:0.8em;">●</span>':''}
+            <div style="background:#0a0020;border:1px solid ${esConocido?'#2a1060':'#1a1510'};border-left:3px solid ${colorBorde};border-radius:6px;padding:7px 11px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
+                <div style="min-width:0;flex:1;">
+                    <div style="font-size:0.84em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                        ${textoMostrado}${cambio?' <span style="color:#ffaa00;font-size:0.8em;">●</span>':''}
                     </div>
-                    <div style="color:${colorAf};font-size:0.7em;margin-top:2px;">${_esc(nodo.afinidad||'—')}${nodo.hex?' · '+nodo.hex+' HEX':''}${nodo.clase?' · '+nodo.clase:''}</div>
+                    <div style="color:${esConocido?'#b896ff':'#d4af37'};font-size:0.7em;margin-top:2px;opacity:0.7;">${_esc(nodo.afinidad||'—')}${nodo.hex?' · '+nodo.hex+' HEX':''}${nodo.clase?' · '+nodo.clase:''}</div>
                 </div>
                 <button onclick="window.devMapa.toggleVis('${safeId}')"
                     style="background:${esConocido?'rgba(200,60,60,0.2)':'rgba(0,180,100,0.2)'};color:${esConocido?'#ff8888':'#00cc88'};border:1px solid ${esConocido?'#aa3333':'#00aa66'};border-radius:4px;padding:4px 8px;cursor:pointer;font-size:0.74em;font-weight:bold;flex-shrink:0;">
@@ -897,35 +1239,10 @@ function _htmlVistaLista() {
     return html;
 }
 
-// ── VISTA: COLORES ────────────────────────────────────────────
-function _htmlVistaColores() {
-    const afinidades = getAfinidadesUnicas();
-    if (!afinidades.length) return `<div style="color:#555;text-align:center;padding:20px;">Sin afinidades cargadas.</div>`;
-    let html = `<div style="color:#555;font-size:0.78em;margin-bottom:10px;">Los cambios de color se guardan con 🔥</div><div style="display:flex;flex-direction:column;gap:5px;">`;
-    afinidades.forEach(af => {
-        const col    = _colorAf(af);
-        const enCola = mapaDevState.colaColores[af] !== undefined;
-        const safeAf = af.replace(/'/g, "\\'");
-        html += `
-        <div style="background:#0a0020;border:1px solid ${enCola?'#ffaa00':'#222'};border-radius:6px;padding:8px 12px;display:flex;justify-content:space-between;align-items:center;gap:10px;">
-            <span style="color:${col};font-weight:bold;font-size:0.85em;">${af}</span>
-            ${enCola?`<span style="color:#ffaa00;font-size:0.72em;">●</span>`:''}
-            <div style="display:flex;align-items:center;gap:8px;margin-left:auto;">
-                <span style="color:#444;font-size:0.72em;">${col}</span>
-                <input type="color" value="${col}" onchange="window.devMapa.editarColor('${safeAf}',this.value)"
-                    style="width:32px;height:26px;background:none;border:1px solid #444;border-radius:4px;cursor:pointer;padding:1px;">
-            </div>
-        </div>`;
-    });
-    html += `</div>`;
-    return html;
-}
-
 // ── HELPERS ───────────────────────────────────────────────────
-function _colorAf(afinidad) {
-    return mapaDevState.colaColores[afinidad]?.t
-        ?? window.mapaColores?.[afinidad]?.t
-        ?? '#888888';
+function _extractNum(id) {
+    const m = String(id || '').match(/\d+/);
+    return m ? m[0] : id;
 }
 
 function _esc(s) {
