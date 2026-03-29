@@ -11,6 +11,8 @@ import { hzState } from './hechizos/panel-hechizos-state.js';
 import { getPjStat, calcularVidaRojaMaxTotal, calcularVidaAzulTotal, calcularGuardaDoradaTotal, calcularDanoRojoTotal, calcularDanoAzulTotal, calcularElimDoradaTotal } from './estadisticas/panel-stats-logic.js';
 import { AFINIDADES_LISTA } from './estadisticas/panel-stats-state.js';
 import { getCantidadActual } from './objetos/panel-objetos-logic.js'; 
+import { mapaDevState } from './mapa/panel-mapa-state.js';
+import { contarCambiosPendientes as contarCambiosMapa } from './mapa/panel-mapa-logic.js';
 
 export function revisarCambiosPendientes() {
     const btnSync = document.getElementById('btn-sync-global');
@@ -28,6 +30,8 @@ export function revisarCambiosPendientes() {
     if (stState.colaBorrarEstados.length > 0) hayCambios = true;
     if (Object.keys(hzState.colaAsignaciones).length > 0) hayCambios = true; 
     if (Object.keys(hzState.colaVisibilidad).length > 0) hayCambios = true;
+    // 🗺️ Cambios del panel mapa
+    if (contarCambiosMapa() > 0) hayCambios = true;
 
     if (hayCambios) btnSync.classList.remove('oculto');
     else btnSync.classList.add('oculto');
@@ -263,6 +267,14 @@ export function actualizarLogGlobal() {
         });
     }
 
+    // 🗺️ Entradas del log del panel mapa (cambios globales, sin PJ)
+    if (mapaDevState.logSesion && mapaDevState.logSesion.length > 0) {
+        if (!logPorPJ['__global__']) logPorPJ['__global__'] = [];
+        mapaDevState.logSesion.forEach(item => {
+            logPorPJ['__global__'].push(`Mapa | ${item.msg}`);
+        });
+    }
+
     for (const t of objState.logTransferencias) {
         const cabeceraTransf = `${t.origen} → ${t.destino}`;
         if (!logPorPJ[cabeceraTransf]) logPorPJ[cabeceraTransf] = [];
@@ -464,6 +476,70 @@ export async function ejecutarGuardadoGlobal() {
         if (hzUpserts.length > 0) {
             const { error: errHz } = await supabase.from('hechizos_inventario').upsert(hzUpserts, { onConflict: 'personaje_nombre,hechizo_nombre' }); 
             if (errHz) throw new Error("Hechizos: " + errHz.message);
+        }
+
+        // 🗺️ GUARDAR CAMBIOS DEL MAPA ────────────────────────────────────
+        // 1. Visibilidad de nodos (colaVisibilidad del panel mapa)
+        //    Nota: hzState.colaVisibilidad ya cubre los cambios hechos desde el panel de hechizos.
+        //    mapaDevState.colaVisibilidad cubre los cambios hechos desde el panel mapa.
+        //    Ambos escriben a la misma tabla, así que los procesamos por separado para evitar conflictos.
+        const mapaVisPromises = [];
+        for (const hzId in mapaDevState.colaVisibilidad) {
+            mapaVisPromises.push(
+                supabase.from('hechizos_nodos')
+                    .update({ es_conocido: mapaDevState.colaVisibilidad[hzId] })
+                    .eq('hechizo_id', hzId)
+            );
+        }
+        if (mapaVisPromises.length > 0) {
+            const resultados = await Promise.all(mapaVisPromises);
+            const errVis = resultados.find(r => r.error);
+            if (errVis) throw new Error("Visibilidad mapa: " + errVis.error.message);
+        }
+
+        // 2. Metadatos de nodos editados desde el panel mapa (nombre, hex, clase, etc.)
+        const mapaMetaUpserts = [];
+        for (const hzId in mapaDevState.colaMetadatos) {
+            const meta = mapaDevState.colaMetadatos[hzId];
+            const nodoBase = mapaDevState.nodosDB.find(n => n.id === hzId);
+            if (!nodoBase) continue;
+            const merged = { ...nodoBase, ...meta };
+            mapaMetaUpserts.push({
+                hechizo_id:  merged.id,
+                nombre:      merged.nombreOriginal || merged.id,
+                hex_cost:    merged.hex     || 0,
+                clase:       merged.clase   || 'Clase 1',
+                afinidad:    merged.afinidad || '',
+                resumen:     merged.resumen  || '',
+                efecto:      merged.efecto   || '',
+                overcast:    merged.overcast || '',
+                undercast:   merged.undercast || '',
+                especial:    merged.especial || '',
+                pos_x:       Math.round(merged.x || 0),
+                pos_y:       Math.round(merged.y || 0),
+                es_conocido: merged.esConocido || false
+            });
+        }
+        if (mapaMetaUpserts.length > 0) {
+            for (let i = 0; i < mapaMetaUpserts.length; i += 50) {
+                const { error: errMeta } = await supabase
+                    .from('hechizos_nodos')
+                    .upsert(mapaMetaUpserts.slice(i, i + 50), { onConflict: 'hechizo_id' });
+                if (errMeta) throw new Error("Metadatos mapa: " + errMeta.message);
+            }
+        }
+
+        // 3. Colores de afinidad modificados desde el panel mapa
+        const mapaColoresUpserts = Object.entries(mapaDevState.colaColores).map(([afinidad, colores]) => ({
+            afinidad,
+            color_t: colores.t,
+            color_b: colores.b
+        }));
+        if (mapaColoresUpserts.length > 0) {
+            const { error: errCol } = await supabase
+                .from('hechizos_afinidades')
+                .upsert(mapaColoresUpserts, { onConflict: 'afinidad' });
+            if (errCol) throw new Error("Colores mapa: " + errCol.message);
         }
 
         localStorage.removeItem('hex_obj_v4');
