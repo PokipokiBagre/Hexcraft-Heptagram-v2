@@ -10,6 +10,11 @@ export function initStatsDev(statsGlobal, listaEstados) {
     stState.estadosDB = JSON.parse(JSON.stringify(listaEstados || []));
 }
 
+// ── ¿Es un NPC tipo sistema? (sin Grimorio en los totales) ──
+export function esSistema(pjNombre) {
+    return !!(stState.statsDB[pjNombre]?.isSistema);
+}
+
 export function getPjStat(pjNombre, campoRaiz, subCampo = null) {
     if (!pjNombre) return 0;
     const pjKey = pjNombre; 
@@ -59,7 +64,26 @@ export function setPjStat(pjNombre, campoRaiz, subCampo, valor, reRender = true)
     else window.dispatchEvent(new Event('devDataChanged'));
 }
 
-// 🌟 REGLA DE ASISTENCIA: Vuelve a 1 y otorga +1000 Extra 🌟
+// ── NOTA POR AFINIDAD ────────────────────────────────────────────────────────
+export function setNotaAfinidad(pjNombre, flatKey, nota) {
+    if (!stState.notasAfinidad[pjNombre]) stState.notasAfinidad[pjNombre] = {};
+    stState.notasAfinidad[pjNombre][flatKey] = nota;
+    // No re-render: el textarea ya se actualiza solo
+}
+
+export function toggleNotaAbierta(pjNombre, flatKey) {
+    const k = `${pjNombre}|${flatKey}`;
+    if (stState.notasAbiertasSet.has(k)) stState.notasAbiertasSet.delete(k);
+    else stState.notasAbiertasSet.add(k);
+    window.dispatchEvent(new Event('devUIUpdate'));
+}
+
+export function setSubVistaAfinidades(sub) {
+    stState.subVistaAfinidades = sub;
+    window.dispatchEvent(new Event('devUIUpdate'));
+}
+
+// ── ASISTENCIA ───────────────────────────────────────────────────────────────
 export function darAsistencia(pjNombre) {
     const asistActual = getPjStat(pjNombre, 'asistencia');
     let nuevaAsist = asistActual + 1;
@@ -72,9 +96,7 @@ export function darAsistencia(pjNombre) {
         esReinicio = true;
     }
 
-    // Guardamos el valor PREVIO real (de cola o DB) para que dev-logic pueda detectar el reinicio
     if (!stState.colaStats[pjNombre]) stState.colaStats[pjNombre] = {};
-    // Marcamos explícitamente el valor anterior como metadato temporal
     stState.colaStats[pjNombre].__asistPrevio = asistActual;
     stState.colaStats[pjNombre].__esReinicio = esReinicio;
 
@@ -94,10 +116,17 @@ function getTotalAfinidad(pj, af) {
            Number(getPjStat(pj, 'buffs', af) || 0);
 }
 
-// 🌟 VEX CALCULADO DE SOLO LECTURA 🌟
+// 🌟 Total de afinidad respetando regla de sistema (sin grimorio) 🌟
+export function getTotalAfinidadSmart(pjNombre, af) {
+    const base = getPjStat(pjNombre, 'afinidadesBase', af) || 0;
+    const hcz  = esSistema(pjNombre) ? 0 : (getPjStat(pjNombre, 'hechizos', af) || 0);
+    const alt  = getPjStat(pjNombre, 'hechizosEfecto', af) || 0;
+    const buff = getPjStat(pjNombre, 'buffs', af) || 0;
+    return base + hcz + alt + buff;
+}
+
 export function getVexMax(pjNombre) {
     const calcOscT = getTotalAfinidad(pjNombre, 'oscura');
-    // Aplicamos la fórmula exacta: (Total Oscura * 300) / 4, redondeado al 50 más cercano
     return Math.round(((calcOscT * 300) / 4) / 50) * 50; 
 }
 
@@ -124,9 +153,20 @@ export function toggleEstado(pjNombre, estadoId) {
     setPjStat(pjNombre, 'estados', estadoId, !actual);
 }
 
+// ── SIN ALERTAS: usa el div #stats-feedback para mensajes ──
+function mostrarFeedback(msg, color = '#ffaa00') {
+    const el = document.getElementById('stats-feedback');
+    if (!el) return;
+    el.textContent = msg;
+    el.style.color = color;
+    el.style.opacity = '1';
+    clearTimeout(el._t);
+    el._t = setTimeout(() => { el.style.opacity = '0'; }, 2500);
+}
+
 export function guardarNuevoEstado(nombre, tipo, bgHex, borderHex, desc) {
     const id = norm(nombre); 
-    if (!id) return alert("El nombre no es válido.");
+    if (!id) { mostrarFeedback('❌ Nombre no válido.', '#ff4444'); return; }
     
     stState.colaEstadosConfig[id] = {
         nombre: nombre,
@@ -135,7 +175,7 @@ export function guardarNuevoEstado(nombre, tipo, bgHex, borderHex, desc) {
         color_border: borderHex,
         descripcion: desc
     };
-    alert(`Estado "${nombre}" guardado en la cola.`);
+    mostrarFeedback(`✅ Estado "${nombre}" en cola.`, '#00ff88');
     window.dispatchEvent(new Event('devUIUpdate')); 
 }
 
@@ -150,14 +190,12 @@ export function cargarEstadoParaEditar(id) {
     }
 }
 
-// ── FUNCIONES DE TOTALES (Solo Lectura, espejo de stats-logic.js) ──
-
+// ── FUNCIONES DE TOTALES ────────────────────────────────────────────────────
 export function calcularVidaRojaMaxTotal(pjNombre) {
     const base   = getPjStat(pjNombre, 'baseVidaRojaMax');
     const hcz    = getPjStat(pjNombre, 'hechizos', 'vidaRojaMaxExtra');
     const alt    = getPjStat(pjNombre, 'hechizosEfecto', 'vidaRojaMaxExtra');
     const ext    = getPjStat(pjNombre, 'buffs', 'vidaRojaMaxExtra');
-    // Bono incremental de física proveniente de hechizos/efectos/buffs
     const fisBase  = getPjStat(pjNombre, 'afinidadesBase', 'fisica');
     const fisHcz   = getPjStat(pjNombre, 'hechizos',        'fisica');
     const fisAlt   = getPjStat(pjNombre, 'hechizosEfecto',  'fisica');
