@@ -141,7 +141,32 @@ window.onload = async () => {
             });
         }
 
-        initMapaDev(nodosParaMapa, [], coloresParaMapa);
+        // ── Construir enlaces para el mini-mapa ──────────────────
+        // Necesitamos referencias a objetos nodo, igual que en mapa-data.js
+        const findNodoDev = (str) => {
+            if (!str) return null;
+            const strNorm = String(str).trim().toLowerCase();
+            const strNum  = strNorm.replace(/^hechizo\s+/i, '').trim();
+            return nodosParaMapa.find(n => {
+                const nid  = String(n.id).trim().toLowerCase();
+                const nnom = String(n.nombreOriginal).trim().toLowerCase();
+                return nid === strNorm || nnom === strNorm
+                    || nid.replace(/^hechizo\s+/i,'').trim() === strNum
+                    || nnom.replace(/^hechizo\s+/i,'').trim() === strNum;
+            });
+        };
+
+        const enlacesParaMapa = [];
+        if (hechizosData.string) {
+            hechizosData.string.forEach(rel => {
+                if (!rel || !rel.Source || !rel.Target) return;
+                const src = findNodoDev(rel.Source);
+                const tgt = findNodoDev(rel.Target);
+                if (src && tgt && src !== tgt) enlacesParaMapa.push({ source: src, target: tgt });
+            });
+        }
+
+        initMapaDev(nodosParaMapa, enlacesParaMapa, coloresParaMapa);
 
         // Renderizado inicial del panel mapa (no depende de pjSeleccionado)
         renderColumnaMapa();
