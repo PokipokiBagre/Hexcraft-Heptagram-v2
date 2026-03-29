@@ -42,6 +42,7 @@
                 <div class="character-selector" id="dev-character-list"></div>
             </div>
 
+            <!-- ── Columnas de personaje (visibles al seleccionar uno) ── -->
             <div id="dev-workspace" class="dev-container oculto">
                 
                 <div class="dev-column" id="col-stats">
@@ -60,10 +61,20 @@
                 </div>
             </div>
 
+            <!-- ── Portapapeles de Sesión ── -->
             <div style="margin-top:30px; background:#05050a; padding:20px; border-radius:12px; border:1px solid #4a1880; box-shadow: inset 0 0 15px rgba(74,24,128,0.2);">
                 <h3 style="margin-top:0; color:#b8860b; font-family:'Cinzel'; text-transform:uppercase;">📋 Portapapeles de Sesión</h3>
                 <textarea id="log-global-textarea" readonly placeholder="Los cambios en inventario, estadísticas y hechizos aparecerán aquí automáticamente..." style="width:100%; box-sizing:border-box; height:150px; background:#000; color:#00ff88; border:1px solid #333; border-radius:6px; padding:15px; font-family:monospace; font-size:1.1em; resize:vertical; outline:none;"></textarea>
                 <button onclick="window.copiarLogGlobal()" style="margin-top:15px; background:linear-gradient(135deg, #004a4a 0%, #008080 100%); color:#fff; font-weight:bold; border:1px solid #00ffff; padding:12px 25px; border-radius:6px; cursor:pointer; font-family:'Cinzel'; font-size:1.1em; transition:0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">📄 COPIAR AL PORTAPAPELES</button>
+            </div>
+
+            <!-- ── Panel Mapa — siempre visible debajo del portapapeles ── -->
+            <div style="margin-top:20px; background:#05050a; padding:20px; border-radius:12px; border:1px solid #4a1880; box-shadow: inset 0 0 15px rgba(74,24,128,0.2);">
+                <h3 style="margin-top:0; color:#b060ff; font-family:'Cinzel'; text-transform:uppercase; display:flex; align-items:center; gap:10px;">
+                    🗺️ Editor de Mapa de Hechizos
+                    <span style="font-size:0.65em; font-weight:normal; color:#666; font-family:'Rajdhani';">Los cambios se guardan con el botón global 🔥</span>
+                </h3>
+                <div id="content-mapa" class="dev-column-content" style="max-height: 600px; overflow-y: auto;"></div>
             </div>
 
         </div>
