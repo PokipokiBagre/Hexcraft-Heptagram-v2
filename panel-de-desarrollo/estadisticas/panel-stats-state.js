@@ -7,18 +7,17 @@ export const stState = {
     estadosDB: [],    
     
     vistaActiva: 'hex', 
-    subVistaAfinidades: 'totales', // Sub-tab dentro de la vista afinidades
+    subVistaAfinidades: 'totales', 
+    subVistaVida: 'totales', // 🌟 Sub-tab de Vida
     logAsistencia: "",
     
-    // Notas por afinidad: { pjNombre: { 'afinidadesBase.fisica': 'nota...' } }
     notasAfinidad: {},
-    // Set de flatKeys con el input de nota desplegado: "pj|flatKey"
-    notasAbiertasSet: new Set(),
+    // 🌟 Set que almacena qué notas ESTÁN OCULTAS. Si no está aquí, se muestra.
+    notasOcultasSet: new Set(),
     
-    // 🔥 COLAS DE CAMBIOS (Staging) 🔥
     colaStats: {},         
     colaEstadosConfig: {}, 
-    colaBorrarEstados: []  // 🌟 NUEVO: Estados que serán borrados de la BD
+    colaBorrarEstados: []  
 };
 
 export const AFINIDADES_LISTA = ["fisica", "energetica", "espiritual", "mando", "psiquica", "oscura"];
