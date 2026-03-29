@@ -1,42 +1,50 @@
 // ============================================================
-// panel-mapa-state.js — Estado local y Cola de Cambios
+// panel-mapa-state.js — Estado local, Colas de Cambios y Editor
 // ============================================================
 
 export const mapaDevState = {
-    // ── Datos cargados desde el mapa ────────────────────────
-    nodosDB: [],      // Copia en memoria de los nodos del mapa (estadoMapa.nodos)
-    enlacesDB: [],    // Copia en memoria de los enlaces
-    coloresDB: {},    // Copia de window.mapaColores
+    // ── Datos del mapa ───────────────────────────────────────
+    nodosDB:   [],
+    enlacesDB: [],
+    coloresDB: {},
 
     // ── Vista del panel ──────────────────────────────────────
-    vistaActiva: 'nodos',   // 'nodos' | 'enlaces' | 'colores'
-    busqueda: '',
-    filtroAfinidad: '',     // Filtrar lista de nodos por afinidad
-    filtroVisibilidad: 'todos', // 'todos' | 'conocidos' | 'ocultos'
+    vistaActiva:       'nodos',   // 'nodos' | 'lista' | 'colores'
+    busqueda:          '',
+    filtroAfinidad:    '',
+    filtroVisibilidad: 'todos',   // 'todos' | 'conocidos' | 'ocultos'
 
-    // ── 🔥 COLAS DE CAMBIOS (Staging) 🔥 ──────────────────────
+    // ── Estado del editor (canvas) ───────────────────────────
+    herramienta:       'cursor',  // 'cursor' | 'enlace' | 'eliminar-enlace'
+    seleccionMultiple: new Set(),
+    tempLink:          null,      // { source: nodo, endX, endY }
+    boxStart:          null,      // { x, y } en coords mundo
+    boxCurrent:        null,      // { x, y } en coords mundo
+
+    // ── 🔥 Colas de cambios (Staging) ───────────────────────
+
     // Visibilidad: { [hechizoId]: true|false }
     colaVisibilidad: {},
 
     // Posiciones: { [hechizoId]: { x, y } }
+    // (también se refleja en colaMetadatos para el guardado)
     colaPosiciones: {},
 
-    // Metadatos de nodos editados: { [hechizoId]: { campo: valor } }
+    // Metadatos editados: { [hechizoId]: { campo: valor, ... } }
     colaMetadatos: {},
 
-    // Nuevos nodos: [{ id, nombre, hex, clase, afinidad, ... }]
-    colaNuevosNodos: [],
+    // IDs de nodos nuevos (el estado vivo está en nodosDB)
+    colaNuevosNodos: [],   // ['Hechizo 5', 'Hechizo 6', ...]
 
-    // Nuevos enlaces: [{ source, target }]
+    // Nuevos enlaces: [{ source: id, target: id }]
     colaNuevosEnlaces: [],
 
-    // Eliminados: { nodos: Set<hechizoId>, enlaces: [{ source, target }] }
+    // Eliminados
     colaEliminados: { nodos: new Set(), enlaces: [] },
 
-    // Colores de afinidad modificados: { [afinidad]: { t, b } }
+    // Colores de afinidad: { [afinidad]: { t, b } }
     colaColores: {},
 
     // ── Log de sesión ────────────────────────────────────────
-    // [{ msg: string }]  — sin PJ asociado (son cambios globales al mapa)
     logSesion: []
 };
