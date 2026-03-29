@@ -19,7 +19,7 @@ export function revisarCambiosPendientes() {
     let hayCambios = false;
 
     if (Object.keys(objState.colaInventario).length > 0) hayCambios = true;
-    if (Object.keys(objState.colaEquipados).length > 0) hayCambios = true; // 🌟 
+    if (Object.keys(objState.colaEquipados).length > 0) hayCambios = true; 
     if (Object.values(objState.colaNuevosObjetos).some(o => o.nombre.trim() !== '')) hayCambios = true;
     if (Object.keys(objState.colaEdicionObjetos).length > 0) hayCambios = true;
     if (Object.keys(stState.colaStats).length > 0) hayCambios = true;
@@ -35,8 +35,7 @@ export function revisarCambiosPendientes() {
 export function actualizarLogGlobal() {
     const logPorPJ = {};
 
-    // Construir set de objetos ya cubiertos por transferencias para no duplicar
-    const transferCubiertos = {}; // { pjKey: Set<objNombre> }
+    const transferCubiertos = {}; 
     for (const t of objState.logTransferencias) {
         const ok = t.origen.toLowerCase();
         const dk = t.destino.toLowerCase();
@@ -52,7 +51,6 @@ export function actualizarLogGlobal() {
         const encontrado = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey));
         const realPj = encontrado?.nombre || pjKey.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
         for (const objNombre in objState.colaInventario[pjKey]) {
-            // Saltar si ya lo cubre logTransferencias
             if (transferCubiertos[pjKey]?.has(objNombre)) continue;
 
             const cantNueva = objState.colaInventario[pjKey][objNombre];
@@ -73,7 +71,6 @@ export function actualizarLogGlobal() {
         }
     }
 
-    // 🌟 LOG DE EQUIPACIÓN
     for (const pjKey in objState.colaEquipados) {
         const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
         for (const objNombre in objState.colaEquipados[pjKey]) {
@@ -212,27 +209,21 @@ export function actualizarLogGlobal() {
                                       + (getPjStat(pjKey, 'hechizos',       subCampo) || 0)
                                       + (getPjStat(pjKey, 'hechizosEfecto', subCampo) || 0)
                                       + (getPjStat(pjKey, 'buffs',          subCampo) || 0);
-                        const _nota1 = stState.notasAfinidad?.[pjKey]?.[flatKey] || '';
-                        const _notaSuf1 = _nota1 ? ` | Nota: ${_nota1}` : '';
-                        logPorPJ[realPj].push(`Af. Base ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${totalAf})${_notaSuf1}`);
+                        logPorPJ[realPj].push(`Af. Base ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${totalAf})`);
                     }
                     else if (campoRaiz === 'hechizosEfecto' && subCampo && AFINIDADES_LISTA.includes(subCampo)) {
                         const totalAf = (getPjStat(pjKey, 'afinidadesBase', subCampo) || 0)
                                       + (getPjStat(pjKey, 'hechizos',       subCampo) || 0)
                                       + (getPjStat(pjKey, 'hechizosEfecto', subCampo) || 0)
                                       + (getPjStat(pjKey, 'buffs',          subCampo) || 0);
-                        const _nota2 = stState.notasAfinidad?.[pjKey]?.[flatKey] || '';
-                        const _notaSuf2 = _nota2 ? ` | Nota: ${_nota2}` : '';
-                        logPorPJ[realPj].push(`Af. Alt. ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${totalAf})${_notaSuf2}`);
+                        logPorPJ[realPj].push(`Af. Alt. ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${totalAf})`);
                     }
                     else if (campoRaiz === 'buffs' && subCampo && AFINIDADES_LISTA.includes(subCampo)) {
                         const totalAf = (getPjStat(pjKey, 'afinidadesBase', subCampo) || 0)
                                       + (getPjStat(pjKey, 'hechizos',       subCampo) || 0)
                                       + (getPjStat(pjKey, 'hechizosEfecto', subCampo) || 0)
                                       + (getPjStat(pjKey, 'buffs',          subCampo) || 0);
-                        const _nota3 = stState.notasAfinidad?.[pjKey]?.[flatKey] || '';
-                        const _notaSuf3 = _nota3 ? ` | Nota: ${_nota3}` : '';
-                        logPorPJ[realPj].push(`Buff ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${totalAf})${_notaSuf3}`);
+                        logPorPJ[realPj].push(`Buff ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${totalAf})`);
                     }
                     else if (campoRaiz === 'hechizosEfecto' && subCampo) {
                         logPorPJ[realPj].push(`Af. Alt. ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
@@ -261,7 +252,6 @@ export function actualizarLogGlobal() {
     if (hzState.logCasteosSession && hzState.logCasteosSession.length > 0) {
         hzState.logCasteosSession.forEach(item => {
             if (!item.pj || item.pj === '—') {
-                // Log global (ej: visibilidad) — sin cabecera de personaje
                 if (!logPorPJ['__global__']) logPorPJ['__global__'] = [];
                 logPorPJ['__global__'].push(item.msg);
             } else {
@@ -272,20 +262,15 @@ export function actualizarLogGlobal() {
         });
     }
 
-    // 🔀 LOG DE TRANSFERENCIAS (metadata explícita, garantiza aparición en log)
     for (const t of objState.logTransferencias) {
-        // Creamos una "cabecera de personaje" falsa para que agrupe la transferencia
         const cabeceraTransf = `${t.origen} → ${t.destino}`;
-        
         if (!logPorPJ[cabeceraTransf]) logPorPJ[cabeceraTransf] = [];
-        
         t.items.forEach(i => {
             logPorPJ[cabeceraTransf].push(`Obj Trans. | ${i.nombre} x${i.cant}`);
         });
     }
 
     let logText = "";
-    // Primero los globales sin cabecera
     if (logPorPJ['__global__'] && logPorPJ['__global__'].length > 0) {
         logPorPJ['__global__'].forEach(line => { logText += `${line}\n`; });
         logText += `\n`;
@@ -340,7 +325,6 @@ export async function ejecutarGuardadoGlobal() {
             }
         }
 
-        // 🌟 ACÁ SE GUARDAN LAS EQUIPACIONES JUNTAS CON LAS CANTIDADES
         const pjsInvolucradosObj = new Set([...Object.keys(objState.colaInventario), ...Object.keys(objState.colaEquipados)]);
         
         for (const pjKey of pjsInvolucradosObj) {
@@ -467,7 +451,6 @@ export async function ejecutarGuardadoGlobal() {
             if (errHz) throw new Error("Hechizos: " + errHz.message);
         }
 
-        // LIMPIEZA DE CACHÉ GENERAL
         localStorage.removeItem('hex_obj_v4');
         localStorage.removeItem('hex_stats_v2');
         localStorage.removeItem('hex_hechizos_cache');
