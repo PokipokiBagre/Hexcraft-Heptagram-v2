@@ -12,6 +12,8 @@ import { initStatsDev } from './estadisticas/panel-stats-logic.js';
 import { renderColumnaStats } from './estadisticas/panel-stats-ui.js';
 import { initHechizosDev } from './hechizos/panel-hechizos-logic.js';
 import { renderColumnaHechizos } from './hechizos/panel-hechizos-ui.js';
+import { initMapaDev } from './mapa/panel-mapa-logic.js';
+import { renderColumnaMapa } from './mapa/panel-mapa-ui.js';
 
 window.cambiarFiltroRol = cambiarFiltroRol;
 window.filtrarPorNombre = filtrarPorNombre;
@@ -93,7 +95,7 @@ window.onload = async () => {
                     vidaRojaMaxExtra: Number(p.buff_vida_roja) || 0, vidaAzulExtra: Number(p.buff_vida_azul) || 0, guardaDoradaExtra: Number(p.buff_guarda) || 0
                 },
                 estados: p.estados || {},
-                notasAfinidad: p.notas_afinidad || {}, // 🌟 LEEMOS LA NUEVA COLUMNA DE SUPABASE
+                notasAfinidad: p.notas_afinidad || {},
                 iconoOverride: p.icono_override || ''
             };
         });
@@ -106,8 +108,43 @@ window.onload = async () => {
 
         initObjetosDev(catalogoObj, invObj);
         initStatsDev(statsGlobalMock, estadosListMock);
-        
         initHechizosDev(catalogoHz, invHz || []); 
+
+        // ── Inicializar panel mapa con datos de hechizosData ──
+        // Construimos la lista de nodos en el mismo formato que usa estadoMapa
+        const nodosParaMapa = catalogoHz.map(n => ({
+            id:             n.ID,
+            nombreOriginal: n.Nombre || n.ID,
+            nombre:         `${n.Nombre || n.ID} (${n.HEX || 0})`,
+            afinidad:       n.Afinidad || '-',
+            clase:          n.Clase || 'Clase 1',
+            hex:            parseInt(n.HEX) || 0,
+            resumen:        n.Resumen || '',
+            efecto:         n.Efecto || '',
+            overcast:       n['Overcast 100%'] || '',
+            undercast:      n['Undercast 50%'] || '',
+            especial:       n.Especial || '',
+            esConocido:     n.Conocido === 'si',
+            x:              parseFloat(n.X) || 0,
+            y:              parseFloat(n.Y) || 0,
+        }));
+
+        const coloresParaMapa = {};
+        if (hechizosData.afinidades) {
+            hechizosData.afinidades.forEach(row => {
+                if (row[0]) {
+                    coloresParaMapa[row[0].trim()] = {
+                        t: row[1] ? row[1].toString().trim() : '#ffffff',
+                        b: row[2] ? row[2].toString().trim() : '#555555'
+                    };
+                }
+            });
+        }
+
+        initMapaDev(nodosParaMapa, [], coloresParaMapa);
+
+        // Renderizado inicial del panel mapa (no depende de pjSeleccionado)
+        renderColumnaMapa();
 
         document.getElementById('pantalla-carga').classList.add('oculto');
         document.getElementById('interfaz-master').classList.remove('oculto');
@@ -120,6 +157,8 @@ window.onload = async () => {
                 renderColumnaStats(devState.pjSeleccionado);
                 renderColumnaHechizos(devState.pjSeleccionado); 
             }
+            // El panel mapa se re-renderiza siempre (no depende de personaje)
+            renderColumnaMapa();
             revisarCambiosPendientes();
             actualizarLogGlobal();
         });
@@ -200,6 +239,7 @@ function seleccionarPersonajeDev(nombre) {
     renderColumnaObjetos(devState.pjSeleccionado);
     renderColumnaStats(devState.pjSeleccionado);
     renderColumnaHechizos(devState.pjSeleccionado); 
+    // El mapa ya está visible desde el inicio, no necesita re-render aquí
 }
 
 function copiarLogGlobal() {
