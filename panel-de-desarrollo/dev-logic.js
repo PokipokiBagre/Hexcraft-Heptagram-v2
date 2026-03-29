@@ -212,21 +212,27 @@ export function actualizarLogGlobal() {
                                       + (getPjStat(pjKey, 'hechizos',       subCampo) || 0)
                                       + (getPjStat(pjKey, 'hechizosEfecto', subCampo) || 0)
                                       + (getPjStat(pjKey, 'buffs',          subCampo) || 0);
-                        logPorPJ[realPj].push(`Af. Base ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${totalAf})`);
+                        const _nota1 = stState.notasAfinidad?.[pjKey]?.[flatKey] || '';
+                        const _notaSuf1 = _nota1 ? ` | Nota: ${_nota1}` : '';
+                        logPorPJ[realPj].push(`Af. Base ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${totalAf})${_notaSuf1}`);
                     }
                     else if (campoRaiz === 'hechizosEfecto' && subCampo && AFINIDADES_LISTA.includes(subCampo)) {
                         const totalAf = (getPjStat(pjKey, 'afinidadesBase', subCampo) || 0)
                                       + (getPjStat(pjKey, 'hechizos',       subCampo) || 0)
                                       + (getPjStat(pjKey, 'hechizosEfecto', subCampo) || 0)
                                       + (getPjStat(pjKey, 'buffs',          subCampo) || 0);
-                        logPorPJ[realPj].push(`Af. Alt. ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${totalAf})`);
+                        const _nota2 = stState.notasAfinidad?.[pjKey]?.[flatKey] || '';
+                        const _notaSuf2 = _nota2 ? ` | Nota: ${_nota2}` : '';
+                        logPorPJ[realPj].push(`Af. Alt. ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${totalAf})${_notaSuf2}`);
                     }
                     else if (campoRaiz === 'buffs' && subCampo && AFINIDADES_LISTA.includes(subCampo)) {
                         const totalAf = (getPjStat(pjKey, 'afinidadesBase', subCampo) || 0)
                                       + (getPjStat(pjKey, 'hechizos',       subCampo) || 0)
                                       + (getPjStat(pjKey, 'hechizosEfecto', subCampo) || 0)
                                       + (getPjStat(pjKey, 'buffs',          subCampo) || 0);
-                        logPorPJ[realPj].push(`Buff ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${totalAf})`);
+                        const _nota3 = stState.notasAfinidad?.[pjKey]?.[flatKey] || '';
+                        const _notaSuf3 = _nota3 ? ` | Nota: ${_nota3}` : '';
+                        logPorPJ[realPj].push(`Buff ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${totalAf})${_notaSuf3}`);
                     }
                     else if (campoRaiz === 'hechizosEfecto' && subCampo) {
                         logPorPJ[realPj].push(`Af. Alt. ${subNomLegibles[subCampo] || subCampo} ${sign}${delta} (${cantNueva})`);
