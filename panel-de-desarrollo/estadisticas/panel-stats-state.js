@@ -7,7 +7,13 @@ export const stState = {
     estadosDB: [],    
     
     vistaActiva: 'hex', 
+    subVistaAfinidades: 'totales', // Sub-tab dentro de la vista afinidades
     logAsistencia: "",
+    
+    // Notas por afinidad: { pjNombre: { 'afinidadesBase.fisica': 'nota...' } }
+    notasAfinidad: {},
+    // Set de flatKeys con el input de nota desplegado: "pj|flatKey"
+    notasAbiertasSet: new Set(),
     
     // 🔥 COLAS DE CAMBIOS (Staging) 🔥
     colaStats: {},         
