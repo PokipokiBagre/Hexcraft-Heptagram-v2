@@ -53,6 +53,7 @@ window.onload = async () => {
             statsGlobalMock[p.nombre] = {
                 isPlayer: p.is_player,
                 isActive: p.is_active,
+                isSistema: p.tipo === 'sistema', // NPCs sistema excluyen grimorio del total de afinidades
                 hex: Number(p.hex) || 0,
                 asistencia: Number(p.asistencia) || 1,
                 
