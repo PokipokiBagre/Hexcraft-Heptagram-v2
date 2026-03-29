@@ -13,38 +13,25 @@ export const mapaDevState = {
     busqueda:          '',
     filtroAfinidad:    '',
     filtroVisibilidad: 'todos',   // 'todos' | 'conocidos' | 'ocultos'
+    
+    // 🌟 NUEVOS FILTROS
+    filtroPersonaje:   null,      
+    filtroRolPj:       'jugadores', // 'jugadores' | 'npcs'
 
     // ── Estado del editor (canvas) ───────────────────────────
-    herramienta:       'cursor',  // 'cursor' | 'enlace' | 'eliminar-enlace'
+    herramienta:       'cursor', 
     seleccionMultiple: new Set(),
-    tempLink:          null,      // { source: nodo, endX, endY }
-    boxStart:          null,      // { x, y } en coords mundo
-    boxCurrent:        null,      // { x, y } en coords mundo
+    tempLink:          null,      
+    boxStart:          null,      
+    boxCurrent:        null,      
 
     // ── 🔥 Colas de cambios (Staging) ───────────────────────
-
-    // Visibilidad: { [hechizoId]: true|false }
     colaVisibilidad: {},
-
-    // Posiciones: { [hechizoId]: { x, y } }
-    // (también se refleja en colaMetadatos para el guardado)
     colaPosiciones: {},
-
-    // Metadatos editados: { [hechizoId]: { campo: valor, ... } }
     colaMetadatos: {},
-
-    // IDs de nodos nuevos (el estado vivo está en nodosDB)
-    colaNuevosNodos: [],   // ['Hechizo 5', 'Hechizo 6', ...]
-
-    // Nuevos enlaces: [{ source: id, target: id }]
+    colaNuevosNodos: [],   
     colaNuevosEnlaces: [],
-
-    // Eliminados
     colaEliminados: { nodos: new Set(), enlaces: [] },
-
-    // Colores de afinidad: { [afinidad]: { t, b } }
     colaColores: {},
-
-    // ── Log de sesión ────────────────────────────────────────
     logSesion: []
 };
