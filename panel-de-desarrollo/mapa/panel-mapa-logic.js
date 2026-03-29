@@ -61,7 +61,7 @@ export function toggleVisibilidadNodo(hechizoId) {
 
     _propagarVisibilidadAlMapaVivo(hechizoId, nuevo);
     window.dispatchEvent(new Event('devDataChanged'));
-    window.dispatchEvent(new Event('devUIUpdate'));
+    window.dispatchEvent(new Event('devMapaUpdate')); // Refresco instantáneo
 }
 
 function _propagarVisibilidadAlMapaVivo(hechizoId, nuevoValor) {
@@ -113,7 +113,6 @@ export function crearNodoDev(worldX, worldY) {
 
     mapaDevState.nodosDB.push(nuevo);
     mapaDevState.colaNuevosNodos.push(id);
-    // Pre-registrar en colaMetadatos para que el guardado lo tome
     mapaDevState.colaMetadatos[id] = { ...nuevo };
 
     mapaDevState.logSesion.push({ msg: `Nodo Creado | ${id}` });
@@ -142,7 +141,6 @@ export function eliminarEnlaceDev(source, target) {
         window.dispatchEvent(new Event('devDataChanged'));
         return true;
     }
-    // Intentar dirección inversa
     const idxR = mapaDevState.enlacesDB.findIndex(e => e.source === target && e.target === source);
     if (idxR > -1) {
         mapaDevState.enlacesDB.splice(idxR, 1);
@@ -156,7 +154,6 @@ export function eliminarEnlaceDev(source, target) {
 // ── ELIMINAR NODOS ────────────────────────────────────────────
 export function eliminarNodosDev(nodosSet) {
     nodosSet.forEach(n => {
-        // Eliminar enlaces conectados
         const eliminadosConectados = [];
         mapaDevState.enlacesDB = mapaDevState.enlacesDB.filter(e => {
             if (e.source === n || e.target === n) {
@@ -167,11 +164,9 @@ export function eliminarNodosDev(nodosSet) {
         });
         mapaDevState.colaEliminados.enlaces.push(...eliminadosConectados);
 
-        // Eliminar nodo
         mapaDevState.nodosDB = mapaDevState.nodosDB.filter(x => x !== n);
         mapaDevState.colaEliminados.nodos.add(n.id);
 
-        // Si era un nodo nuevo, sacarlo también de colaNuevosNodos
         mapaDevState.colaNuevosNodos = mapaDevState.colaNuevosNodos.filter(id => id !== n.id);
 
         mapaDevState.logSesion.push({ msg: `Nodo Eliminado | ${n.id}` });
@@ -213,14 +208,29 @@ export function editarColorAfinidad(afinidad, hexColor) {
 
     mapaDevState.logSesion.push({ msg: `Color ${afinidad} → ${hexColor}` });
     window.dispatchEvent(new Event('devDataChanged'));
-    window.dispatchEvent(new Event('devUIUpdate'));
+    window.dispatchEvent(new Event('devMapaUpdate'));
 }
 
 // ── FILTROS Y VISTA ───────────────────────────────────────────
-export function setVistaMapaDev(vista)      { mapaDevState.vistaActiva = vista; window.dispatchEvent(new Event('devUIUpdate')); }
-export function setBusquedaMapa(texto)      { mapaDevState.busqueda = texto.toLowerCase(); window.dispatchEvent(new Event('devUIUpdate')); }
-export function setFiltroAfinidad(af)       { mapaDevState.filtroAfinidad = af; window.dispatchEvent(new Event('devUIUpdate')); }
-export function setFiltroVisibilidad(v)     { mapaDevState.filtroVisibilidad = v; window.dispatchEvent(new Event('devUIUpdate')); }
+export function setFiltroPersonaje(nombre) {
+    if (nombre === null || mapaDevState.filtroPersonaje === nombre) {
+        mapaDevState.filtroPersonaje = null;
+    } else {
+        mapaDevState.filtroPersonaje = nombre;
+    }
+    window.dispatchEvent(new Event('devMapaUpdate')); 
+}
+
+export function setFiltroRolPj(rol) {
+    mapaDevState.filtroRolPj = rol;
+    mapaDevState.filtroPersonaje = null; 
+    window.dispatchEvent(new Event('devMapaUpdate'));
+}
+
+export function setVistaMapaDev(vista)      { mapaDevState.vistaActiva = vista; window.dispatchEvent(new Event('devMapaUpdate')); }
+export function setBusquedaMapa(texto)      { mapaDevState.busqueda = texto.toLowerCase(); window.dispatchEvent(new Event('devMapaUpdate')); }
+export function setFiltroAfinidad(af)       { mapaDevState.filtroAfinidad = af; window.dispatchEvent(new Event('devMapaUpdate')); }
+export function setFiltroVisibilidad(v)     { mapaDevState.filtroVisibilidad = v; window.dispatchEvent(new Event('devMapaUpdate')); }
 
 // ── HELPERS DE CONSULTA ───────────────────────────────────────
 export function getNodosFiltrados() {
