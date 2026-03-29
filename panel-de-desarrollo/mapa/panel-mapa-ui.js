@@ -62,6 +62,8 @@ const asignState = {
 window.devMapa = {
     setVista:    (v) => { setVistaMapaDev(v); renderColumnaMapa(); },
     setBusqueda: (t) => { setBusquedaMapa(t); _actualizarBuscadorCanvas(t); },
+    // Buscador del canvas: solo navega, NO dispara devUIUpdate
+    setBusquedaCanvas: (t) => _actualizarBuscadorCanvas(t),
     setFiltroAf: (v) => setFiltroAfinidad(v),
     setFiltroVis:(v) => setFiltroVisibilidad(v),
     abrirMapa:   () => window.open('../mapa/index.html', '_blank'),
@@ -112,8 +114,17 @@ window.devMapa = {
     },
 
     toggleVis: (id) => {
+        // Llamamos directamente a la lógica sin pasar por devUIUpdate
+        // (que dispararía renderColumnaMapa y reiniciaría el canvas)
+        const { mapaDevState: mds } = window.__mapaDevStateRef || {};
         toggleVisibilidadNodo(id);
         _renderPropiedades();
+        // Actualizar panel de asignación si hay personaje activo
+        if (asignState.pjSeleccionado) {
+            _calcularVistaPj(asignState.pjSeleccionado);
+            const np = document.getElementById('mm-asign-nodo-panel');
+            if (np) np.innerHTML = _htmlAsignNodo();
+        }
         _marcarGuardar();
     },
 
@@ -224,6 +235,17 @@ export function renderColumnaMapa() {
     const { vistaActiva } = mapaDevState;
     const esCanvas = !vistaActiva || vistaActiva === 'canvas' || vistaActiva === 'nodos';
 
+    // ── OPTIMIZACIÓN: si el canvas ya está montado y activo, NO reconstruir el DOM ──
+    // Solo actualizamos los sub-paneles que pueden cambiar (pendientes, propiedades, asignación).
+    // Esto evita que el buscador pierda el foco y que la cámara se reinicie.
+    const canvasExistente = document.getElementById('mini-mapa-canvas');
+    if (esCanvas && canvasExistente && canvasExistente.isConnected) {
+        _marcarGuardarSilencioso(pendientes);
+        _renderPropiedades();
+        _renderPanelAsignacion();
+        return;
+    }
+
     const tabStyle = (activa) => activa
         ? 'background:#4a1880;color:#fff;border-color:#b060ff;'
         : 'background:#111;color:#888;border-color:#444;';
@@ -244,6 +266,15 @@ export function renderColumnaMapa() {
     contenedor.innerHTML = html;
 
     if (esCanvas) requestAnimationFrame(() => _montarCanvas());
+}
+
+// Actualiza solo el div de pendientes sin tocar el DOM del canvas
+function _marcarGuardarSilencioso(pendientes) {
+    const div = document.getElementById('mm-pendientes');
+    if (div) {
+        div.style.display = pendientes > 0 ? 'block' : 'none';
+        div.textContent   = `⏳ ${pendientes} cambio${pendientes !== 1 ? 's' : ''} pendiente${pendientes !== 1 ? 's' : ''} — usa 🔥 GUARDAR TODO`;
+    }
 }
 
 // ── HTML DEL CANVAS ───────────────────────────────────────────
@@ -277,7 +308,7 @@ function _htmlVistaCanvas() {
         <!-- Buscador del canvas -->
         <div style="flex:1;position:relative;">
             <input id="mm-buscador" type="text" placeholder="🔍 Buscar por ID o nombre..."
-                oninput="window.devMapa.setBusqueda(this.value)"
+                oninput="window.devMapa.setBusquedaCanvas(this.value)"
                 style="width:100%;box-sizing:border-box;background:#0a0020;color:#fff;border:1px solid #4a1880;border-radius:6px;padding:6px 10px;font-family:'Rajdhani';font-size:0.9em;outline:none;">
         </div>
         <button onclick="window.devMapa.centrarCamara()"
@@ -310,7 +341,7 @@ function _htmlVistaCanvas() {
     <!-- Canvas + Panel de propiedades -->
     <div style="display:flex;gap:8px;align-items:flex-start;">
         <!-- Canvas -->
-        <div style="position:relative;flex:1;height:450px;background:#05000a;border:1px solid #2a1060;border-radius:8px;overflow:hidden;min-width:0;">
+        <div style="position:relative;flex:1;height:600px;background:#05000a;border:1px solid #2a1060;border-radius:8px;overflow:hidden;min-width:0;">
             <canvas id="mini-mapa-canvas" style="display:block;width:100%;height:100%;cursor:grab;"></canvas>
             <div style="position:absolute;top:8px;right:8px;color:#2a2a2a;font-size:0.62em;text-align:right;pointer-events:none;line-height:1.7;">
                 Scroll: zoom<br>Drag: mover<br>SHIFT+drag fondo: caja
@@ -318,7 +349,7 @@ function _htmlVistaCanvas() {
         </div>
         <!-- Panel de propiedades (arriba) -->
         <div id="mm-props-panel"
-            style="width:255px;flex-shrink:0;background:rgba(8,0,18,0.95);border:1px solid #4a1880;border-radius:8px;overflow-y:auto;max-height:450px;font-size:0.82em;">
+            style="width:255px;flex-shrink:0;background:rgba(8,0,18,0.95);border:1px solid #4a1880;border-radius:8px;overflow-y:auto;max-height:600px;font-size:0.82em;">
             <div style="padding:20px;text-align:center;color:#3a3a4a;line-height:1.8;">
                 <div style="font-size:1.3em;margin-bottom:6px;">🗺️</div>
                 <p style="margin:0 0 6px 0;">Haz clic en un nodo para editar sus propiedades.</p>
@@ -454,12 +485,14 @@ function _htmlAsignNodo() {
     else if (esAprendible) estadoLabel = `<span style="background:rgba(212,175,55,0.15);color:#d4af37;border:1px solid #d4af37;border-radius:4px;padding:2px 7px;font-size:0.75em;">✦ Aprendible</span>`;
     else if (esRastreo) estadoLabel = `<span style="background:rgba(100,100,80,0.2);color:#888;border:1px solid #555;border-radius:4px;padding:2px 7px;font-size:0.75em;">○ Prereq.</span>`;
 
-    // Texto del hechizo: tachado si está oculto (no conocido)
+    // Texto del hechizo: dos líneas si está oculto
     let textoNombre = '';
     if (esConocido) {
         textoNombre = `<span style="color:#ddd;font-weight:bold;">${_esc(n.nombreOriginal || n.id)}</span> <span style="color:#888;font-size:0.85em;">(${n.hex} HEX)</span>`;
     } else {
-        textoNombre = `<span style="color:#888;">Hechizo ${_extractNum(n.id)}</span> <span style="color:#888;font-size:0.85em;">(${n.hex} HEX)</span> <span style="color:#555;text-decoration:line-through;font-size:0.8em;">${_esc(n.nombreOriginal || n.id)}</span>`;
+        textoNombre = `
+            <div style="color:#aaa;">Hechizo ${_extractNum(n.id)} <span style="color:#777;font-size:0.85em;">(${n.hex} HEX)</span></div>
+            <div style="color:#555;text-decoration:line-through;font-size:0.82em;">${_esc(n.nombreOriginal || n.id)} (${n.hex} HEX)</div>`;
     }
 
     const safeId  = n.id.replace(/'/g, "\\'");
@@ -914,34 +947,59 @@ function _dibujarFrame() {
         // Texto de etiqueta
         if (miniMapa.camara.zoom > 0.05 || isHovered || isSel) {
             const fs = Math.round((esConocido ? 26 : 20) + (isHovered ? 4 : 0));
-            ctx.font        = `bold ${fs}px sans-serif`;
-            ctx.textAlign   = 'center';
+            ctx.textAlign    = 'center';
             ctx.textBaseline = 'top';
-
-            // Formato: si conocido → "Nombre (HEX)", si oculto → "Hechizo N (HEX) ~~Nombre~~"
-            // En canvas no podemos tachar, así que mostramos "Hechizo N (HEX)" a secas
-            // El nombre tachado se muestra en el panel HTML, no en canvas.
-            const texto = esConocido
-                ? `${nodo.nombreOriginal} (${nodo.hex})`
-                : `Hechizo ${_extractNum(nodo.id)} (${nodo.hex})`;
-
-            const ty2 = nodo.y + r + 8 / sf;
-            ctx.lineWidth   = 5 / sf;
-            ctx.strokeStyle = 'rgba(0,0,0,0.95)'; ctx.strokeText(texto, nodo.x, ty2);
 
             let fillColor;
             if (isSel) fillColor = '#00ffff';
             else if (isHovered) fillColor = '#fff';
             else if (hayPj) {
-                if (asignState.posesiones.has(nodo))    fillColor = 'rgba(200,170,255,0.95)';
+                if (asignState.posesiones.has(nodo))       fillColor = 'rgba(200,170,255,0.95)';
                 else if (asignState.aprendibles.has(nodo)) fillColor = 'rgba(230,200,80,0.95)';
                 else fillColor = esConocido ? 'rgba(160,160,180,0.6)' : 'rgba(130,120,80,0.45)';
             } else {
                 fillColor = esConocido ? COLOR_DESCUBIERTO : 'rgba(180,150,60,0.7)';
             }
 
-            ctx.fillStyle = fillColor;
-            ctx.fillText(texto, nodo.x, ty2);
+            if (esConocido) {
+                // Nodo descubierto → una sola línea: "Nombre (HEX)"
+                const texto = `${nodo.nombreOriginal} (${nodo.hex})`;
+                ctx.font        = `bold ${fs}px sans-serif`;
+                const ty2 = nodo.y + r + 8 / sf;
+                ctx.lineWidth   = 5 / sf;
+                ctx.strokeStyle = 'rgba(0,0,0,0.95)'; ctx.strokeText(texto, nodo.x, ty2);
+                ctx.fillStyle   = fillColor;           ctx.fillText(texto, nodo.x, ty2);
+            } else {
+                // Nodo sellado → dos líneas:
+                //   Línea 1: "Hechizo N (HEX)"  (color dorado/tenue)
+                //   Línea 2: "Nombre real (HEX)" con tachado manual
+                const texto1 = `Hechizo ${_extractNum(nodo.id)} (${nodo.hex})`;
+                const texto2 = `${nodo.nombreOriginal} (${nodo.hex})`;
+                const fs2    = Math.round(fs * 0.78);   // segunda línea más pequeña
+                const gap    = (fs + 4) / sf;           // separación entre líneas
+
+                ctx.font     = `bold ${fs}px sans-serif`;
+                const ty1 = nodo.y + r + 8 / sf;
+                ctx.lineWidth   = 5 / sf;
+                ctx.strokeStyle = 'rgba(0,0,0,0.95)'; ctx.strokeText(texto1, nodo.x, ty1);
+                ctx.fillStyle   = fillColor;           ctx.fillText(texto1, nodo.x, ty1);
+
+                ctx.font        = `${fs2}px sans-serif`;
+                const ty2b = ty1 + gap;
+                const fillColor2 = 'rgba(100,90,70,0.6)';
+                ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.strokeText(texto2, nodo.x, ty2b);
+                ctx.fillStyle   = fillColor2;         ctx.fillText(texto2, nodo.x, ty2b);
+
+                // Línea tachada manual encima del texto2
+                const medida = ctx.measureText(texto2);
+                const midY   = ty2b + fs2 / 2;
+                ctx.beginPath();
+                ctx.moveTo(nodo.x - medida.width / 2, midY);
+                ctx.lineTo(nodo.x + medida.width / 2, midY);
+                ctx.strokeStyle = 'rgba(120,100,70,0.7)';
+                ctx.lineWidth   = 1.2 / sf;
+                ctx.stroke();
+            }
         }
     });
 
@@ -1048,10 +1106,10 @@ function _renderPropiedades() {
 
     // Mostrar nombre tachado si está oculto
     const headerNombre = esConocido
-        ? `<div style="font-weight:bold;color:#b896ff;font-size:0.88em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_esc(n.nombreOriginal || n.id)}</div>`
-        : `<div style="font-size:0.85em;">
-               <span style="color:#888;">Hechizo ${_extractNum(n.id)}</span>
-               <span style="color:#555;text-decoration:line-through;font-size:0.82em;margin-left:4px;">${_esc(n.nombreOriginal || n.id)}</span>
+        ? `<div style="font-weight:bold;color:#b896ff;font-size:0.88em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_esc(n.nombreOriginal || n.id)} <span style="color:#888;font-weight:normal;">(${n.hex} HEX)</span></div>`
+        : `<div style="font-size:0.85em;line-height:1.6;">
+               <div style="color:#aaa;">Hechizo ${_extractNum(n.id)} <span style="color:#888;font-size:0.9em;">(${n.hex} HEX)</span></div>
+               <div style="color:#555;text-decoration:line-through;font-size:0.8em;">${_esc(n.nombreOriginal || n.id)} (${n.hex} HEX)</div>
            </div>`;
 
     panel.innerHTML = `${dlHTML}
