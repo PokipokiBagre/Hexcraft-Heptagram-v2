@@ -34,26 +34,23 @@ window.onload = async () => {
     }
 
     try {
-        // 🔥 CORRECCIÓN: Le pedimos directamente a Supabase todo (*) el inventario de objetos 
-        // para que traiga la nueva columna 'equipado' que db.objetos ignoraba.
         const [{data: personajesBD}, catalogoObj, {data: invObj}, estadosArr, hechizosData, {data: invHz}] = await Promise.all([
             supabase.from('personajes').select('*'),
             db.objetos.getCatalogo(),
-            supabase.from('inventario_objetos').select('*'), // <--- EL CAMBIO CLAVE ESTÁ AQUÍ
+            supabase.from('inventario_objetos').select('*'), 
             db.estadosConfig.getAll(),
             db.hechizos.getDataCompleta(),
             supabase.from('hechizos_inventario').select('*') 
         ]);
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
-        window.__devListaPersonajes = devState.listaPersonajes; // 🔀 Para la vista de transferencia
+        window.__devListaPersonajes = devState.listaPersonajes; 
 
         const statsGlobalMock = {};
         personajesBD.forEach(p => {
             statsGlobalMock[p.nombre] = {
                 isPlayer: p.is_player,
                 isActive: p.is_active,
-                isSistema: p.tipo === 'sistema', // NPCs sistema excluyen grimorio del total de afinidades
                 hex: Number(p.hex) || 0,
                 asistencia: Number(p.asistencia) || 1,
                 
@@ -96,6 +93,7 @@ window.onload = async () => {
                     vidaRojaMaxExtra: Number(p.buff_vida_roja) || 0, vidaAzulExtra: Number(p.buff_vida_azul) || 0, guardaDoradaExtra: Number(p.buff_guarda) || 0
                 },
                 estados: p.estados || {},
+                notasAfinidad: p.notas_afinidad || {}, // 🌟 LEEMOS LA NUEVA COLUMNA DE SUPABASE
                 iconoOverride: p.icono_override || ''
             };
         });
