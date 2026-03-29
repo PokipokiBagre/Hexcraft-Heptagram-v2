@@ -23,6 +23,7 @@ export function revisarCambiosPendientes() {
     if (Object.values(objState.colaNuevosObjetos).some(o => o.nombre.trim() !== '')) hayCambios = true;
     if (Object.keys(objState.colaEdicionObjetos).length > 0) hayCambios = true;
     if (Object.keys(stState.colaStats).length > 0) hayCambios = true;
+    if (Object.keys(stState.colaNotas).length > 0) hayCambios = true; // 🌟 Detectamos si hay notas pendientes
     if (Object.keys(stState.colaEstadosConfig).length > 0) hayCambios = true;
     if (stState.colaBorrarEstados.length > 0) hayCambios = true;
     if (Object.keys(hzState.colaAsignaciones).length > 0) hayCambios = true; 
@@ -346,11 +347,19 @@ export async function ejecutarGuardadoGlobal() {
             }
         }
 
-        for (const pjKey in stState.colaStats) {
-            const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
-            const cambios = stState.colaStats[pjKey];
-            let updatedPj = JSON.parse(JSON.stringify(stState.statsDB[pjKey]));
+        // 🌟 Juntamos PJs con cambios de stats Y PJs con cambios en notas
+        const pjsConCambiosStats = new Set([...Object.keys(stState.colaStats), ...Object.keys(stState.colaNotas)]);
 
+        for (const pjKey of pjsConCambiosStats) {
+            const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
+            const cambios = stState.colaStats[pjKey] || {};
+            const notasCambios = stState.colaNotas[pjKey] || {};
+            let updatedPj = JSON.parse(JSON.stringify(stState.statsDB[pjKey]));
+            
+            // Garantizamos que exista el objeto de notas
+            if (!updatedPj.notasAfinidad) updatedPj.notasAfinidad = {};
+
+            // Aplicar stats matemáticos
             for (const flatKey in cambios) {
                 if (flatKey.endsWith('.null') || flatKey.startsWith('__')) continue; 
                 const keys = flatKey.split('.');
@@ -359,6 +368,11 @@ export async function ejecutarGuardadoGlobal() {
                     if (!updatedPj[keys[0]]) updatedPj[keys[0]] = {};
                     updatedPj[keys[0]][keys[1]] = cambios[flatKey];
                 }
+            }
+
+            // 🌟 Aplicar cambios de notas de texto
+            for (const flatKey in notasCambios) {
+                updatedPj.notasAfinidad[flatKey] = notasCambios[flatKey];
             }
 
             statsUpserts.push({
@@ -402,7 +416,8 @@ export async function ejecutarGuardadoGlobal() {
                 buff_elim: updatedPj.buffs.elimDorada || 0,
                 buff_vida_roja: updatedPj.buffs.vidaRojaMaxExtra || 0,
                 buff_vida_azul: updatedPj.buffs.vidaAzulExtra || 0,
-                buff_guarda: updatedPj.buffs.guardaDoradaExtra || 0
+                buff_guarda: updatedPj.buffs.guardaDoradaExtra || 0,
+                notas_afinidad: updatedPj.notasAfinidad // 🌟 LA NUEVA COLUMNA DE BD
             });
         }
 
