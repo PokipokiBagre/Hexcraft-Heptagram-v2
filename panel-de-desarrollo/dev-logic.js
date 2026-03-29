@@ -542,6 +542,82 @@ export async function ejecutarGuardadoGlobal() {
             if (errCol) throw new Error("Colores mapa: " + errCol.message);
         }
 
+// 4. 🗑️ NODOS ELIMINADOS (borra sus enlaces primero para evitar FK)
+        for (const nodeId of mapaDevState.colaEliminados.nodos) {
+            // Eliminar todos los enlaces que referencian este nodo
+            await supabase.from('hechizos_strings')
+                .delete()
+                .or(`source_id.eq.${nodeId},target_id.eq.${nodeId}`);
+            // Eliminar el nodo
+            await supabase.from('hechizos_nodos')
+                .delete()
+                .eq('hechizo_id', nodeId);
+        }
+ 
+        // 5. 🗑️ ENLACES ELIMINADOS (los no cubiertos por la eliminación de nodos)
+        for (const enlace of mapaDevState.colaEliminados.enlaces) {
+            // Evitar duplicar deletes si el nodo ya fue borrado arriba
+            if (mapaDevState.colaEliminados.nodos.has(enlace.source) ||
+                mapaDevState.colaEliminados.nodos.has(enlace.target)) continue;
+            await supabase.from('hechizos_strings')
+                .delete()
+                .eq('source_id', enlace.source)
+                .eq('target_id', enlace.target);
+        }
+ 
+        // 6. ➕ NUEVOS NODOS
+        // Leemos el estado actualizado directamente de nodosDB (por si el usuario
+        // editó el nodo después de crearlo — colaMetadatos ya lo cubre también).
+        const nodosNuevosUpserts = mapaDevState.colaNuevosNodos
+            .filter(id => !mapaDevState.colaEliminados.nodos.has(id)) // Ignorar si fue eliminado
+            .map(id => {
+                const n = mapaDevState.nodosDB.find(nd => nd.id === id);
+                if (!n) return null;
+                return {
+                    hechizo_id:  n.id,
+                    nombre:      n.nombreOriginal || n.id,
+                    hex_cost:    n.hex     || 0,
+                    clase:       n.clase   || 'Clase 1',
+                    afinidad:    n.afinidad || '',
+                    resumen:     n.resumen  || '',
+                    efecto:      n.efecto   || '',
+                    overcast:    n.overcast || '',
+                    undercast:   n.undercast || '',
+                    especial:    n.especial || '',
+                    pos_x:       Math.round(n.x || 0),
+                    pos_y:       Math.round(n.y || 0),
+                    es_conocido: n.esConocido || false
+                };
+            })
+            .filter(Boolean);
+ 
+        if (nodosNuevosUpserts.length > 0) {
+            for (let i = 0; i < nodosNuevosUpserts.length; i += 50) {
+                const { error: errNuev } = await supabase
+                    .from('hechizos_nodos')
+                    .upsert(nodosNuevosUpserts.slice(i, i + 50), { onConflict: 'hechizo_id' });
+                if (errNuev) throw new Error("Nuevos nodos: " + errNuev.message);
+            }
+        }
+ 
+        // 7. ➕ NUEVOS ENLACES
+        const enlacesNuevosUpserts = mapaDevState.colaNuevosEnlaces
+            .filter(e =>
+                // Ignorar si alguno de sus nodos fue eliminado
+                !mapaDevState.colaEliminados.nodos.has(e.source) &&
+                !mapaDevState.colaEliminados.nodos.has(e.target)
+            )
+            .map(e => ({ source_id: e.source, target_id: e.target }));
+ 
+        if (enlacesNuevosUpserts.length > 0) {
+            for (let i = 0; i < enlacesNuevosUpserts.length; i += 50) {
+                const { error: errEnlN } = await supabase
+                    .from('hechizos_strings')
+                    .upsert(enlacesNuevosUpserts.slice(i, i + 50), { onConflict: 'source_id,target_id' });
+                if (errEnlN) throw new Error("Nuevos enlaces: " + errEnlN.message);
+            }
+        }
+        
         localStorage.removeItem('hex_obj_v4');
         localStorage.removeItem('hex_stats_v2');
         localStorage.removeItem('hex_hechizos_cache');
