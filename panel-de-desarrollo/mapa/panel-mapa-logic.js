@@ -5,27 +5,30 @@
 import { mapaDevState } from './panel-mapa-state.js';
 
 // ── INICIALIZACIÓN ────────────────────────────────────────────
-// Se llama desde dev-main.js pasando los datos ya cargados por el mapa.
-// Acepta tanto el estadoMapa vivo como una lista plana de nodos/enlaces.
 export function initMapaDev(nodos, enlaces, colores) {
-    mapaDevState.nodosDB = nodos || [];
+    mapaDevState.nodosDB   = nodos  || [];
     mapaDevState.enlacesDB = enlaces || [];
     mapaDevState.coloresDB = JSON.parse(JSON.stringify(colores || {}));
 
-    // Limpiar colas en cada re-init (por si se recarga)
-    mapaDevState.colaVisibilidad  = {};
-    mapaDevState.colaPosiciones   = {};
-    mapaDevState.colaMetadatos    = {};
-    mapaDevState.colaNuevosNodos  = [];
+    // Limpiar todo el estado de edición
+    mapaDevState.herramienta       = 'cursor';
+    mapaDevState.seleccionMultiple = new Set();
+    mapaDevState.tempLink          = null;
+    mapaDevState.boxStart          = null;
+    mapaDevState.boxCurrent        = null;
+
+    mapaDevState.colaVisibilidad   = {};
+    mapaDevState.colaPosiciones    = {};
+    mapaDevState.colaMetadatos     = {};
+    mapaDevState.colaNuevosNodos   = [];
     mapaDevState.colaNuevosEnlaces = [];
-    mapaDevState.colaEliminados   = { nodos: new Set(), enlaces: [] };
-    mapaDevState.colaColores      = {};
-    mapaDevState.logSesion        = [];
+    mapaDevState.colaEliminados    = { nodos: new Set(), enlaces: [] };
+    mapaDevState.colaColores       = {};
+    mapaDevState.logSesion         = [];
 }
 
 // ── ACCESO A DATOS ────────────────────────────────────────────
 export function getNodoActual(hechizoId) {
-    // Primero revisa la cola de metadatos pendientes
     const meta = mapaDevState.colaMetadatos[hechizoId];
     const base = mapaDevState.nodosDB.find(n => n.id === hechizoId);
     if (!base) return null;
@@ -46,87 +49,167 @@ export function toggleVisibilidadNodo(hechizoId) {
     const nuevo  = !actual;
     mapaDevState.colaVisibilidad[hechizoId] = nuevo;
 
+    // Actualizar nodo en memoria para que el canvas lo refleje de inmediato
     const nodo = mapaDevState.nodosDB.find(n => n.id === hechizoId);
+    if (nodo) {
+        nodo.esConocido = nuevo;
+        nodo.radio = nuevo ? 35 : 28;
+    }
+
     const nombre = nodo ? (nodo.nombreOriginal || nodo.id) : hechizoId;
-    const accion = nuevo ? 'Hechizo Descubierto' : 'Hechizo Sellado';
-    mapaDevState.logSesion.push({ msg: `${accion} | ${nombre}` });
+    mapaDevState.logSesion.push({ msg: `${nuevo ? 'Hechizo Descubierto' : 'Hechizo Sellado'} | ${nombre}` });
 
-    // Propagar al mapa vivo si está disponible en memoria (mismo contexto de módulo)
-    _propagarVisibilidadAlMapaVivo(hechizoId, nuevo, nodo);
-
+    _propagarVisibilidadAlMapaVivo(hechizoId, nuevo);
     window.dispatchEvent(new Event('devDataChanged'));
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
-function _propagarVisibilidadAlMapaVivo(hechizoId, nuevoValor, nodoRef) {
-    // Si el mapa está activo en la misma sesión, actualizamos el nodo en memoria
-    // para que al navegar al mapa el cambio ya esté reflejado sin recargar.
+function _propagarVisibilidadAlMapaVivo(hechizoId, nuevoValor) {
     try {
-        // estadoMapa se importa dinámicamente para no crear dependencia circular
-        // si el módulo no está cargado, simplemente no hace nada.
         const mapaVivo = window.__mapaEstadoVivo;
         if (!mapaVivo) return;
         const nodoVivo = mapaVivo.nodos.find(n => n.id === hechizoId);
         if (!nodoVivo) return;
         nodoVivo.esConocido = nuevoValor;
         nodoVivo.modificado = true;
-        if (nuevoValor) {
-            nodoVivo.radio = 35;
-            const base = nodoVivo.nombreOriginal.replace(/\s*\(\d+\)$/, '').trim();
-            nodoVivo.nombre = `${base} (${nodoVivo.hex})`;
-        } else {
-            nodoVivo.radio = 28;
-            const maskName = nodoVivo.id.toLowerCase().includes('hechizo')
-                ? nodoVivo.id
-                : `Hechizo ${nodoVivo.id}`;
-            nodoVivo.nombre = `${maskName} (${nodoVivo.hex})`;
-        }
+        nodoVivo.radio = nuevoValor ? 35 : 28;
     } catch (_) { /* silencioso */ }
 }
 
-// ── EDICIÓN DE METADATOS DE UN NODO ───────────────────────────
-export function editarMetadatoNodo(hechizoId, campo, valor) {
-    if (!mapaDevState.colaMetadatos[hechizoId]) {
-        mapaDevState.colaMetadatos[hechizoId] = {};
-    }
-    mapaDevState.colaMetadatos[hechizoId][campo] = valor;
+// ── CREAR NODO ────────────────────────────────────────────────
+export function getNextIdDev() {
+    const usedIds = new Set();
+    mapaDevState.nodosDB.forEach(n => {
+        const match = String(n.id || '').match(/\d+/);
+        if (match) usedIds.add(parseInt(match[0]));
+    });
+    let i = 1;
+    while (usedIds.has(i)) i++;
+    return i;
+}
 
-    // Propagar al nodo vivo si el campo es crítico para el render
-    if (['nombreOriginal', 'hex', 'esConocido'].includes(campo)) {
-        try {
-            const mapaVivo = window.__mapaEstadoVivo;
-            if (mapaVivo) {
-                const nodoVivo = mapaVivo.nodos.find(n => n.id === hechizoId);
-                if (nodoVivo) {
-                    nodoVivo[campo] = valor;
-                    nodoVivo.modificado = true;
-                    if (campo === 'nombreOriginal' || campo === 'hex') {
-                        nodoVivo.nombre = `${nodoVivo.nombreOriginal} (${nodoVivo.hex})`;
-                    }
-                }
-            }
-        } catch (_) {}
+export function crearNodoDev(worldX, worldY) {
+    const newIdNum = getNextIdDev();
+    const id = `Hechizo ${newIdNum}`;
+
+    const nuevo = {
+        id,
+        nombreOriginal: id,
+        nombre:         `${id} (0)`,
+        afinidad:       '',
+        clase:          'Clase 1',
+        hex:            0,
+        resumen:        '',
+        efecto:         '',
+        overcast:       '',
+        undercast:      '',
+        especial:       '',
+        esConocido:     false,
+        x:              worldX || 0,
+        y:              worldY || 0,
+        radio:          28,
+        incomingSources: [],
+    };
+
+    mapaDevState.nodosDB.push(nuevo);
+    mapaDevState.colaNuevosNodos.push(id);
+    // Pre-registrar en colaMetadatos para que el guardado lo tome
+    mapaDevState.colaMetadatos[id] = { ...nuevo };
+
+    mapaDevState.logSesion.push({ msg: `Nodo Creado | ${id}` });
+    window.dispatchEvent(new Event('devDataChanged'));
+    return nuevo;
+}
+
+// ── CREAR ENLACE ──────────────────────────────────────────────
+export function crearEnlaceDev(source, target) {
+    if (mapaDevState.enlacesDB.some(e => e.source === source && e.target === target)) return false;
+    if (source === target) return false;
+
+    mapaDevState.enlacesDB.push({ source, target });
+    mapaDevState.colaNuevosEnlaces.push({ source: source.id, target: target.id });
+    mapaDevState.logSesion.push({ msg: `Enlace | ${source.id} → ${target.id}` });
+    window.dispatchEvent(new Event('devDataChanged'));
+    return true;
+}
+
+// ── ELIMINAR ENLACE ───────────────────────────────────────────
+export function eliminarEnlaceDev(source, target) {
+    const idx = mapaDevState.enlacesDB.findIndex(e => e.source === source && e.target === target);
+    if (idx > -1) {
+        mapaDevState.enlacesDB.splice(idx, 1);
+        mapaDevState.colaEliminados.enlaces.push({ source: source.id, target: target.id });
+        window.dispatchEvent(new Event('devDataChanged'));
+        return true;
     }
+    // Intentar dirección inversa
+    const idxR = mapaDevState.enlacesDB.findIndex(e => e.source === target && e.target === source);
+    if (idxR > -1) {
+        mapaDevState.enlacesDB.splice(idxR, 1);
+        mapaDevState.colaEliminados.enlaces.push({ source: target.id, target: source.id });
+        window.dispatchEvent(new Event('devDataChanged'));
+        return true;
+    }
+    return false;
+}
+
+// ── ELIMINAR NODOS ────────────────────────────────────────────
+export function eliminarNodosDev(nodosSet) {
+    nodosSet.forEach(n => {
+        // Eliminar enlaces conectados
+        const eliminadosConectados = [];
+        mapaDevState.enlacesDB = mapaDevState.enlacesDB.filter(e => {
+            if (e.source === n || e.target === n) {
+                eliminadosConectados.push({ source: e.source.id, target: e.target.id });
+                return false;
+            }
+            return true;
+        });
+        mapaDevState.colaEliminados.enlaces.push(...eliminadosConectados);
+
+        // Eliminar nodo
+        mapaDevState.nodosDB = mapaDevState.nodosDB.filter(x => x !== n);
+        mapaDevState.colaEliminados.nodos.add(n.id);
+
+        // Si era un nodo nuevo, sacarlo también de colaNuevosNodos
+        mapaDevState.colaNuevosNodos = mapaDevState.colaNuevosNodos.filter(id => id !== n.id);
+
+        mapaDevState.logSesion.push({ msg: `Nodo Eliminado | ${n.id}` });
+    });
 
     window.dispatchEvent(new Event('devDataChanged'));
 }
 
-// ── MODIFICAR COLOR DE AFINIDAD ───────────────────────────────
+// ── ACTUALIZAR DATO DE NODO ───────────────────────────────────
+export function actualizarDatoNodoDev(hechizoId, campo, valor) {
+    const nodo = mapaDevState.nodosDB.find(n => n.id === hechizoId);
+    if (!nodo) return;
+
+    nodo[campo] = valor;
+    if (campo === 'nombreOriginal' || campo === 'hex') {
+        nodo.nombre = `${nodo.nombreOriginal} (${nodo.hex})`;
+    }
+    if (campo === 'esConocido') {
+        nodo.radio = valor ? 35 : 28;
+    }
+
+    if (!mapaDevState.colaMetadatos[hechizoId]) mapaDevState.colaMetadatos[hechizoId] = {};
+    mapaDevState.colaMetadatos[hechizoId][campo] = valor;
+
+    window.dispatchEvent(new Event('devDataChanged'));
+}
+
+// ── COLOR DE AFINIDAD ─────────────────────────────────────────
 export function editarColorAfinidad(afinidad, hexColor) {
-    // Calcular color de borde oscurecido (igual que en mapa-edicion.js)
-    const c = hexColor.substring(1);
+    const c   = hexColor.substring(1);
     const rgb = parseInt(c, 16);
-    const r = Math.max(0, (rgb >> 16) - 50);
-    const g = Math.max(0, ((rgb >> 8) & 0x00FF) - 50);
-    const b = Math.max(0, (rgb & 0x0000FF) - 50);
+    const r   = Math.max(0, (rgb >> 16) - 50);
+    const g   = Math.max(0, ((rgb >> 8) & 0x00FF) - 50);
+    const b   = Math.max(0, (rgb & 0x0000FF) - 50);
     const borderHex = `#${(r << 16 | g << 8 | b).toString(16).padStart(6, '0')}`;
 
     mapaDevState.colaColores[afinidad] = { t: hexColor, b: borderHex };
-
-    // Propagar a window.mapaColores si está disponible
-    if (window.mapaColores) {
-        window.mapaColores[afinidad] = { t: hexColor, b: borderHex };
-    }
+    if (window.mapaColores) window.mapaColores[afinidad] = { t: hexColor, b: borderHex };
 
     mapaDevState.logSesion.push({ msg: `Color ${afinidad} → ${hexColor}` });
     window.dispatchEvent(new Event('devDataChanged'));
@@ -134,25 +217,10 @@ export function editarColorAfinidad(afinidad, hexColor) {
 }
 
 // ── FILTROS Y VISTA ───────────────────────────────────────────
-export function setVistaMapaDev(vista) {
-    mapaDevState.vistaActiva = vista;
-    window.dispatchEvent(new Event('devUIUpdate'));
-}
-
-export function setBusquedaMapa(texto) {
-    mapaDevState.busqueda = texto.toLowerCase();
-    window.dispatchEvent(new Event('devUIUpdate'));
-}
-
-export function setFiltroAfinidad(af) {
-    mapaDevState.filtroAfinidad = af;
-    window.dispatchEvent(new Event('devUIUpdate'));
-}
-
-export function setFiltroVisibilidad(v) {
-    mapaDevState.filtroVisibilidad = v;
-    window.dispatchEvent(new Event('devUIUpdate'));
-}
+export function setVistaMapaDev(vista)      { mapaDevState.vistaActiva = vista; window.dispatchEvent(new Event('devUIUpdate')); }
+export function setBusquedaMapa(texto)      { mapaDevState.busqueda = texto.toLowerCase(); window.dispatchEvent(new Event('devUIUpdate')); }
+export function setFiltroAfinidad(af)       { mapaDevState.filtroAfinidad = af; window.dispatchEvent(new Event('devUIUpdate')); }
+export function setFiltroVisibilidad(v)     { mapaDevState.filtroVisibilidad = v; window.dispatchEvent(new Event('devUIUpdate')); }
 
 // ── HELPERS DE CONSULTA ───────────────────────────────────────
 export function getNodosFiltrados() {
@@ -164,14 +232,11 @@ export function getNodosFiltrados() {
             if (!busqueda) return true;
             return (
                 (n.nombreOriginal || '').toLowerCase().includes(busqueda) ||
-                (n.id || '').toLowerCase().includes(busqueda) ||
+                (n.id  || '').toLowerCase().includes(busqueda) ||
                 (n.afinidad || '').toLowerCase().includes(busqueda)
             );
         })
-        .filter(n => {
-            if (!filtroAfinidad) return true;
-            return (n.afinidad || '').toLowerCase() === filtroAfinidad.toLowerCase();
-        })
+        .filter(n => !filtroAfinidad || (n.afinidad || '').toLowerCase() === filtroAfinidad.toLowerCase())
         .filter(n => {
             const vis = colaVisibilidad[n.id] !== undefined ? colaVisibilidad[n.id] : n.esConocido;
             if (filtroVisibilidad === 'conocidos') return vis;
@@ -179,10 +244,8 @@ export function getNodosFiltrados() {
             return true;
         })
         .sort((a, b) => {
-            // Ordenar por afinidad, luego por nombre
             const afCmp = (a.afinidad || '').localeCompare(b.afinidad || '');
-            if (afCmp !== 0) return afCmp;
-            return (a.nombreOriginal || a.id).localeCompare(b.nombreOriginal || b.id);
+            return afCmp !== 0 ? afCmp : (a.nombreOriginal || a.id).localeCompare(b.nombreOriginal || b.id);
         });
 }
 
