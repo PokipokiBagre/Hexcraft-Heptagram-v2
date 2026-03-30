@@ -329,6 +329,7 @@ function _generarBotonesPersonajes(fuentePj) {
 }
 
 // ── HTML DEL CANVAS ───────────────────────────────────────────
+// ── HTML DEL CANVAS ───────────────────────────────────────────
 function _htmlVistaCanvas() {
     const nodos     = mapaDevState.nodosDB;
     const total     = nodos.length;
@@ -385,15 +386,15 @@ function _htmlVistaCanvas() {
         </button>
     </div>
 
-    <div style="display:flex;gap:8px;align-items:flex-start;">
-        <div style="position:relative;flex:1;height:600px;background:#05000a;border:1px solid #2a1060;border-radius:8px;overflow:hidden;min-width:0;">
+    <div style="display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;">
+        <div style="position:relative;flex:1 1 300px;height:600px;background:#05000a;border:1px solid #2a1060;border-radius:8px;overflow:hidden;min-width:100px;">
             <canvas id="mini-mapa-canvas" style="display:block;width:100%;height:100%;cursor:grab;"></canvas>
             <div style="position:absolute;top:8px;right:8px;color:#2a2a2a;font-size:0.62em;text-align:right;pointer-events:none;line-height:1.7;">
                 Scroll: zoom<br>Drag: mover<br>SHIFT+drag fondo: caja
             </div>
         </div>
         <div id="mm-props-panel"
-            style="width:255px;flex-shrink:0;background:rgba(8,0,18,0.95);border:1px solid #4a1880;border-radius:8px;overflow-y:auto;max-height:600px;font-size:0.82em;">
+            style="flex:1 1 255px;width:100%;max-width:100%;background:rgba(8,0,18,0.95);border:1px solid #4a1880;border-radius:8px;overflow-y:auto;max-height:600px;font-size:0.82em;">
             <div style="padding:20px;text-align:center;color:#3a3a4a;line-height:1.8;">
                 <div style="font-size:1.3em;margin-bottom:6px;">🗺️</div>
                 <p style="margin:0 0 6px 0;">Haz clic en un nodo para editar sus propiedades.</p>
@@ -965,7 +966,9 @@ function _dibujarFrame() {
         const rCore = Math.max(1, r - 7);
 
         ctx.globalAlpha = alpha;
-        ctx.shadowBlur  = (isHovered || isSel) ? 22 / sf : (esConocido ? 4 / sf : 0);
+        
+        // ⚡ FIX RENDIMIENTO APLICADO AQUÍ: Apagamos el blur base de los nodos en reposo
+        ctx.shadowBlur  = (isHovered || isSel) ? 22 / sf : 0;
         ctx.shadowColor = colorBorde;
 
         ctx.beginPath(); ctx.arc(nodo.x, nodo.y, r, 0, Math.PI * 2);
@@ -1004,7 +1007,8 @@ function _dibujarFrame() {
             ctx.globalAlpha = 1.0;
         }
 
-        if (miniMapa.camara.zoom > 0.05 || isHovered || isSel) {
+        // ⚡ FIX RENDIMIENTO APLICADO AQUÍ: Umbral subido a 0.15 para evitar renderizado masivo de texto
+        if (miniMapa.camara.zoom > 0.15 || isHovered || isSel) {
             const fs = Math.round((esConocido ? 26 : 20) + (isHovered ? 4 : 0));
             ctx.textAlign    = 'center';
             ctx.textBaseline = 'top';
@@ -1042,8 +1046,7 @@ function _dibujarFrame() {
                 ctx.font        = `${fs2}px sans-serif`;
                 const ty2b = ty1 + gap;
                 
-                // 🌟 CORRECCIÓN DEL GRIS DEL TACHADO (Canvas)
-                const fillColor2 = 'rgba(160,150,140,0.8)'; // Más blanco/brillante
+                const fillColor2 = 'rgba(160,150,140,0.8)';
                 ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.strokeText(texto2, nodo.x, ty2b);
                 ctx.fillStyle   = fillColor2;         ctx.fillText(texto2, nodo.x, ty2b);
 
@@ -1053,13 +1056,48 @@ function _dibujarFrame() {
                 ctx.moveTo(nodo.x - medida.width / 2, midY);
                 ctx.lineTo(nodo.x + medida.width / 2, midY);
                 
-                // 🌟 Línea de tachado más visible
                 ctx.strokeStyle = 'rgba(180,160,140,0.9)'; 
                 ctx.lineWidth   = 1.5 / sf;
                 ctx.stroke();
             }
         }
     });
+
+    if (mapaDevState.tempLink) {
+        const { source, endX, endY } = mapaDevState.tempLink;
+        const isDelete = mapaDevState.herramienta === 'eliminar-enlace';
+        ctx.beginPath();
+        ctx.moveTo(source.x, source.y); ctx.lineTo(endX, endY);
+        ctx.strokeStyle = isDelete ? 'rgba(255,68,68,0.75)' : 'rgba(0,255,255,0.75)';
+        ctx.lineWidth   = 2.5 / sf;
+        ctx.setLineDash([8 / sf, 4 / sf]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        const angle = Math.atan2(endY - source.y, endX - source.x);
+        const hl    = 12 / sf;
+        ctx.beginPath();
+        ctx.moveTo(endX, endY);
+        ctx.lineTo(endX - hl * Math.cos(angle - Math.PI / 7), endY - hl * Math.sin(angle - Math.PI / 7));
+        ctx.lineTo(endX - hl * Math.cos(angle + Math.PI / 7), endY - hl * Math.sin(angle + Math.PI / 7));
+        ctx.lineTo(endX, endY);
+        ctx.fillStyle = isDelete ? 'rgba(255,68,68,0.75)' : 'rgba(0,255,255,0.75)';
+        ctx.fill();
+    }
+
+    if (mapaDevState.boxStart && mapaDevState.boxCurrent) {
+        const bx = Math.min(mapaDevState.boxStart.x, mapaDevState.boxCurrent.x);
+        const by = Math.min(mapaDevState.boxStart.y, mapaDevState.boxCurrent.y);
+        const bw = Math.abs(mapaDevState.boxCurrent.x - mapaDevState.boxStart.x);
+        const bh = Math.abs(mapaDevState.boxCurrent.y - mapaDevState.boxStart.y);
+        ctx.fillStyle   = 'rgba(0,255,255,0.04)';
+        ctx.strokeStyle = 'rgba(0,255,255,0.5)';
+        ctx.lineWidth   = 1.5 / sf;
+        ctx.setLineDash([6 / sf, 3 / sf]);
+        ctx.fillRect(bx, by, bw, bh);
+        ctx.strokeRect(bx, by, bw, bh);
+        ctx.setLineDash([]);
+    }
+}
 
     if (mapaDevState.tempLink) {
         const { source, endX, endY } = mapaDevState.tempLink;
