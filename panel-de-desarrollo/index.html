@@ -7,6 +7,31 @@
     <link rel="icon" type="image/png" id="dynamic-favicon">
     <link rel="stylesheet" href="../stylepanel.css">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Rajdhani:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        /* ── Tabs de paneles inferiores ── */
+        .tab-inf-btn {
+            padding: 10px 22px;
+            border: 1px solid #333;
+            border-bottom: 2px solid #333;
+            border-radius: 8px 8px 0 0;
+            background: #111;
+            color: #666;
+            cursor: pointer;
+            font-family: 'Cinzel', serif;
+            font-weight: bold;
+            font-size: 0.82em;
+            transition: color 0.15s, background 0.15s;
+            position: relative;
+            bottom: -1px; /* overlaps panel border */
+        }
+        .tab-inf-btn:hover { color: #aaa; border-color: #555; }
+        .tab-inf-btn.activo {
+            background: #05050a;
+            color: #d4af37;
+            border-color: #4a1880;
+            border-bottom: 2px solid #05050a; /* funde con el panel */
+        }
+    </style>
 </head>
 <body>
     <div class="container-hex">
@@ -30,31 +55,27 @@
         </div>
 
         <div id="interfaz-master" class="oculto">
-            
+
+            <!-- ── Selector de personajes ── -->
             <div class="selector-section">
                 <div style="display:flex; gap:10px; margin-bottom: 10px;">
                     <button class="tab-rol active" id="tab-jugadores" onclick="window.cambiarFiltroRol('jugadores')" style="background:#004a00; color:white; border:2px solid #00e676; padding:10px 20px; border-radius:6px; cursor:pointer; font-family:'Cinzel'; font-weight:bold;">⚔️ JUGADORES</button>
                     <button class="tab-rol" id="tab-npcs" onclick="window.cambiarFiltroRol('npcs')" style="background:#111; color:#888; border:2px solid #444; padding:10px 20px; border-radius:6px; cursor:pointer; font-family:'Cinzel'; font-weight:bold; transition:0.2s;">🎭 NPCs</button>
                 </div>
-
                 <input type="text" id="dev-search" class="search-bar-dev" placeholder="🔍 Buscar personaje en esta lista..." oninput="window.filtrarPorNombre(this.value)">
-                
                 <div class="character-selector" id="dev-character-list"></div>
             </div>
 
             <!-- ── Columnas de personaje (visibles al seleccionar uno) ── -->
             <div id="dev-workspace" class="dev-container oculto">
-                
                 <div class="dev-column" id="col-stats">
                     <div class="dev-column-header">❤️ Estadísticas y Atributos</div>
                     <div id="content-stats" class="dev-column-content"></div>
                 </div>
-
                 <div class="dev-column" id="col-items">
                     <div class="dev-column-header">🎒 Inventario y Objetos</div>
                     <div id="content-items" class="dev-column-content"></div>
                 </div>
-
                 <div class="dev-column" id="col-spells">
                     <div class="dev-column-header">📖 Grimorio y Hechizos</div>
                     <div id="content-spells" class="dev-column-content"></div>
@@ -68,22 +89,78 @@
                 <button onclick="window.copiarLogGlobal()" style="margin-top:15px; background:linear-gradient(135deg, #004a4a 0%, #008080 100%); color:#fff; font-weight:bold; border:1px solid #00ffff; padding:12px 25px; border-radius:6px; cursor:pointer; font-family:'Cinzel'; font-size:1.1em; transition:0.2s;" onmouseover="this.style.filter='brightness(1.2)'" onmouseout="this.style.filter='brightness(1)'">📄 COPIAR AL PORTAPAPELES</button>
             </div>
 
-            <!-- ── Panel Mapa — siempre visible debajo del portapapeles ── -->
-            <div style="margin-top:20px; background:#05050a; padding:20px; border-radius:12px; border:1px solid #4a1880; box-shadow: inset 0 0 15px rgba(74,24,128,0.2);">
-                <h3 style="margin-top:0; color:#b060ff; font-family:'Cinzel'; text-transform:uppercase; display:flex; align-items:center; gap:10px;">
-                    🗺️ Editor de Mapa de Hechizos
-                    <span style="font-size:0.65em; font-weight:normal; color:#666; font-family:'Rajdhani';">Los cambios se guardan con el botón global 🔥</span>
-                </h3>
-                 <div id="content-mapa" class="dev-column-content" style="max-height: none; overflow-y: visible;">
+            <!-- ── Paneles inferiores con 3 tabs ── -->
+            <div style="margin-top:28px;">
+
+                <!-- Botones de pestaña -->
+                <div style="display:flex; gap:4px; border-bottom:2px solid #4a1880; padding-left:4px;">
+                    <button id="tab-inf-mapa"      class="tab-inf-btn activo"
+                        onclick="window.cambiarPanelInferior('mapa')">
+                        🗺️ Mapa
+                    </button>
+                    <button id="tab-inf-personaje" class="tab-inf-btn"
+                        onclick="window.cambiarPanelInferior('personaje')">
+                        👤 Editar / Crear Personaje
+                    </button>
+                    <button id="tab-inf-acciones"  class="tab-inf-btn"
+                        onclick="window.cambiarPanelInferior('acciones')">
+                        ⚡ Clonar / Acciones Especiales
+                    </button>
+                </div>
+
+                <!-- Panel: Mapa -->
+                <div id="panel-inf-mapa"
+                     style="background:#05050a; padding:20px; border-radius:0 12px 12px 12px;
+                            border:1px solid #4a1880; border-top:none;
+                            box-shadow: inset 0 0 15px rgba(74,24,128,0.2);">
+                    <div id="content-mapa" style="max-height:none; overflow-y:visible;"></div>
+                </div>
+
+                <!-- Panel: Personaje -->
+                <div id="panel-inf-personaje" class="oculto"
+                     style="background:#05050a; padding:20px; border-radius:0 12px 12px 12px;
+                            border:1px solid #4a1880; border-top:none;
+                            box-shadow: inset 0 0 15px rgba(74,24,128,0.2);">
+                    <div id="content-personaje" style="max-height:none; overflow-y:visible;"></div>
+                </div>
+
+                <!-- Panel: Acciones Especiales -->
+                <div id="panel-inf-acciones" class="oculto"
+                     style="background:#05050a; padding:20px; border-radius:0 12px 12px 12px;
+                            border:1px solid #4a1880; border-top:none;
+                            box-shadow: inset 0 0 15px rgba(74,24,128,0.2);">
+                    <div style="text-align:center; padding:60px 20px; color:#333;
+                                font-family:'Cinzel'; font-size:1.05em; line-height:2;">
+                        ⚡ Clonar / Acciones Especiales
+                        <br>
+                        <span style="font-size:0.65em; color:#222; font-family:'Rajdhani';">
+                            Próximamente...
+                        </span>
+                    </div>
+                </div>
+
             </div>
+            <!-- /paneles inferiores -->
 
         </div>
+        <!-- /interfaz-master -->
     </div>
 
-    <button id="btn-sync-global" class="oculto" onclick="window.ejecutarGuardadoGlobal()" style="position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: linear-gradient(135deg, #b8860b 0%, #d4af37 100%); color: #000; border: 2px solid #fff; border-radius: 30px; padding: 15px 30px; font-family: 'Cinzel', serif; font-size: 1.2em; font-weight: bold; cursor: pointer; box-shadow: 0 10px 20px rgba(0,0,0,0.8), 0 0 15px rgba(212,175,55,0.6); z-index: 1000; transition: transform 0.2s;">
+    <button id="btn-sync-global" class="oculto" onclick="window.ejecutarGuardadoGlobal()"
+        style="position:fixed; bottom:30px; left:50%; transform:translateX(-50%);
+               background:linear-gradient(135deg,#b8860b 0%,#d4af37 100%);
+               color:#000; border:2px solid #fff; border-radius:30px;
+               padding:15px 30px; font-family:'Cinzel',serif; font-size:1.2em;
+               font-weight:bold; cursor:pointer;
+               box-shadow:0 10px 20px rgba(0,0,0,0.8),0 0 15px rgba(212,175,55,0.6);
+               z-index:1000; transition:transform 0.2s;">
         🔥 GUARDAR TODO AL SERVIDOR 🔥
     </button>
 
     <script type="module" src="dev-main.js"></script>
+    <script>
+        // Inicializar estado visual de las tabs inferiores al cargar
+        // (la función cambiarPanelInferior se llama desde dev-main.js cuando la interfaz está lista)
+    </script>
 </body>
 </html>
