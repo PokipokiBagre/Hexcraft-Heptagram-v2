@@ -138,27 +138,53 @@ function uploadSeguro(ruta, file, tipoContenido) {
     return Promise.race([solicitud, tiempoLimite]).finally(() => clearTimeout(timerId));
 }
 
-export async function subirImagen(file, keyNorm, tipoIcono, onProgreso) {
-    const rutaPNG = `${tipoIcono}/${keyNorm}.png`;
-    const rutaJPG = `${tipoIcono}/${keyNorm}.jpg`;
+export async function subirImagen(file, keyNorm, tipoIcono, onProgreso, nombre) {
+    // 1. Preparamos las keys en las que se guardará la imagen.
+    // Siempre incluimos la key principal (que puede ser la del clon).
+    let keysToUpload = [keyNorm];
+
+    // Si es un personaje y tenemos su nombre, verificamos si su key propia es distinta
+    if (tipoIcono === 'imgpersonajes' && nombre) {
+        const keyPropia = norm(nombre) + 'icon';
+        if (keyPropia !== keyNorm && !keysToUpload.includes(keyPropia)) {
+            keysToUpload.push(keyPropia);
+        }
+    }
 
     if (onProgreso) onProgreso(30, 'Procesando formatos...');
     const { blobPNG, blobJPG } = await convertirAFormatos(file);
 
-    const filePNG = new File([blobPNG], `${keyNorm}.png`, { type: 'image/png' });
-    const fileJPG = new File([blobJPG], `${keyNorm}.jpg`, { type: 'image/jpeg' });
+    let urlPrincipal = '';
 
-    if (onProgreso) onProgreso(50, 'Subiendo versión PNG...');
-    const { error: errPNG } = await uploadSeguro(rutaPNG, filePNG, 'image/png');
-    if (errPNG) throw new Error(errPNG.message || 'Error en red PNG');
+    // 2. Iteramos sobre las keys (subirá 1 vez si es normal, 2 veces si es copia)
+    for (let i = 0; i < keysToUpload.length; i++) {
+        const currentKey = keysToUpload[i];
+        const rutaPNG = `${tipoIcono}/${currentKey}.png`;
+        const rutaJPG = `${tipoIcono}/${currentKey}.jpg`;
 
-    if (onProgreso) onProgreso(80, 'Subiendo versión JPG...');
-    const { error: errJPG } = await uploadSeguro(rutaJPG, fileJPG, 'image/jpeg');
-    if (errJPG) throw new Error(errJPG.message || 'Error en red JPG');
+        const filePNG = new File([blobPNG], `${currentKey}.png`, { type: 'image/png' });
+        const fileJPG = new File([blobJPG], `${currentKey}.jpg`, { type: 'image/jpeg' });
 
-    if (onProgreso) onProgreso(100, '¡Imagen subida exitosamente!');
+        // Ajustamos el porcentaje visual según la cantidad de subidas
+        const progresoBase = 30 + (i * 30); 
 
-    return `${STORAGE_URL}/${rutaPNG}?v=${Date.now()}`;
+        if (onProgreso) onProgreso(progresoBase + 10, `Subiendo PNG (${currentKey})...`);
+        const { error: errPNG } = await uploadSeguro(rutaPNG, filePNG, 'image/png');
+        if (errPNG) throw new Error(errPNG.message || `Error en red PNG (${currentKey})`);
+
+        if (onProgreso) onProgreso(progresoBase + 20, `Subiendo JPG (${currentKey})...`);
+        const { error: errJPG } = await uploadSeguro(rutaJPG, fileJPG, 'image/jpeg');
+        if (errJPG) throw new Error(errJPG.message || `Error en red JPG (${currentKey})`);
+
+        // Guardamos la URL de la key principal para devolvérsela a la interfaz
+        if (currentKey === keyNorm) {
+            urlPrincipal = `${STORAGE_URL}/${rutaPNG}?v=${Date.now()}`;
+        }
+    }
+
+    if (onProgreso) onProgreso(100, keysToUpload.length > 1 ? '¡Imágenes subidas exitosamente!' : '¡Imagen subida exitosamente!');
+
+    return urlPrincipal;
 }
 
 function convertirAFormatos(file) {
