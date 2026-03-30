@@ -555,18 +555,6 @@ export async function ejecutarGuardadoGlobal() {
         }
  
         // 5. 🗑️ ENLACES ELIMINADOS (los no cubiertos por la eliminación de nodos)
-  for (const nodeId of mapaDevState.colaEliminados.nodos) {
-            // Eliminar todos los enlaces que referencian este nodo
-            await supabase.from('hechizos_strings')
-                .delete()
-                .or(`source_id.eq.${nodeId},target_id.eq.${nodeId}`);
-            // Eliminar el nodo
-            await supabase.from('hechizos_nodos')
-                .delete()
-                .eq('hechizo_id', nodeId);
-        }
- 
-        // 5. 🗑️ ENLACES ELIMINADOS (los no cubiertos por la eliminación de nodos)
         for (const enlace of mapaDevState.colaEliminados.enlaces) {
             // Evitar duplicar deletes si el nodo ya fue borrado arriba
             if (mapaDevState.colaEliminados.nodos.has(enlace.source) ||
