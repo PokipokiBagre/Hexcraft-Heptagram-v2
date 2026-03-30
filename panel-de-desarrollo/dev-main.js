@@ -14,12 +14,14 @@ import { initHechizosDev } from './hechizos/panel-hechizos-logic.js';
 import { renderColumnaHechizos } from './hechizos/panel-hechizos-ui.js';
 import { initMapaDev } from './mapa/panel-mapa-logic.js';
 import { renderColumnaMapa } from './mapa/panel-mapa-ui.js';
+import { renderColumnaPersonaje } from './personajes/panel-personaje-ui.js';
 
 window.cambiarFiltroRol = cambiarFiltroRol;
 window.filtrarPorNombre = filtrarPorNombre;
 window.seleccionarPersonajeDev = seleccionarPersonajeDev;
 window.copiarLogGlobal = copiarLogGlobal;
 window.ejecutarGuardadoGlobal = ejecutarGuardadoGlobal;
+window.cambiarPanelInferior = cambiarPanelInferior;
 
 window.onload = async () => {
     const favicon = document.getElementById("dynamic-favicon");
@@ -168,7 +170,7 @@ window.onload = async () => {
 
         initMapaDev(nodosParaMapa, enlacesParaMapa, coloresParaMapa);
 
-        // Renderizado inicial del panel mapa (no depende de pjSeleccionado)
+        // Renderizado inicial del panel mapa (pestaña activa por defecto)
         renderColumnaMapa();
 
         document.getElementById('pantalla-carga').classList.add('oculto');
@@ -191,9 +193,13 @@ window.onload = async () => {
             actualizarLogGlobal();
         });
 
-        // 🌟 NUEVO EVENTO: Exclusivo para refrescar el mapa al instante
         window.addEventListener('devMapaUpdate', () => {
             renderColumnaMapa();
+        });
+
+        // Refresca el selector de personajes cuando se crea/renombra uno
+        window.addEventListener('devPersonajesUpdate', () => {
+            renderSelectorPersonajes();
         });
 
     } catch (error) {
@@ -268,6 +274,31 @@ function seleccionarPersonajeDev(nombre) {
     renderColumnaStats(devState.pjSeleccionado);
     renderColumnaHechizos(devState.pjSeleccionado); 
     // El mapa ya está visible desde el inicio, no necesita re-render aquí
+}
+
+// ── Navegación de paneles inferiores ─────────────────────────
+function cambiarPanelInferior(panel) {
+    const paneles = ['mapa', 'personaje', 'acciones'];
+    paneles.forEach(p => {
+        document.getElementById(`panel-inf-${p}`)?.classList.add('oculto');
+        const tab = document.getElementById(`tab-inf-${p}`);
+        if (tab) {
+            tab.style.background   = '#111';
+            tab.style.color        = '#666';
+            tab.style.borderBottom = '2px solid #333';
+        }
+    });
+
+    document.getElementById(`panel-inf-${panel}`)?.classList.remove('oculto');
+    const tabActivo = document.getElementById(`tab-inf-${panel}`);
+    if (tabActivo) {
+        tabActivo.style.background   = '#05050a';
+        tabActivo.style.color        = '#d4af37';
+        tabActivo.style.borderBottom = '2px solid #05050a'; // "funde" con el panel
+    }
+
+    if (panel === 'mapa')      renderColumnaMapa();
+    if (panel === 'personaje') renderColumnaPersonaje();
 }
 
 function copiarLogGlobal() {
