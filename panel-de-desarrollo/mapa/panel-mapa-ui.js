@@ -19,7 +19,7 @@ import {
     crearEnlaceDev,
     eliminarEnlaceDev,
     eliminarNodosDev,
-    actualizarDatoNodoDev,
+    actualizarDatoNodoDev
 } from './panel-mapa-logic.js';
 
 import { hzState } from '../hechizos/panel-hechizos-state.js';
@@ -131,12 +131,19 @@ window.devMapa = {
     // ── Asignación de personaje ───────────────────────────────
     setFiltroRolAsign: (rol) => {
         asignState.filtroRol = rol;
+        asignState.pjSeleccionado = null; // Limpiar selección al cambiar de bando
+        _calcularVistaPj(null);
         _renderPanelAsignacion();
     },
 
     seleccionarPjAsign: (nombre) => {
-        asignState.pjSeleccionado = nombre;
-        _calcularVistaPj(nombre);
+        // Si hace clic en el mismo que ya está, lo deselecciona (o si recibe null del botón Ninguno)
+        if (nombre === null || asignState.pjSeleccionado === nombre) {
+            asignState.pjSeleccionado = null;
+        } else {
+            asignState.pjSeleccionado = nombre;
+        }
+        _calcularVistaPj(asignState.pjSeleccionado);
         _renderPanelAsignacion();
     },
 
@@ -236,8 +243,6 @@ export function renderColumnaMapa() {
     const esCanvas = !vistaActiva || vistaActiva === 'canvas' || vistaActiva === 'nodos';
 
     // ── OPTIMIZACIÓN: si el canvas ya está montado y activo, NO reconstruir el DOM ──
-    // Solo actualizamos los sub-paneles que pueden cambiar (pendientes, propiedades, asignación).
-    // Esto evita que el buscador pierda el foco y que la cámara se reinicie.
     const canvasExistente = document.getElementById('mini-mapa-canvas');
     if (esCanvas && canvasExistente && canvasExistente.isConnected) {
         _marcarGuardarSilencioso(pendientes);
@@ -277,6 +282,33 @@ function _marcarGuardarSilencioso(pendientes) {
     }
 }
 
+// Función auxiliar para pintar los botones de personajes
+function _generarBotonesPersonajes(fuentePj) {
+    const isNinguno = !asignState.pjSeleccionado;
+    let html = `
+    <button onclick="window.devMapa.seleccionarPjAsign(null)"
+        style="padding:5px 11px;border-radius:20px;cursor:pointer;font-family:'Rajdhani';font-size:0.82em;font-weight:bold;transition:0.2s;
+        ${isNinguno ? 'background:#4a4a4a;color:#fff;border:1px solid #fff;' : 'background:#0a0018;color:#888;border:1px solid #333;'}">
+        🚫 Ninguno
+    </button>`;
+
+    html += fuentePj.map(p => {
+        const activo = asignState.pjSeleccionado === p.nombre;
+        return `<button onclick="window.devMapa.seleccionarPjAsign('${p.nombre.replace(/'/g,"\\'")}')"
+            style="padding:5px 11px;border-radius:20px;cursor:pointer;font-family:'Rajdhani';font-size:0.82em;font-weight:bold;transition:0.2s;
+            ${activo
+                ? 'background:#4a1880;color:#fff;border:1px solid #b060ff;'
+                : 'background:#0a0018;color:#888;border:1px solid #333;'}">
+            ${_esc(p.nombre)}
+        </button>`;
+    }).join('');
+
+    if (fuentePj.length === 0) {
+        html += `<span style="color:#555;font-style:italic;font-size:0.8em;align-self:center;">Sin personajes activos en esta categoría.</span>`;
+    }
+    return html;
+}
+
 // ── HTML DEL CANVAS ───────────────────────────────────────────
 function _htmlVistaCanvas() {
     const nodos     = mapaDevState.nodosDB;
@@ -294,7 +326,6 @@ function _htmlVistaCanvas() {
     const fuentePj  = asignState.filtroRol === 'jugadores' ? jugadores : npcs;
 
     return `
-    <!-- Estadísticas rápidas + buscador -->
     <div style="display:flex;gap:8px;margin-bottom:8px;font-size:0.78em;align-items:center;">
         <div style="flex:0 0 auto;background:#0a0020;border:1px solid #333;border-radius:6px;padding:6px 10px;">
             <span style="color:#b060ff;font-weight:bold;">${total}</span> <span style="color:#555;">Total</span>
@@ -305,7 +336,6 @@ function _htmlVistaCanvas() {
         <div style="flex:0 0 auto;background:#0a0020;border:1px solid #d4af37;border-radius:6px;padding:6px 10px;">
             <span style="color:#d4af37;font-weight:bold;">${total - conocidos}</span> <span style="color:#555;">Sellados</span>
         </div>
-        <!-- Buscador del canvas -->
         <div style="flex:1;position:relative;">
             <input id="mm-buscador" type="text" placeholder="🔍 Buscar por ID o nombre..."
                 oninput="window.devMapa.setBusquedaCanvas(this.value)"
@@ -315,7 +345,6 @@ function _htmlVistaCanvas() {
             style="background:#111;color:#aaa;border:1px solid #444;border-radius:6px;padding:6px 10px;cursor:pointer;font-size:1em;" title="Centrar vista">⌖</button>
     </div>
 
-    <!-- Barra de herramientas -->
     <div style="display:flex;gap:6px;margin-bottom:8px;background:rgba(8,0,18,0.85);padding:8px;border-radius:8px;border:1px solid #2a1060;">
         <button id="mm-tool-cursor" onclick="window.devMapa.setHerramienta('cursor')"
             title="Seleccionar y mover nodos"
@@ -338,16 +367,13 @@ function _htmlVistaCanvas() {
         </button>
     </div>
 
-    <!-- Canvas + Panel de propiedades -->
     <div style="display:flex;gap:8px;align-items:flex-start;">
-        <!-- Canvas -->
         <div style="position:relative;flex:1;height:600px;background:#05000a;border:1px solid #2a1060;border-radius:8px;overflow:hidden;min-width:0;">
             <canvas id="mini-mapa-canvas" style="display:block;width:100%;height:100%;cursor:grab;"></canvas>
             <div style="position:absolute;top:8px;right:8px;color:#2a2a2a;font-size:0.62em;text-align:right;pointer-events:none;line-height:1.7;">
                 Scroll: zoom<br>Drag: mover<br>SHIFT+drag fondo: caja
             </div>
         </div>
-        <!-- Panel de propiedades (arriba) -->
         <div id="mm-props-panel"
             style="width:255px;flex-shrink:0;background:rgba(8,0,18,0.95);border:1px solid #4a1880;border-radius:8px;overflow-y:auto;max-height:600px;font-size:0.82em;">
             <div style="padding:20px;text-align:center;color:#3a3a4a;line-height:1.8;">
@@ -358,7 +384,6 @@ function _htmlVistaCanvas() {
         </div>
     </div>
 
-    <!-- ══ PANEL DE ASIGNACIÓN DE PERSONAJE (debajo del canvas) ══ -->
     <div id="mm-asign-panel" style="margin-top:14px;background:rgba(5,0,15,0.9);border:1px solid #3a1060;border-radius:10px;padding:14px;">
         <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
             <span style="color:#b060ff;font-family:'Cinzel';font-weight:bold;font-size:0.85em;">👤 ASIGNAR HECHIZOS A PERSONAJE</span>
@@ -378,22 +403,10 @@ function _htmlVistaCanvas() {
             </div>
         </div>
 
-        <!-- Lista de personajes -->
-        <div style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;">
-            ${fuentePj.map(p => {
-                const activo = asignState.pjSeleccionado === p.nombre;
-                return `<button onclick="window.devMapa.seleccionarPjAsign('${p.nombre.replace(/'/g,"\\'")}')\"
-                    style="padding:5px 11px;border-radius:20px;cursor:pointer;font-family:'Rajdhani';font-size:0.82em;font-weight:bold;transition:0.2s;
-                    ${activo
-                        ? 'background:#4a1880;color:#fff;border:1px solid #b060ff;'
-                        : 'background:#0a0018;color:#888;border:1px solid #333;'}">
-                    ${_esc(p.nombre)}
-                </button>`;
-            }).join('')}
-            ${fuentePj.length === 0 ? `<span style="color:#555;font-style:italic;font-size:0.8em;">Sin personajes activos en esta categoría.</span>` : ''}
+        <div class="mm-pj-lista" style="display:flex;flex-wrap:wrap;gap:7px;margin-bottom:12px;">
+            ${_generarBotonesPersonajes(fuentePj)}
         </div>
 
-        <!-- Panel de asignación del personaje seleccionado -->
         <div id="mm-asign-nodo-panel">
             ${asignState.pjSeleccionado
                 ? _htmlAsignNodo()
@@ -427,19 +440,10 @@ function _renderPanelAsignacion() {
         tabNpc.style.borderColor   = asignState.filtroRol === 'npcs' ? '#ff4444' : '#444';
     }
 
-    // Reconstruir lista de personajes
+    // Reconstruir lista de personajes usando el helper y la clase mm-pj-lista
     const listContainer = panel.querySelector('.mm-pj-lista');
     if (listContainer) {
-        listContainer.innerHTML = fuentePj.map(p => {
-            const activo = asignState.pjSeleccionado === p.nombre;
-            return `<button onclick="window.devMapa.seleccionarPjAsign('${p.nombre.replace(/'/g,"\\'")}')\"
-                style="padding:5px 11px;border-radius:20px;cursor:pointer;font-family:'Rajdhani';font-size:0.82em;font-weight:bold;transition:0.2s;
-                ${activo
-                    ? 'background:#4a1880;color:#fff;border:1px solid #b060ff;'
-                    : 'background:#0a0018;color:#888;border:1px solid #333;'}">
-                ${_esc(p.nombre)}
-            </button>`;
-        }).join('') || `<span style="color:#555;font-style:italic;font-size:0.8em;">Sin personajes activos.</span>`;
+        listContainer.innerHTML = _generarBotonesPersonajes(fuentePj);
     }
 
     const nodoPanel = document.getElementById('mm-asign-nodo-panel');
@@ -500,7 +504,6 @@ function _htmlAsignNodo() {
 
     return `
     <div style="background:rgba(10,0,25,0.8);border:1px solid #3a1060;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:10px;">
-        <!-- Info del nodo -->
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <div style="flex:1;min-width:0;">
                 <div style="font-size:0.85em;margin-bottom:4px;">${textoNombre}</div>
@@ -510,7 +513,6 @@ function _htmlAsignNodo() {
             ${cambioEnCola ? `<span style="color:#ffaa00;font-size:0.72em;">● cola</span>` : ''}
         </div>
 
-        <!-- Botones de asignación -->
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
             ${!tiene ? `
             <button onclick="window.devMapa.asignarDesdeNodo('${safeId}', false)"
@@ -881,16 +883,13 @@ function _dibujarFrame() {
             } else if (esRastreo) {
                 colorCore  = 'rgba(130,110,60,0.5)';
                 colorBorde = 'rgba(160,140,80,0.55)';
-                // Ocultos en rastreo: ligeramente más visibles (opacidad aumentada)
                 alpha      = esConocido ? 0.65 : 0.45;
             } else {
                 colorCore  = 'rgba(50,50,55,0.3)';
                 colorBorde = 'rgba(80,80,85,0.3)';
-                // Ocultos irrelevantes: levemente más visibles que antes para que se vean en asignación
                 alpha      = esConocido ? 0.35 : 0.25;
             }
         } else {
-            // Sin personaje seleccionado: lila = descubierto, dorado = oculto
             colorCore  = esConocido ? COLOR_DESCUBIERTO : COLOR_OCULTO;
             colorBorde = esConocido ? COLOR_BORDE_DESC  : COLOR_BORDE_OCU;
             alpha      = esConocido ? 1.0 : 0.55;
@@ -962,7 +961,6 @@ function _dibujarFrame() {
             }
 
             if (esConocido) {
-                // Nodo descubierto → una sola línea: "Nombre (HEX)"
                 const texto = `${nodo.nombreOriginal} (${nodo.hex})`;
                 ctx.font        = `bold ${fs}px sans-serif`;
                 const ty2 = nodo.y + r + 8 / sf;
@@ -970,13 +968,10 @@ function _dibujarFrame() {
                 ctx.strokeStyle = 'rgba(0,0,0,0.95)'; ctx.strokeText(texto, nodo.x, ty2);
                 ctx.fillStyle   = fillColor;           ctx.fillText(texto, nodo.x, ty2);
             } else {
-                // Nodo sellado → dos líneas:
-                //   Línea 1: "Hechizo N (HEX)"  (color dorado/tenue)
-                //   Línea 2: "Nombre real (HEX)" con tachado manual
                 const texto1 = `Hechizo ${_extractNum(nodo.id)} (${nodo.hex})`;
                 const texto2 = `${nodo.nombreOriginal} (${nodo.hex})`;
-                const fs2    = Math.round(fs * 0.78);   // segunda línea más pequeña
-                const gap    = (fs + 4) / sf;           // separación entre líneas
+                const fs2    = Math.round(fs * 0.78);
+                const gap    = (fs + 4) / sf;
 
                 ctx.font     = `bold ${fs}px sans-serif`;
                 const ty1 = nodo.y + r + 8 / sf;
@@ -990,7 +985,6 @@ function _dibujarFrame() {
                 ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.strokeText(texto2, nodo.x, ty2b);
                 ctx.fillStyle   = fillColor2;         ctx.fillText(texto2, nodo.x, ty2b);
 
-                // Línea tachada manual encima del texto2
                 const medida = ctx.measureText(texto2);
                 const midY   = ty2b + fs2 / 2;
                 ctx.beginPath();
@@ -1269,11 +1263,9 @@ function _htmlVistaLista() {
         nodos.forEach(nodo => {
             const esConocido = getVisibilidadActual(nodo.id);
             const cambio     = mapaDevState.colaVisibilidad[nodo.id] !== undefined;
-            // Color fijo: lila si conocido, dorado si oculto
             const colorBorde = esConocido ? '#b896ff' : '#d4af37';
             const safeId     = nodo.id.replace(/'/g, "\\'");
 
-            // Texto con nombre tachado si oculto
             const textoMostrado = esConocido
                 ? `<span style="color:#ddd;font-weight:bold;">${_esc(nodo.nombreOriginal || nodo.id)}</span>`
                 : `<span style="color:#888;">Hechizo ${_extractNum(nodo.id)}</span> <span style="color:#555;text-decoration:line-through;font-size:0.82em;margin-left:4px;">${_esc(nodo.nombreOriginal || nodo.id)}</span>`;
