@@ -4,8 +4,20 @@ import { dibujarCatalogo, renderHeaders, dibujarGrimorioGrid, dibujarGestionGrid
 import { getInventarioCombinado } from './inventario-logic.js';
 import { db as hexDB } from '../hex-db.js';
 import { hexAuth } from '../hex-auth.js'; 
+import { abrirModalClonar } from './inventario-clonar.js';
+
+window.abrirModalClonar = abrirModalClonar;
 
 estadoUI.colaCambios.hexCasts = estadoUI.colaCambios.hexCasts || [];
+
+// Listener para el modal de clonado de hechizos
+window.addEventListener('inventario-changed', () => {
+    const pj = estadoUI.personajeSeleccionado;
+    if (pj) recalcularEstadisticasPersonaje(pj);
+    if (estadoUI.vistaActual === 'gestion')  { renderHeaders(); dibujarGestionGrid(); actualizarTextoLogOP(); }
+    if (estadoUI.vistaActual === 'grimorio') { renderHeaders(); dibujarGrimorioGrid(); }
+    actualizarBotonSync();
+});
 
 const textNorm = (str) => str ? str.toString().trim().toLowerCase() : '';
 
