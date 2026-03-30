@@ -291,7 +291,7 @@ export function renderColumnaMapa() {
 
     contenedor.innerHTML = html;
 
-    if (esCanvas) requestAnimationFrame(() => _montarCanvas());
+    requestAnimationFrame(() => _montarCanvas());
 }
 
 function _marcarGuardarSilencioso(pendientes) {
