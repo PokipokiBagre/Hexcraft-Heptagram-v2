@@ -25,7 +25,6 @@ export async function crearPersonaje(nombre, esJugador, npcTipo) {
         is_player: esJugador,
         is_active: true,
         npc_tipo:  esJugador ? null : npcTipo,
-        // todos los stats quedan en 0 por los defaults de la DB
     };
 
     const { data, error } = await supabase
@@ -36,11 +35,9 @@ export async function crearPersonaje(nombre, esJugador, npcTipo) {
 
     if (error) return { error: error.message };
 
-    // Actualizar lista local principal
     devState.listaPersonajes.push(data);
     window.__devListaPersonajes = devState.listaPersonajes;
 
-    // 🌟 INICIALIZAR ESTADOS EN MEMORIA PARA EL NUEVO PJ
     const nom = data.nombre;
     const normNom = norm(nom);
 
@@ -67,7 +64,7 @@ export async function editarNombrePersonaje(nombreActual, nuevoNombre) {
     if (!nuevoNombre || !nuevoNombre.trim()) return { error: 'El nombre no puede estar vacío.' };
 
     const nuevoTrimmed = nuevoNombre.trim();
-    if (nuevoTrimmed === nombreActual) return { ok: true }; // sin cambio
+    if (nuevoTrimmed === nombreActual) return { ok: true }; 
 
     const existe = devState.listaPersonajes.some(
         p => p.nombre.toLowerCase() === nuevoTrimmed.toLowerCase() && p.nombre !== nombreActual
@@ -81,61 +78,27 @@ export async function editarNombrePersonaje(nombreActual, nuevoNombre) {
 
     if (error) return { error: error.message };
 
-    // Actualizar lista local
     const pj = devState.listaPersonajes.find(p => p.nombre === nombreActual);
     if (pj) pj.nombre = nuevoTrimmed;
     window.__devListaPersonajes = devState.listaPersonajes;
 
-    // 🌟 MIGRAR ESTADOS EN MEMORIA AL NUEVO NOMBRE
     const oldNorm = norm(nombreActual);
     const newNorm = norm(nuevoTrimmed);
 
-    // Migrar Estadísticas
-    if (stState.statsDB[nombreActual]) {
-        stState.statsDB[nuevoTrimmed] = stState.statsDB[nombreActual];
-        delete stState.statsDB[nombreActual];
-    }
-    if (stState.colaStats[nombreActual]) {
-        stState.colaStats[nuevoTrimmed] = stState.colaStats[nombreActual];
-        delete stState.colaStats[nombreActual];
-    }
-    if (stState.colaNotas[nombreActual]) {
-        stState.colaNotas[nuevoTrimmed] = stState.colaNotas[nombreActual];
-        delete stState.colaNotas[nombreActual];
-    }
+    if (stState.statsDB[nombreActual]) { stState.statsDB[nuevoTrimmed] = stState.statsDB[nombreActual]; delete stState.statsDB[nombreActual]; }
+    if (stState.colaStats[nombreActual]) { stState.colaStats[nuevoTrimmed] = stState.colaStats[nombreActual]; delete stState.colaStats[nombreActual]; }
+    if (stState.colaNotas[nombreActual]) { stState.colaNotas[nuevoTrimmed] = stState.colaNotas[nombreActual]; delete stState.colaNotas[nombreActual]; }
 
-    // Migrar Objetos
-    if (objState.inventariosDB[oldNorm]) {
-        objState.inventariosDB[newNorm] = objState.inventariosDB[oldNorm];
-        delete objState.inventariosDB[oldNorm];
-    }
-    if (objState.equipadosDB[oldNorm]) {
-        objState.equipadosDB[newNorm] = objState.equipadosDB[oldNorm];
-        delete objState.equipadosDB[oldNorm];
-    }
-    if (objState.colaInventario[oldNorm]) {
-        objState.colaInventario[newNorm] = objState.colaInventario[oldNorm];
-        delete objState.colaInventario[oldNorm];
-    }
-    if (objState.colaEquipados[oldNorm]) {
-        objState.colaEquipados[newNorm] = objState.colaEquipados[oldNorm];
-        delete objState.colaEquipados[oldNorm];
-    }
+    if (objState.inventariosDB[oldNorm]) { objState.inventariosDB[newNorm] = objState.inventariosDB[oldNorm]; delete objState.inventariosDB[oldNorm]; }
+    if (objState.equipadosDB[oldNorm]) { objState.equipadosDB[newNorm] = objState.equipadosDB[oldNorm]; delete objState.equipadosDB[oldNorm]; }
+    if (objState.colaInventario[oldNorm]) { objState.colaInventario[newNorm] = objState.colaInventario[oldNorm]; delete objState.colaInventario[oldNorm]; }
+    if (objState.colaEquipados[oldNorm]) { objState.colaEquipados[newNorm] = objState.colaEquipados[oldNorm]; delete objState.colaEquipados[oldNorm]; }
 
-    // Migrar Hechizos
-    if (hzState.inventariosDB[oldNorm]) {
-        hzState.inventariosDB[newNorm] = hzState.inventariosDB[oldNorm];
-        delete hzState.inventariosDB[oldNorm];
-    }
-    if (hzState.colaAsignaciones[oldNorm]) {
-        hzState.colaAsignaciones[newNorm] = hzState.colaAsignaciones[oldNorm];
-        delete hzState.colaAsignaciones[oldNorm];
-    }
+    if (hzState.inventariosDB[oldNorm]) { hzState.inventariosDB[newNorm] = hzState.inventariosDB[oldNorm]; delete hzState.inventariosDB[oldNorm]; }
+    if (hzState.colaAsignaciones[oldNorm]) { hzState.colaAsignaciones[newNorm] = hzState.colaAsignaciones[oldNorm]; delete hzState.colaAsignaciones[oldNorm]; }
 
-    // Si el personaje renombrado es el que estamos viendo en la pantalla, actualizarlo
     if (devState.pjSeleccionado === nombreActual) {
         devState.pjSeleccionado = nuevoTrimmed;
-        // Forzar renderizado de los paneles de trabajo para que usen el nuevo nombre
         window.dispatchEvent(new Event('devUIUpdate'));
     }
 
@@ -144,37 +107,58 @@ export async function editarNombrePersonaje(nombreActual, nuevoNombre) {
 }
 
 // ── SUBIR IMAGEN DE PERSONAJE ─────────────────────────────────
-export async function subirImagenPersonaje(file, keyNorm, onProgreso) {
+export async function subirImagenPersonaje(file, keyNorm, onProgreso, nombre) {
     const tipoIcono = 'imgpersonajes';
-    const rutaPNG   = `${tipoIcono}/${keyNorm}.png`;
-    const rutaJPG   = `${tipoIcono}/${keyNorm}.jpg`;
+    
+    // 🌟 APLICADA LA DOBLE SUBIDA PARA CLONES
+    let keysToUpload = [keyNorm];
+    if (nombre) {
+        const keyPropia = norm(nombre) + 'icon';
+        if (keyPropia !== keyNorm && !keysToUpload.includes(keyPropia)) {
+            keysToUpload.push(keyPropia);
+        }
+    }
 
     if (onProgreso) onProgreso(20, 'Procesando imagen...');
     const { blobPNG, blobJPG } = await _convertirAFormatos(file);
 
-    const filePNG = new File([blobPNG], `${keyNorm}.png`, { type: 'image/png' });
-    const fileJPG = new File([blobJPG], `${keyNorm}.jpg`, { type: 'image/jpeg' });
+    let urlPrincipal = '';
 
-    if (onProgreso) onProgreso(50, 'Subiendo PNG...');
-    const subida = (ruta, f, tipo) => {
-        const p = supabase.storage.from(BUCKET)
-            .upload(ruta, f, { upsert: true, contentType: tipo, cacheControl: '3600' });
-        let timer;
-        const timeout = new Promise((_, reject) => {
-            timer = setTimeout(() => reject(new Error('Tiempo de espera agotado.')), 25000);
-        });
-        return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
-    };
+    for (let i = 0; i < keysToUpload.length; i++) {
+        const currentKey = keysToUpload[i];
+        const rutaPNG = `${tipoIcono}/${currentKey}.png`;
+        const rutaJPG = `${tipoIcono}/${currentKey}.jpg`;
 
-    const { error: errPNG } = await subida(rutaPNG, filePNG, 'image/png');
-    if (errPNG) throw new Error(errPNG.message || 'Error subiendo PNG');
+        const filePNG = new File([blobPNG], `${currentKey}.png`, { type: 'image/png' });
+        const fileJPG = new File([blobJPG], `${currentKey}.jpg`, { type: 'image/jpeg' });
 
-    if (onProgreso) onProgreso(80, 'Subiendo JPG...');
-    const { error: errJPG } = await subida(rutaJPG, fileJPG, 'image/jpeg');
-    if (errJPG) throw new Error(errJPG.message || 'Error subiendo JPG');
+        const progresoBase = 20 + (i * 35); 
 
-    if (onProgreso) onProgreso(100, '¡Imagen subida!');
-    return `${STORAGE_URL}/imgpersonajes/${keyNorm}.png?v=${Date.now()}`;
+        if (onProgreso) onProgreso(progresoBase + 10, `Subiendo PNG (${currentKey})...`);
+        const subida = (ruta, f, tipo) => {
+            const p = supabase.storage.from(BUCKET)
+                .upload(ruta, f, { upsert: true, contentType: tipo, cacheControl: '3600' });
+            let timer;
+            const timeout = new Promise((_, reject) => {
+                timer = setTimeout(() => reject(new Error('Tiempo de espera agotado.')), 25000);
+            });
+            return Promise.race([p, timeout]).finally(() => clearTimeout(timer));
+        };
+
+        const { error: errPNG } = await subida(rutaPNG, filePNG, 'image/png');
+        if (errPNG) throw new Error(errPNG.message || `Error subiendo PNG (${currentKey})`);
+
+        if (onProgreso) onProgreso(progresoBase + 25, `Subiendo JPG (${currentKey})...`);
+        const { error: errJPG } = await subida(rutaJPG, fileJPG, 'image/jpeg');
+        if (errJPG) throw new Error(errJPG.message || `Error subiendo JPG (${currentKey})`);
+
+        if (currentKey === keyNorm) {
+            urlPrincipal = `${STORAGE_URL}/${rutaPNG}?v=${Date.now()}`;
+        }
+    }
+
+    if (onProgreso) onProgreso(100, keysToUpload.length > 1 ? '¡Imágenes subidas!' : '¡Imagen subida!');
+    return urlPrincipal;
 }
 
 // ── Conversión interna ────────────────────────────────────────
