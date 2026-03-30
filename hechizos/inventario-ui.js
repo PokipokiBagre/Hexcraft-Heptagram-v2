@@ -114,6 +114,10 @@ export function renderHeaders() {
     const btnGestion = estadoUI.esAdmin
         ? `<button onclick="window.cambiarVista('gestion')" class="btn-nav" style="background:#4a004a; border-color:var(--purple-magic);">⚙️ Asignar/Quitar (OP)</button>`
         : (!char.isPlayer ? `<button onclick="window.abrirGestionNPC('${pj}')" class="btn-nav" style="background:#002244; border-color:#00aaff; color:#00ccff;">🎭 Asignar Hechizos</button>` : '');
+    // Botón Clonar — solo visible en modo OP
+    const btnClonar = estadoUI.esAdmin
+        ? `<button onclick="window.abrirModalClonar()" class="btn-nav" style="background:#1a0a00; border-color:#d4af37; color:#d4af37;" title="Importar hechizos de otro personaje">📋 Clonar Hechizos (OP)</button>`
+        : '';
 
     // VEX calculado desde afinidad oscura total (sin rawRow)
     const afOscura = char.afinidades?.oscura || 0;
@@ -170,6 +174,7 @@ export function renderHeaders() {
                 ${btnArbol}
                 ${btnCastear}
                 ${btnGestion}
+                ${btnClonar}
             </div>
         </div>`;
 
