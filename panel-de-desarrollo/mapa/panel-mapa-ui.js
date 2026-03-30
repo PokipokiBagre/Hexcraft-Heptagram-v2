@@ -50,19 +50,17 @@ const miniMapa = {
 
 // ── Estado del selector de personaje para asignación ─────────
 const asignState = {
-    pjSeleccionado: null,   // nombre del personaje activo en este panel
-    filtroRol: 'jugadores', // 'jugadores' | 'npcs'
-    // Sets calculados al seleccionar un personaje
-    posesiones: new Set(),  // nodos que tiene
-    aprendibles: new Set(), // nodos 1 paso adelante
-    rastreo:     new Set(), // nodos predecesores necesarios
+    pjSeleccionado: null,   
+    filtroRol: 'jugadores', 
+    posesiones: new Set(),  
+    aprendibles: new Set(), 
+    rastreo:     new Set(), 
 };
 
 // ── API pública expuesta al HTML inline ───────────────────────
 window.devMapa = {
     setVista:    (v) => { setVistaMapaDev(v); renderColumnaMapa(); },
     setBusqueda: (t) => { setBusquedaMapa(t); _actualizarBuscadorCanvas(t); },
-    // Buscador del canvas: solo navega, NO dispara devUIUpdate
     setBusquedaCanvas: (t) => _actualizarBuscadorCanvas(t),
     setFiltroAf: (v) => setFiltroAfinidad(v),
     setFiltroVis:(v) => setFiltroVisibilidad(v),
@@ -114,12 +112,9 @@ window.devMapa = {
     },
 
     toggleVis: (id) => {
-        // Llamamos directamente a la lógica sin pasar por devUIUpdate
-        // (que dispararía renderColumnaMapa y reiniciaría el canvas)
         const { mapaDevState: mds } = window.__mapaDevStateRef || {};
         toggleVisibilidadNodo(id);
         _renderPropiedades();
-        // Actualizar panel de asignación si hay personaje activo
         if (asignState.pjSeleccionado) {
             _calcularVistaPj(asignState.pjSeleccionado);
             const np = document.getElementById('mm-asign-nodo-panel');
@@ -128,16 +123,14 @@ window.devMapa = {
         _marcarGuardar();
     },
 
-    // ── Asignación de personaje ───────────────────────────────
     setFiltroRolAsign: (rol) => {
         asignState.filtroRol = rol;
-        asignState.pjSeleccionado = null; // Limpiar selección al cambiar de bando
+        asignState.pjSeleccionado = null; 
         _calcularVistaPj(null);
         _renderPanelAsignacion();
     },
 
     seleccionarPjAsign: (nombre) => {
-        // Si hace clic en el mismo que ya está, lo deselecciona (o si recibe null del botón Ninguno)
         if (nombre === null || asignState.pjSeleccionado === nombre) {
             asignState.pjSeleccionado = null;
         } else {
@@ -147,28 +140,67 @@ window.devMapa = {
         _renderPanelAsignacion();
     },
 
-    // Asignar/quitar hechizo desde el panel de asignación
     asignarDesdeNodo: (hechizoId, cobrarHex) => {
         const pj = asignState.pjSeleccionado;
         if (!pj) return;
-        // Usamos la misma lógica que panel-hechizos-logic.js
-        const pjKey  = norm(pj);
-        const idNorm = norm(hechizoId);
-        const yaLoTiene = (hzState.colaAsignaciones[pjKey]?.[hechizoId] !== undefined)
-            ? hzState.colaAsignaciones[pjKey][hechizoId]
-            : (hzState.inventariosDB[pjKey] || []).includes(idNorm);
-
-        // Forzamos el cobro según el checkbox
         const cobrarOriginal = hzState.cobrarAlAsignar;
         hzState.cobrarAlAsignar = cobrarHex;
         asignarHechizo(pj, hechizoId);
         hzState.cobrarAlAsignar = cobrarOriginal;
 
-        // Recalcular vista
         _calcularVistaPj(pj);
         _renderPanelAsignacion();
         _marcarGuardar();
     },
+
+    // 🌟 NUEVA LÓGICA: ASIGNACIÓN MÚLTIPLE
+    asignarMasivo: (cobrarHex) => {
+        const pj = asignState.pjSeleccionado;
+        if (!pj) return;
+        const pjKey = norm(pj);
+        const inv   = hzState.inventariosDB[pjKey] || [];
+        const cobrarOriginal = hzState.cobrarAlAsignar;
+        hzState.cobrarAlAsignar = cobrarHex;
+
+        const cands = Array.from(mapaDevState.seleccionMultiple);
+        cands.forEach(n => {
+            const idNorm  = norm(n.id);
+            const inCola  = hzState.colaAsignaciones[pjKey]?.[n.id];
+            const tieneDB = inv.includes(idNorm) || inv.includes(norm(n.nombreOriginal || ''));
+            const tiene   = inCola !== undefined ? inCola : tieneDB;
+
+            if (!tiene) asignarHechizo(pj, n.id);
+        });
+
+        hzState.cobrarAlAsignar = cobrarOriginal;
+        _calcularVistaPj(pj);
+        _renderPanelAsignacion();
+        _marcarGuardar();
+    },
+
+    quitarMasivo: () => {
+        const pj = asignState.pjSeleccionado;
+        if (!pj) return;
+        const pjKey = norm(pj);
+        const inv   = hzState.inventariosDB[pjKey] || [];
+        const cobrarOriginal = hzState.cobrarAlAsignar;
+        hzState.cobrarAlAsignar = false; 
+
+        const cands = Array.from(mapaDevState.seleccionMultiple);
+        cands.forEach(n => {
+            const idNorm  = norm(n.id);
+            const inCola  = hzState.colaAsignaciones[pjKey]?.[n.id];
+            const tieneDB = inv.includes(idNorm) || inv.includes(norm(n.nombreOriginal || ''));
+            const tiene   = inCola !== undefined ? inCola : tieneDB;
+
+            if (tiene) asignarHechizo(pj, n.id);
+        });
+
+        hzState.cobrarAlAsignar = cobrarOriginal;
+        _calcularVistaPj(pj);
+        _renderPanelAsignacion();
+        _marcarGuardar();
+    }
 };
 
 // ── Calcular posesiones/aprendibles/rastreo para el personaje ─
@@ -216,7 +248,6 @@ let _busquedaCanvas = '';
 function _actualizarBuscadorCanvas(texto) {
     _busquedaCanvas = (texto || '').toLowerCase().trim();
     if (!_busquedaCanvas) return;
-    // Buscar por ID o nombre real
     const nodo = mapaDevState.nodosDB.find(n =>
         (n.id || '').toLowerCase().includes(_busquedaCanvas) ||
         (n.nombreOriginal || '').toLowerCase().includes(_busquedaCanvas)
@@ -226,7 +257,6 @@ function _actualizarBuscadorCanvas(texto) {
         const zoom = miniMapa.camara.zoom;
         miniMapa.camara.x = (c.width  / 2) - (nodo.x * zoom);
         miniMapa.camara.y = (c.height / 2) - (nodo.y * zoom);
-        // Seleccionar para destacar
         mapaDevState.seleccionMultiple.clear();
         mapaDevState.seleccionMultiple.add(nodo);
         _renderPropiedades();
@@ -242,7 +272,6 @@ export function renderColumnaMapa() {
     const { vistaActiva } = mapaDevState;
     const esCanvas = !vistaActiva || vistaActiva === 'canvas' || vistaActiva === 'nodos';
 
-    // ── OPTIMIZACIÓN: si el canvas ya está montado y activo, NO reconstruir el DOM ──
     const canvasExistente = document.getElementById('mini-mapa-canvas');
     if (esCanvas && canvasExistente && canvasExistente.isConnected) {
         _marcarGuardarSilencioso(pendientes);
@@ -273,7 +302,6 @@ export function renderColumnaMapa() {
     if (esCanvas) requestAnimationFrame(() => _montarCanvas());
 }
 
-// Actualiza solo el div de pendientes sin tocar el DOM del canvas
 function _marcarGuardarSilencioso(pendientes) {
     const div = document.getElementById('mm-pendientes');
     if (div) {
@@ -282,7 +310,6 @@ function _marcarGuardarSilencioso(pendientes) {
     }
 }
 
-// Función auxiliar para pintar los botones de personajes
 function _generarBotonesPersonajes(fuentePj) {
     const isNinguno = !asignState.pjSeleccionado;
     let html = `
@@ -319,7 +346,6 @@ function _htmlVistaCanvas() {
             : n.esConocido
     ).length;
 
-    // Lista de todos los personajes activos para el selector
     const listaPersonajes = window.__devListaPersonajes || [];
     const jugadores = listaPersonajes.filter(p => p.is_player && p.is_active);
     const npcs      = listaPersonajes.filter(p => !p.is_player && p.is_active);
@@ -416,9 +442,7 @@ function _htmlVistaCanvas() {
     </div>`;
 }
 
-// ── Re-render solo del panel de asignación (sin reconstruir todo) ──
 function _renderPanelAsignacion() {
-    // Intentar actualizar sin reconstruir el canvas
     const panel = document.getElementById('mm-asign-panel');
     if (!panel) { renderColumnaMapa(); return; }
 
@@ -440,7 +464,6 @@ function _renderPanelAsignacion() {
         tabNpc.style.borderColor   = asignState.filtroRol === 'npcs' ? '#ff4444' : '#444';
     }
 
-    // Reconstruir lista de personajes usando el helper y la clase mm-pj-lista
     const listContainer = panel.querySelector('.mm-pj-lista');
     if (listContainer) {
         listContainer.innerHTML = _generarBotonesPersonajes(fuentePj);
@@ -463,12 +486,61 @@ function _htmlAsignNodo() {
     }
 
     const cands = Array.from(mapaDevState.seleccionMultiple);
+    
+    // 🌟 SELECCIÓN MÚLTIPLE (MASS ASSIGN)
     if (cands.length > 1) {
-        return `<div style="color:#888;text-align:center;padding:15px;font-size:0.8em;">
-            Selección múltiple (${cands.length} nodos). Selecciona uno solo para asignar.
+        const pj      = asignState.pjSeleccionado;
+        const pjKey   = norm(pj);
+        const inv     = hzState.inventariosDB[pjKey] || [];
+
+        let faltantes = 0;
+        let poseidos = 0;
+        let costoTotal = 0;
+
+        cands.forEach(n => {
+            const idNorm  = norm(n.id);
+            const inCola  = hzState.colaAsignaciones[pjKey]?.[n.id];
+            const tieneDB = inv.includes(idNorm) || inv.includes(norm(n.nombreOriginal || ''));
+            const tiene   = inCola !== undefined ? inCola : tieneDB;
+            if (tiene) {
+                poseidos++;
+            } else {
+                faltantes++;
+                costoTotal += (n.hex || 0);
+            }
+        });
+
+        return `
+        <div style="background:rgba(10,0,25,0.8);border:1px solid #3a1060;border-radius:8px;padding:12px;display:flex;flex-direction:column;gap:10px;">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:0.85em;margin-bottom:4px;color:#ddd;font-weight:bold;">Asignación Múltiple (${cands.length} hechizos)</div>
+                    <div style="font-size:0.75em;color:#aaa;">Posee: <span style="color:#b896ff;">${poseidos}</span> | Faltan: <span style="color:#d4af37;">${faltantes}</span></div>
+                </div>
+            </div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+                ${faltantes > 0 ? `
+                <button onclick="window.devMapa.asignarMasivo(false)"
+                    style="flex:1;padding:8px;background:rgba(0,180,100,0.15);color:#00cc88;border:1px solid #00aa66;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
+                    ✅ DAR FALTANTES (0 HEX)
+                </button>
+                ${costoTotal > 0 ? `
+                <button onclick="window.devMapa.asignarMasivo(true)"
+                    style="flex:1;padding:8px;background:rgba(180,140,0,0.15);color:#d4af37;border:1px solid #b09030;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
+                    💰 DAR FALTANTES (−${costoTotal} HEX)
+                </button>` : ''}
+                ` : ''}
+                ${poseidos > 0 ? `
+                <button onclick="window.devMapa.quitarMasivo()"
+                    style="flex:1;padding:8px;background:rgba(180,0,0,0.15);color:#ff6666;border:1px solid #aa3333;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
+                    ❌ QUITAR TODOS
+                </button>
+                ` : ''}
+            </div>
         </div>`;
     }
 
+    // 🌟 SELECCIÓN ÚNICA
     const n       = cands[0];
     const pj      = asignState.pjSeleccionado;
     const pjKey   = norm(pj);
@@ -489,14 +561,14 @@ function _htmlAsignNodo() {
     else if (esAprendible) estadoLabel = `<span style="background:rgba(212,175,55,0.15);color:#d4af37;border:1px solid #d4af37;border-radius:4px;padding:2px 7px;font-size:0.75em;">✦ Aprendible</span>`;
     else if (esRastreo) estadoLabel = `<span style="background:rgba(100,100,80,0.2);color:#888;border:1px solid #555;border-radius:4px;padding:2px 7px;font-size:0.75em;">○ Prereq.</span>`;
 
-    // Texto del hechizo: dos líneas si está oculto
     let textoNombre = '';
     if (esConocido) {
         textoNombre = `<span style="color:#ddd;font-weight:bold;">${_esc(n.nombreOriginal || n.id)}</span> <span style="color:#888;font-size:0.85em;">(${n.hex} HEX)</span>`;
     } else {
+        // 🌟 CORRECCIÓN DEL GRIS DEL TACHADO
         textoNombre = `
             <div style="color:#aaa;">Hechizo ${_extractNum(n.id)} <span style="color:#777;font-size:0.85em;">(${n.hex} HEX)</span></div>
-            <div style="color:#555;text-decoration:line-through;font-size:0.82em;">${_esc(n.nombreOriginal || n.id)} (${n.hex} HEX)</div>`;
+            <div style="color:#aaa;text-decoration:line-through;font-size:0.82em;">${_esc(n.nombreOriginal || n.id)} (${n.hex} HEX)</div>`;
     }
 
     const safeId  = n.id.replace(/'/g, "\\'");
@@ -507,7 +579,7 @@ function _htmlAsignNodo() {
         <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
             <div style="flex:1;min-width:0;">
                 <div style="font-size:0.85em;margin-bottom:4px;">${textoNombre}</div>
-                <div style="font-size:0.72em;color:#555;">${_esc(n.afinidad || '—')} · ${_esc(n.clase)}</div>
+                <div style="font-size:0.72em;color:#aaa;">${_esc(n.afinidad || '—')} · ${_esc(n.clase)}</div>
             </div>
             ${estadoLabel}
             ${cambioEnCola ? `<span style="color:#ffaa00;font-size:0.72em;">● cola</span>` : ''}
@@ -531,7 +603,7 @@ function _htmlAsignNodo() {
             </button>
             `}
         </div>
-        ${n.efecto ? `<div style="font-size:0.75em;color:#888;border-top:1px dashed #2a1060;padding-top:8px;line-height:1.4;">${_esc(n.efecto)}</div>` : ''}
+        ${n.efecto ? `<div style="font-size:0.75em;color:#aaa;border-top:1px dashed #2a1060;padding-top:8px;line-height:1.4;">${_esc(n.efecto)}</div>` : ''}
     </div>`;
 }
 
@@ -629,7 +701,6 @@ function _engacharEventos(canvas) {
                 }
                 miniMapa.inter.draggedNode = nodo;
                 _renderPropiedades();
-                // Actualizar panel de asignación si hay personaje seleccionado
                 if (asignState.pjSeleccionado) {
                     const np = document.getElementById('mm-asign-nodo-panel');
                     if (np) np.innerHTML = _htmlAsignNodo();
@@ -713,6 +784,10 @@ function _engacharEventos(canvas) {
             mapaDevState.boxStart   = null;
             mapaDevState.boxCurrent = null;
             _renderPropiedades();
+            if (asignState.pjSeleccionado) {
+                const np = document.getElementById('mm-asign-nodo-panel');
+                if (np) np.innerHTML = _htmlAsignNodo();
+            }
         } else if (miniMapa.inter.draggedNode) {
             if (miniMapa.inter.hasDragged) _marcarGuardar();
         } else if (miniMapa.inter.isDraggingBg && !miniMapa.inter.hasDragged && !e.shiftKey) {
@@ -866,7 +941,6 @@ function _dibujarFrame() {
         const isHovered   = miniMapa.inter.hoveredNode  === nodo;
         const isSel       = mapaDevState.seleccionMultiple.has(nodo);
 
-        // Determinar colores según modo (con personaje / sin personaje)
         let colorCore, colorBorde, alpha;
         if (hayPj) {
             const esPosesion   = asignState.posesiones.has(nodo);
@@ -902,11 +976,9 @@ function _dibujarFrame() {
         ctx.shadowBlur  = (isHovered || isSel) ? 22 / sf : (esConocido ? 4 / sf : 0);
         ctx.shadowColor = colorBorde;
 
-        // Fondo
         ctx.beginPath(); ctx.arc(nodo.x, nodo.y, r, 0, Math.PI * 2);
         ctx.fillStyle = '#111'; ctx.fill();
 
-        // Core
         ctx.beginPath(); ctx.arc(nodo.x, nodo.y, rCore, 0, Math.PI * 2);
         ctx.fillStyle   = colorCore;
         ctx.globalAlpha = alpha * 0.88;
@@ -915,7 +987,6 @@ function _dibujarFrame() {
 
         ctx.shadowBlur = 0;
 
-        // Borde
         ctx.beginPath(); ctx.arc(nodo.x, nodo.y, r, 0, Math.PI * 2);
         ctx.lineWidth   = 1.8 / sf;
         ctx.strokeStyle = colorBorde;
@@ -924,7 +995,6 @@ function _dibujarFrame() {
         ctx.setLineDash([]);
         ctx.globalAlpha = 1.0;
 
-        // Anillo de selección
         if (isSel) {
             ctx.beginPath(); ctx.arc(nodo.x, nodo.y, r + 6 / sf, 0, Math.PI * 2);
             ctx.strokeStyle = 'rgba(0,255,255,0.85)';
@@ -934,7 +1004,6 @@ function _dibujarFrame() {
             ctx.setLineDash([]);
         }
 
-        // Icono 🔒 si está sellado (solo sin personaje activo, para no saturar)
         if (!esConocido && !hayPj) {
             ctx.font      = `bold ${Math.round(18 + 2)}px sans-serif`;
             ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
@@ -943,7 +1012,6 @@ function _dibujarFrame() {
             ctx.globalAlpha = 1.0;
         }
 
-        // Texto de etiqueta
         if (miniMapa.camara.zoom > 0.05 || isHovered || isSel) {
             const fs = Math.round((esConocido ? 26 : 20) + (isHovered ? 4 : 0));
             ctx.textAlign    = 'center';
@@ -981,7 +1049,9 @@ function _dibujarFrame() {
 
                 ctx.font        = `${fs2}px sans-serif`;
                 const ty2b = ty1 + gap;
-                const fillColor2 = 'rgba(100,90,70,0.6)';
+                
+                // 🌟 CORRECCIÓN DEL GRIS DEL TACHADO (Canvas)
+                const fillColor2 = 'rgba(160,150,140,0.8)'; // Más blanco/brillante
                 ctx.strokeStyle = 'rgba(0,0,0,0.9)'; ctx.strokeText(texto2, nodo.x, ty2b);
                 ctx.fillStyle   = fillColor2;         ctx.fillText(texto2, nodo.x, ty2b);
 
@@ -990,14 +1060,15 @@ function _dibujarFrame() {
                 ctx.beginPath();
                 ctx.moveTo(nodo.x - medida.width / 2, midY);
                 ctx.lineTo(nodo.x + medida.width / 2, midY);
-                ctx.strokeStyle = 'rgba(120,100,70,0.7)';
-                ctx.lineWidth   = 1.2 / sf;
+                
+                // 🌟 Línea de tachado más visible
+                ctx.strokeStyle = 'rgba(180,160,140,0.9)'; 
+                ctx.lineWidth   = 1.5 / sf;
                 ctx.stroke();
             }
         }
     });
 
-    // ── LINK TEMPORAL ─────────────────────────────────────────
     if (mapaDevState.tempLink) {
         const { source, endX, endY } = mapaDevState.tempLink;
         const isDelete = mapaDevState.herramienta === 'eliminar-enlace';
@@ -1019,7 +1090,6 @@ function _dibujarFrame() {
         ctx.fill();
     }
 
-    // ── CAJA DE SELECCIÓN ─────────────────────────────────────
     if (mapaDevState.boxStart && mapaDevState.boxCurrent) {
         const bx = Math.min(mapaDevState.boxStart.x, mapaDevState.boxCurrent.x);
         const by = Math.min(mapaDevState.boxStart.y, mapaDevState.boxCurrent.y);
@@ -1043,7 +1113,7 @@ function _renderPropiedades() {
     const cands  = Array.from(mapaDevState.seleccionMultiple);
     const afs    = getAfinidadesUnicas();
     const inp    = `width:100%;box-sizing:border-box;background:#000;color:#fff;border:1px solid #444;border-radius:4px;padding:6px;font-family:'Rajdhani';font-size:0.9em;outline:none;`;
-    const lbl    = `color:#888;font-weight:bold;font-size:0.75em;display:block;margin-bottom:3px;`;
+    const lbl    = `color:#aaa;font-weight:bold;font-size:0.75em;display:block;margin-bottom:3px;`;
     const dlHTML = `<datalist id="mm-dl-af">${afs.map(a => `<option value="${a}">`).join('')}</datalist>`;
 
     if (cands.length === 0) {
@@ -1096,22 +1166,21 @@ function _renderPropiedades() {
 
     const visStyle = esConocido
         ? 'background:rgba(0,180,100,0.2);color:#00cc88;border:1px solid #00aa66;'
-        : 'background:rgba(80,80,80,0.2);color:#888;border:1px solid #555;';
+        : 'background:rgba(80,80,80,0.2);color:#aaa;border:1px solid #555;';
 
-    // Mostrar nombre tachado si está oculto
     const headerNombre = esConocido
-        ? `<div style="font-weight:bold;color:#b896ff;font-size:0.88em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_esc(n.nombreOriginal || n.id)} <span style="color:#888;font-weight:normal;">(${n.hex} HEX)</span></div>`
+        ? `<div style="font-weight:bold;color:#b896ff;font-size:0.88em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${_esc(n.nombreOriginal || n.id)} <span style="color:#aaa;font-weight:normal;">(${n.hex} HEX)</span></div>`
         : `<div style="font-size:0.85em;line-height:1.6;">
                <div style="color:#aaa;">Hechizo ${_extractNum(n.id)} <span style="color:#888;font-size:0.9em;">(${n.hex} HEX)</span></div>
-               <div style="color:#555;text-decoration:line-through;font-size:0.8em;">${_esc(n.nombreOriginal || n.id)} (${n.hex} HEX)</div>
-           </div>`;
+               <div style="color:#aaa;text-decoration:line-through;font-size:0.8em;">${_esc(n.nombreOriginal || n.id)} (${n.hex} HEX)</div>
+           </div>`; // 🌟 CORRECCIÓN DEL GRIS EN PANEL
 
     panel.innerHTML = `${dlHTML}
     <div style="padding:12px;">
         <div style="display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:10px;border-bottom:1px solid #2a1060;">
             <div style="min-width:0;">
                 ${headerNombre}
-                <div style="color:#555;font-size:0.7em;margin-top:2px;">${_esc(n.afinidad || '—')} · ${n.hex} HEX · ${_esc(n.clase)}</div>
+                <div style="color:#aaa;font-size:0.7em;margin-top:2px;">${_esc(n.afinidad || '—')} · ${n.hex} HEX · ${_esc(n.clase)}</div>
             </div>
             <button onclick="window.devMapa.toggleVis('${sid}')"
                 style="${visStyle}border-radius:4px;padding:4px 8px;cursor:pointer;font-size:0.72em;font-weight:bold;flex-shrink:0;">
@@ -1122,7 +1191,7 @@ function _renderPropiedades() {
         <div style="display:flex;flex-direction:column;gap:9px;">
             <div>
                 <label style="${lbl}">ID</label>
-                <div style="background:#0a0020;color:#555;border:1px solid #222;border-radius:4px;padding:6px;font-size:0.85em;">${_esc(n.id)}</div>
+                <div style="background:#0a0020;color:#aaa;border:1px solid #222;border-radius:4px;padding:6px;font-size:0.85em;">${_esc(n.id)}</div>
             </div>
             <div>
                 <label style="${lbl}">NOMBRE</label>
@@ -1268,7 +1337,7 @@ function _htmlVistaLista() {
 
             const textoMostrado = esConocido
                 ? `<span style="color:#ddd;font-weight:bold;">${_esc(nodo.nombreOriginal || nodo.id)}</span>`
-                : `<span style="color:#888;">Hechizo ${_extractNum(nodo.id)}</span> <span style="color:#555;text-decoration:line-through;font-size:0.82em;margin-left:4px;">${_esc(nodo.nombreOriginal || nodo.id)}</span>`;
+                : `<span style="color:#888;">Hechizo ${_extractNum(nodo.id)}</span> <span style="color:#aaa;text-decoration:line-through;font-size:0.82em;margin-left:4px;">${_esc(nodo.nombreOriginal || nodo.id)}</span>`; // 🌟 CORRECCIÓN EN LISTA
 
             html += `
             <div style="background:#0a0020;border:1px solid ${esConocido?'#2a1060':'#1a1510'};border-left:3px solid ${colorBorde};border-radius:6px;padding:7px 11px;display:flex;justify-content:space-between;align-items:center;gap:8px;">
