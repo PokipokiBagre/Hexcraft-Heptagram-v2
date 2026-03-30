@@ -45,6 +45,12 @@ window.pjEditor = {
         _setFeedback('pje-feedback', `✅ "${nombre}" creado correctamente.`, '#00ff88');
         pjEditorState.tabActiva      = esJugador ? 'jugadores' : 'npcs';
         pjEditorState.mostrarFormCrear = false;
+
+        // 🔥 FIX REACTIVIDAD: Forzamos la barra superior a cambiar a la tab donde se creó el PJ
+        if (window.cambiarFiltroRol) {
+            window.cambiarFiltroRol(esJugador ? 'jugadores' : 'npcs');
+        }
+
         setTimeout(() => renderColumnaPersonaje(), 800);
     },
 
@@ -104,8 +110,7 @@ window.pjEditor = {
         }
         pjEditorState.editandoNombre = null;
         renderColumnaPersonaje();
-        // Actualiza el selector global
-        if (typeof renderSelectorPersonajes === 'function') renderSelectorPersonajes();
+        // 🔥 FIX REACTIVIDAD: El evento devPersonajesUpdate lanzado en _logic ahora garantiza la reactividad completa
     },
 };
 
@@ -187,7 +192,6 @@ export function renderColumnaPersonaje() {
         </button>`;
 
     contenedor.innerHTML = `
-    <!-- TABS -->
     <div style="display:flex;gap:8px;margin-bottom:16px;align-items:center;flex-wrap:wrap;">
         ${btnTab('jugadores', esJ,  '#1a4000','#00e676', '⚔️','JUGADORES', jugadores.length)}
         ${btnTab('npcs',     !esJ,  '#3a0000','#ff4444', '🎭','NPCs',      npcs.length)}
@@ -201,13 +205,10 @@ export function renderColumnaPersonaje() {
         </button>
     </div>
 
-    <!-- FORM CREAR -->
     <div id="pje-form-crear">${mostrarFormCrear ? _htmlFormCrear() : ''}</div>
 
-    <!-- PANEL UPLOAD -->
     <div id="pje-upload-panel">${_htmlUpload()}</div>
 
-    <!-- GRID -->
     <div id="pje-grid">${_htmlGrid()}</div>`;
 }
 
