@@ -648,6 +648,7 @@ function _centrarCamaraAuto() {
 }
 
 // ── EVENTOS ───────────────────────────────────────────────────
+// ── EVENTOS ───────────────────────────────────────────────────
 function _engacharEventos(canvas) {
     const toWorld = (cx, cy) => {
         const rect = canvas.getBoundingClientRect();
@@ -816,25 +817,78 @@ function _engacharEventos(canvas) {
         miniMapa.camara.zoom = nz;
     }, { passive: false });
 
+    // 📱 FIX: Eventos táctiles nativos reconstruidos para soportar selección, nodos y arrastre
     let pinchDist = 0;
+    
     canvas.addEventListener('touchstart', (e) => {
         e.preventDefault();
         if (e.touches.length === 1) {
-            miniMapa.inter.isDraggingBg = true;
-            miniMapa.inter.lastMouseX = e.touches[0].clientX;
-            miniMapa.inter.lastMouseY = e.touches[0].clientY;
+            const t = e.touches[0];
+            miniMapa.inter.lastMouseX = t.clientX;
+            miniMapa.inter.lastMouseY = t.clientY;
+            miniMapa.inter.hasDragged = false;
+            
+            const wp   = toWorld(t.clientX, t.clientY);
+            const nodo = hitNodo(wp.x, wp.y);
+            const herr = mapaDevState.herramienta;
+
+            if (herr === 'enlace' || herr === 'eliminar-enlace') {
+                if (nodo) {
+                    mapaDevState.tempLink = { source: nodo, endX: nodo.x, endY: nodo.y };
+                }
+            } else {
+                if (nodo) {
+                    if (!mapaDevState.seleccionMultiple.has(nodo)) {
+                        mapaDevState.seleccionMultiple.clear();
+                        mapaDevState.seleccionMultiple.add(nodo);
+                    }
+                    miniMapa.inter.draggedNode = nodo;
+                    _renderPropiedades();
+                    if (asignState.pjSeleccionado) {
+                        const np = document.getElementById('mm-asign-nodo-panel');
+                        if (np) np.innerHTML = _htmlAsignNodo();
+                    }
+                } else {
+                    miniMapa.inter.isDraggingBg = true;
+                }
+            }
         } else if (e.touches.length === 2) {
             miniMapa.inter.isDraggingBg = false;
+            miniMapa.inter.draggedNode = null;
+            mapaDevState.tempLink = null;
             pinchDist = Math.hypot(e.touches[0].clientX - e.touches[1].clientX, e.touches[0].clientY - e.touches[1].clientY);
         }
     }, { passive: false });
 
     canvas.addEventListener('touchmove', (e) => {
         e.preventDefault();
-        if (e.touches.length === 1 && miniMapa.inter.isDraggingBg) {
+        if (e.touches.length === 1) {
             const t = e.touches[0];
-            miniMapa.camara.x += t.clientX - miniMapa.inter.lastMouseX;
-            miniMapa.camara.y += t.clientY - miniMapa.inter.lastMouseY;
+            const dx = t.clientX - miniMapa.inter.lastMouseX;
+            const dy = t.clientY - miniMapa.inter.lastMouseY;
+            if (Math.abs(dx) > 2 || Math.abs(dy) > 2) miniMapa.inter.hasDragged = true;
+
+            const wp = toWorld(t.clientX, t.clientY);
+
+            if (mapaDevState.tempLink) {
+                mapaDevState.tempLink.endX = wp.x;
+                mapaDevState.tempLink.endY = wp.y;
+                miniMapa.inter.hoveredNode = hitNodo(wp.x, wp.y);
+            } else if (miniMapa.inter.draggedNode) {
+                const z = miniMapa.camara.zoom;
+                mapaDevState.seleccionMultiple.forEach(n => {
+                    n.x += dx / z;
+                    n.y += dy / z;
+                    if (!mapaDevState.colaMetadatos[n.id]) mapaDevState.colaMetadatos[n.id] = {};
+                    mapaDevState.colaMetadatos[n.id].x = n.x;
+                    mapaDevState.colaMetadatos[n.id].y = n.y;
+                    mapaDevState.colaPosiciones[n.id]  = { x: n.x, y: n.y };
+                });
+            } else if (miniMapa.inter.isDraggingBg) {
+                miniMapa.camara.x += dx;
+                miniMapa.camara.y += dy;
+            }
+
             miniMapa.inter.lastMouseX = t.clientX;
             miniMapa.inter.lastMouseY = t.clientY;
         } else if (e.touches.length === 2) {
@@ -850,7 +904,38 @@ function _engacharEventos(canvas) {
         }
     }, { passive: false });
 
-    canvas.addEventListener('touchend', () => { miniMapa.inter.isDraggingBg = false; pinchDist = 0; });
+    canvas.addEventListener('touchend', (e) => {
+        const herr = mapaDevState.herramienta;
+
+        if (mapaDevState.tempLink) {
+            const nodo = miniMapa.inter.hoveredNode;
+            if (nodo && nodo !== mapaDevState.tempLink.source) {
+                if (herr === 'enlace') {
+                    crearEnlaceDev(mapaDevState.tempLink.source, nodo);
+                    _marcarGuardar();
+                } else {
+                    const ok = eliminarEnlaceDev(mapaDevState.tempLink.source, nodo);
+                    if (ok) _marcarGuardar();
+                }
+            }
+            mapaDevState.tempLink = null;
+        } else if (miniMapa.inter.draggedNode) {
+            if (miniMapa.inter.hasDragged) _marcarGuardar();
+        } else if (miniMapa.inter.isDraggingBg && !miniMapa.inter.hasDragged) {
+            // Si fue un tap rápido en el fondo y no se arrastró, se deselecciona todo
+            mapaDevState.seleccionMultiple.clear();
+            _renderPropiedades();
+            if (asignState.pjSeleccionado) {
+                const np = document.getElementById('mm-asign-nodo-panel');
+                if (np) np.innerHTML = _htmlAsignNodo();
+            }
+        }
+
+        miniMapa.inter.isDraggingBg = false;
+        miniMapa.inter.draggedNode  = null;
+        miniMapa.inter.hoveredNode  = null;
+        pinchDist = 0;
+    });
 }
 
 // ── LOOP DE RENDER ────────────────────────────────────────────
