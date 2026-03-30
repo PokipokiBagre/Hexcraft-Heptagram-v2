@@ -4,6 +4,9 @@
 
 import { supabase } from '../../hex-auth.js';
 import { devState, STORAGE_URL, norm } from '../dev-state.js';
+import { stState } from '../estadisticas/panel-stats-state.js';
+import { objState } from '../objetos/panel-objetos-state.js';
+import { hzState } from '../hechizos/panel-hechizos-state.js';
 
 const BUCKET = 'imagenes-hex';
 
@@ -33,11 +36,29 @@ export async function crearPersonaje(nombre, esJugador, npcTipo) {
 
     if (error) return { error: error.message };
 
-    // Actualizar lista local
+    // Actualizar lista local principal
     devState.listaPersonajes.push(data);
     window.__devListaPersonajes = devState.listaPersonajes;
-    window.dispatchEvent(new Event('devPersonajesUpdate'));
 
+    // 🌟 INICIALIZAR ESTADOS EN MEMORIA PARA EL NUEVO PJ
+    const nom = data.nombre;
+    const normNom = norm(nom);
+
+    stState.statsDB[nom] = {
+        hex: 0, asistencia: 1,
+        vidaRojaActual: 0, baseVidaRojaMax: 0, baseVidaAzul: 0, baseGuardaDorada: 0,
+        baseDanoRojo: 0, baseDanoAzul: 0, baseElimDorada: 0,
+        afinidadesBase: { fisica:0, energetica:0, espiritual:0, mando:0, psiquica:0, oscura:0 },
+        hechizos: { fisica:0, energetica:0, espiritual:0, mando:0, psiquica:0, oscura:0, danoRojo:0, danoAzul:0, elimDorada:0, vidaRojaMaxExtra:0, vidaAzulExtra:0, guardaDoradaExtra:0 },
+        hechizosEfecto: { fisica:0, energetica:0, espiritual:0, mando:0, psiquica:0, oscura:0, danoRojo:0, danoAzul:0, elimDorada:0, vidaRojaMaxExtra:0, vidaAzulExtra:0, guardaDoradaExtra:0 },
+        buffs: { fisica:0, energetica:0, espiritual:0, mando:0, psiquica:0, oscura:0, danoRojo:0, danoAzul:0, elimDorada:0, vidaRojaMaxExtra:0, vidaAzulExtra:0, guardaDoradaExtra:0 },
+        estados: {}, notasAfinidad: {}, iconoOverride: ''
+    };
+    objState.inventariosDB[normNom] = {};
+    objState.equipadosDB[normNom] = {};
+    hzState.inventariosDB[normNom] = [];
+
+    window.dispatchEvent(new Event('devPersonajesUpdate'));
     return { data };
 }
 
@@ -65,9 +86,57 @@ export async function editarNombrePersonaje(nombreActual, nuevoNombre) {
     if (pj) pj.nombre = nuevoTrimmed;
     window.__devListaPersonajes = devState.listaPersonajes;
 
-    // Si era el personaje seleccionado, actualizar
+    // 🌟 MIGRAR ESTADOS EN MEMORIA AL NUEVO NOMBRE
+    const oldNorm = norm(nombreActual);
+    const newNorm = norm(nuevoTrimmed);
+
+    // Migrar Estadísticas
+    if (stState.statsDB[nombreActual]) {
+        stState.statsDB[nuevoTrimmed] = stState.statsDB[nombreActual];
+        delete stState.statsDB[nombreActual];
+    }
+    if (stState.colaStats[nombreActual]) {
+        stState.colaStats[nuevoTrimmed] = stState.colaStats[nombreActual];
+        delete stState.colaStats[nombreActual];
+    }
+    if (stState.colaNotas[nombreActual]) {
+        stState.colaNotas[nuevoTrimmed] = stState.colaNotas[nombreActual];
+        delete stState.colaNotas[nombreActual];
+    }
+
+    // Migrar Objetos
+    if (objState.inventariosDB[oldNorm]) {
+        objState.inventariosDB[newNorm] = objState.inventariosDB[oldNorm];
+        delete objState.inventariosDB[oldNorm];
+    }
+    if (objState.equipadosDB[oldNorm]) {
+        objState.equipadosDB[newNorm] = objState.equipadosDB[oldNorm];
+        delete objState.equipadosDB[oldNorm];
+    }
+    if (objState.colaInventario[oldNorm]) {
+        objState.colaInventario[newNorm] = objState.colaInventario[oldNorm];
+        delete objState.colaInventario[oldNorm];
+    }
+    if (objState.colaEquipados[oldNorm]) {
+        objState.colaEquipados[newNorm] = objState.colaEquipados[oldNorm];
+        delete objState.colaEquipados[oldNorm];
+    }
+
+    // Migrar Hechizos
+    if (hzState.inventariosDB[oldNorm]) {
+        hzState.inventariosDB[newNorm] = hzState.inventariosDB[oldNorm];
+        delete hzState.inventariosDB[oldNorm];
+    }
+    if (hzState.colaAsignaciones[oldNorm]) {
+        hzState.colaAsignaciones[newNorm] = hzState.colaAsignaciones[oldNorm];
+        delete hzState.colaAsignaciones[oldNorm];
+    }
+
+    // Si el personaje renombrado es el que estamos viendo en la pantalla, actualizarlo
     if (devState.pjSeleccionado === nombreActual) {
         devState.pjSeleccionado = nuevoTrimmed;
+        // Forzar renderizado de los paneles de trabajo para que usen el nuevo nombre
+        window.dispatchEvent(new Event('devUIUpdate'));
     }
 
     window.dispatchEvent(new Event('devPersonajesUpdate'));
