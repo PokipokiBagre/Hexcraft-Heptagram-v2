@@ -117,9 +117,10 @@ window.handleFileSelect = async (e) => {
     e.target.value = ''; 
 };
 
-async function ejecutarSubida(file) {
+    async function ejecutarSubida(file) {
     if (!estadoUI.uploadTarget) return;
-    const { keyNorm, tipoIcono } = estadoUI.uploadTarget;
+    // Añade 'nombre' a la desestructuración
+    const { keyNorm, tipoIcono, nombre } = estadoUI.uploadTarget;
 
     if (!hexAuth.estaLogueado() && tipoIcono !== 'imgobjetos' && tipoIcono !== 'imgpersonajes') {
         actualizarProgreso(0, '❌ Permiso denegado para esta categoría.', true);
@@ -127,11 +128,13 @@ async function ejecutarSubida(file) {
     }
 
     try {
+        // Pasa 'nombre' como quinto parámetro
         const nuevaUrl = await subirImagen(file, keyNorm, tipoIcono, (pct, msg) => {
             actualizarProgreso(pct, msg);
-        });
+        }, nombre);
 
         marcarExiste(keyNorm, tipoIcono, nuevaUrl);
+
 
         setTimeout(() => {
             window.cerrarUpload();
