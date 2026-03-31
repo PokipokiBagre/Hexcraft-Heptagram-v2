@@ -42,10 +42,10 @@ window.onload = async () => {
         const [{data: personajesBD}, catalogoObj, {data: invObj}, estadosArr, hechizosData, {data: invHz}] = await Promise.all([
             supabase.from('personajes').select('*'),
             db.objetos.getCatalogo(),
-            supabase.from('inventario_objetos').select('*'), 
+            supabase.from('inventario_objetos').select('*').limit(5000), 
             db.estadosConfig.getAll(),
             db.hechizos.getDataCompleta(),
-            supabase.from('hechizos_inventario').select('*') 
+            supabase.from('hechizos_inventario').select('*').limit(5000) 
         ]);
 
         devState.listaPersonajes = personajesBD.filter(p => p.is_active);
@@ -111,7 +111,6 @@ window.onload = async () => {
 
         initObjetosDev(catalogoObj, invObj);
         initStatsDev(statsGlobalMock, estadosListMock);
-        console.log('invHz count:', invHz?.length, 'sample:', invHz?.slice(0,3));
         initHechizosDev(catalogoHz, invHz || []); 
 
         // ── Inicializar panel mapa con datos de hechizosData ──
