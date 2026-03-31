@@ -135,6 +135,24 @@
         <!-- GRID -->
         <div id="img-grid" class="img-grid"></div>
 
+        <!-- IMÁGENES HUÉRFANAS -->
+        <div style="margin-top:30px;border-top:1px solid #333;padding-top:20px;">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+                <h3 style="margin:0;color:#ff9900;font-family:'Cinzel';font-size:0.95em;">
+                    🗂️ Limpieza de Storage
+                </h3>
+                <button id="btn-huerfanas" onclick="window.abrirHuerfanas()"
+                    style="background:#1a0800;border:1px solid #cc6600;color:#ff9900;
+                           padding:8px 18px;border-radius:6px;cursor:pointer;
+                           font-family:'Cinzel';font-size:0.8em;font-weight:bold;transition:0.2s;"
+                    onmouseover="this.style.borderColor='#ff9900'"
+                    onmouseout="this.style.borderColor='#cc6600'">
+                    🗂️ Ver Imágenes No Usadas
+                </button>
+            </div>
+            <div id="panel-huerfanas" style="display:none;"></div>
+        </div>
+
     </div>
 
     <script type="module" src="extra-main.js"></script>
