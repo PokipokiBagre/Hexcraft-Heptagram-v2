@@ -59,7 +59,8 @@ export function getHechizosDestinoSet(pjNombre) {
 
 // ── Leer objetos efectivos de un PJ (cola + BD) ──────────────
 export function getObjetosOrigen(pjNombre) {
-    const pjKey = norm(pjNombre);
+    // IMPORTANTE: inventariosDB se pobla con toLowerCase(), NO con norm()
+    const pjKey = pjNombre.toLowerCase();
     const enDB  = objState.inventariosDB[pjKey] || {};
     const cola  = objState.colaInventario[pjKey] || {};
     const merged = { ...enDB, ...cola };
@@ -149,7 +150,8 @@ export async function ejecutarClonado() {
     // ── 6. OBJETOS ────────────────────────────────────────────
     if (modulos.objetos) {
         const objOrigen  = getObjetosOrigen(pjOrigen);
-        const destinoKey = norm(pjDestino);
+        // IMPORTANTE: usar toLowerCase() igual que initObjetosDev
+        const destinoKey = pjDestino.toLowerCase();
 
         if (!objState.colaInventario[destinoKey]) objState.colaInventario[destinoKey] = {};
 
@@ -263,4 +265,60 @@ export function getPreview() {
     if (modulos.imagen) lines.push({ icon:'🖼️', texto:'Imagen de perfil' });
 
     return lines;
+}
+
+// ── CLONAR Y CREAR PERSONAJE NUEVO ───────────────────────────
+// Crea un nuevo personaje con nombre "Destino (Origen)" y le aplica la clonación.
+// Si ya existe "Destino (Origen)", intenta "Destino (Origen) 2", "Destino (Origen) 3", etc.
+export async function ejecutarClonadoYCrear() {
+    const { pjOrigen, pjDestino } = clonarState;
+    if (!pjOrigen || !pjDestino) return { error: 'Selecciona origen y destino.' };
+
+    // ── Calcular nombre del clon ──────────────────────────────
+    const nombreBase = `${pjDestino} (${pjOrigen})`;
+    let nombreFinal  = nombreBase;
+    let sufijo = 2;
+
+    const nombresExistentes = new Set(
+        (devState.listaPersonajes || []).map(p => p.nombre.toLowerCase())
+    );
+    while (nombresExistentes.has(nombreFinal.toLowerCase())) {
+        nombreFinal = `${nombreBase} ${sufijo}`;
+        sufijo++;
+    }
+
+    // ── Importar crearPersonaje dinámicamente para evitar ciclos ─
+    const { crearPersonaje } = await import('../personajes/panel-personaje-logic.js');
+
+    // Determinar si el destino es jugador o NPC
+    const pjDestinoData = devState.listaPersonajes.find(p => p.nombre === pjDestino);
+    const esJugador     = pjDestinoData ? pjDestinoData.is_player : false;
+
+    clonarState.ejecutando = true;
+
+    const resultCrear = await crearPersonaje(nombreFinal, esJugador, null);
+    if (resultCrear.error) {
+        clonarState.ejecutando = false;
+        clonarState.feedback = { ok: false, msg: `\u274C No se pudo crear el personaje: ${resultCrear.error}` };
+        return { error: resultCrear.error };
+    }
+
+    // ── Guardar pjDestino original y hacer el clonado al nuevo personaje ─
+    const destinoOriginal  = clonarState.pjDestino;
+    clonarState.pjDestino  = nombreFinal;
+
+    const resultClon = await ejecutarClonado();
+
+    // Restaurar destino en state por si el usuario quiere seguir usando el panel
+    clonarState.pjDestino = destinoOriginal;
+    clonarState.ejecutando = false;
+
+    if (resultClon.error) {
+        clonarState.feedback = { ok: false, msg: `\u26A0\uFE0F Personaje creado como "${nombreFinal}" pero el clonado fall\u00F3:\n${resultClon.error}` };
+        return { error: resultClon.error };
+    }
+
+    const lineas = [`\u2728 Personaje creado: ${nombreFinal}`, ...(resultClon.log || [])];
+    clonarState.feedback = { ok: true, msg: lineas.join('\n') };
+    return { ok: true, log: lineas, nombreFinal };
 }
