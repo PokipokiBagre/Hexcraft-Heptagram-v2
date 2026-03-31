@@ -6,6 +6,7 @@ import { clonarState }                                     from './panel-clonar-
 import { devState, STORAGE_URL, norm }                     from '../dev-state.js';
 import {
     ejecutarClonado,
+    ejecutarClonadoYCrear,
     getHechizosOrigen,
     getHechizosDestinoSet,
     getObjetosOrigen,
@@ -94,6 +95,23 @@ window.clonar = {
         _refreshFeedback();
     },
 
+    async ejecutarYCrear() {
+        if (clonarState.ejecutando) return;
+        const preview = getPreview();
+        if (!preview || !preview.length) {
+            clonarState.feedback = { ok: false, msg: '⚠️ Selecciona al menos un módulo y completa origen + destino.' };
+            _refreshFeedback();
+            return;
+        }
+
+        _setEjecutandoUI(true, true);
+        const result = await ejecutarClonadoYCrear();
+        _setEjecutandoUI(false, true);
+
+        _refreshFeedback();
+        if (result.ok) window.dispatchEvent(new Event('devPersonajesUpdate'));
+    },
+
     resetear() {
         clonarState.pjOrigen          = null;
         clonarState.pjDestino         = null;
@@ -139,13 +157,14 @@ function _actualizarRowHz(idNorm) {
     if (check) check.checked = marcado;
 }
 
-function _setEjecutandoUI(v) {
-    const btn = document.getElementById('clonar-btn-ejecutar');
-    if (btn) {
-        btn.disabled      = v;
-        btn.style.opacity = v ? '0.6' : '1';
-        btn.textContent   = v ? '⏳ Clonando...' : '🔁 EJECUTAR CLONADO';
-    }
+function _setEjecutandoUI(v, esCrear = false) {
+    const btn1 = document.getElementById('clonar-btn-ejecutar');
+    const btn2 = document.getElementById('clonar-btn-crear');
+    [btn1, btn2].forEach(btn => {
+        if (btn) { btn.disabled = v; btn.style.opacity = v ? '0.6' : '1'; }
+    });
+    if (btn1) btn1.textContent = (v && !esCrear) ? '⏳ Clonando...' : '🔁 EJECUTAR CLONADO';
+    if (btn2) btn2.textContent = (v && esCrear)  ? '⏳ Creando...'  : '✨ CLONAR Y CREAR PERSONAJE';
 }
 
 // ── RENDER PRINCIPAL ──────────────────────────────────────────
@@ -194,20 +213,32 @@ export function renderColumnaClonar() {
         </div>
     </div>
 
-    <!-- PREVIEW + BOTÓN -->
+    <!-- PREVIEW + BOTONES -->
     <div style="margin-top:18px;">
         <div id="clonar-preview">${_htmlPreview()}</div>
         <div id="clonar-feedback">${_htmlFeedback()}</div>
-        <button id="clonar-btn-ejecutar" onclick="window.clonar.ejecutar()"
-            style="width:100%;margin-top:10px;padding:14px;
-                   background:linear-gradient(135deg,#3a1800,#8a4400,#3a1800);
-                   color:#d4af37;border:2px solid #d4af37;border-radius:8px;
-                   cursor:pointer;font-family:'Cinzel';font-weight:bold;font-size:1em;
-                   letter-spacing:0.05em;transition:0.2s;text-transform:uppercase;"
-            onmouseover="this.style.filter='brightness(1.3)'"
-            onmouseout="this.style.filter='brightness(1)'">
-            🔁 EJECUTAR CLONADO
-        </button>
+        <div style="display:flex;gap:10px;margin-top:10px;">
+            <button id="clonar-btn-ejecutar" onclick="window.clonar.ejecutar()"
+                style="flex:1;padding:14px;
+                       background:linear-gradient(135deg,#3a1800,#8a4400,#3a1800);
+                       color:#d4af37;border:2px solid #d4af37;border-radius:8px;
+                       cursor:pointer;font-family:'Cinzel';font-weight:bold;font-size:0.95em;
+                       letter-spacing:0.05em;transition:0.2s;text-transform:uppercase;"
+                onmouseover="this.style.filter='brightness(1.3)'"
+                onmouseout="this.style.filter='brightness(1)'">
+                🔁 EJECUTAR CLONADO
+            </button>
+            <button id="clonar-btn-crear" onclick="window.clonar.ejecutarYCrear()"
+                style="flex:1;padding:14px;
+                       background:linear-gradient(135deg,#001a3a,#004a8a,#001a3a);
+                       color:#88ccff;border:2px solid #4488cc;border-radius:8px;
+                       cursor:pointer;font-family:'Cinzel';font-weight:bold;font-size:0.95em;
+                       letter-spacing:0.05em;transition:0.2s;text-transform:uppercase;"
+                onmouseover="this.style.filter='brightness(1.3)'"
+                onmouseout="this.style.filter='brightness(1)'">
+                ✨ CLONAR Y CREAR PERSONAJE
+            </button>
+        </div>
     </div>`;
 }
 
