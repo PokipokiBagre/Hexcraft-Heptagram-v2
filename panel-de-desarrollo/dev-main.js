@@ -214,13 +214,9 @@ function cambiarFiltroRol(rol) {
     const btnJ = document.getElementById('tab-jugadores');
     const btnN = document.getElementById('tab-npcs');
 
-    if (rol === 'jugadores') {
-        btnJ.style.background = '#004a00'; btnJ.style.borderColor = '#00e676'; btnJ.style.color = 'white';
-        btnN.style.background = '#111'; btnN.style.borderColor = '#444'; btnN.style.color = '#888';
-    } else {
-        btnN.style.background = '#4a0000'; btnN.style.borderColor = '#ff4444'; btnN.style.color = 'white';
-        btnJ.style.background = '#111'; btnJ.style.borderColor = '#444'; btnJ.style.color = '#888';
-    }
+    btnJ.className = 'tab-rol-btn' + (rol === 'jugadores' ? ' active-jugadores' : '');
+    btnN.className = 'tab-rol-btn' + (rol === 'npcs'      ? ' active-npcs'      : '');
+
     renderSelectorPersonajes();
 }
 
