@@ -173,14 +173,14 @@ export function calcularConjurosMasivos(pjNombre) {
             }
 
             if (resultado === 'contrarrestado') {
-                lineLog += `NC: ${nc} | 🛡️ Contrarrestado | ❌ FALLO`;
+                lineLog += `NC: ${nc} | Contrarrestado | FALLO`;
 
             } else if (resultado === 'fallo_nc') {
-                lineLog += `NC: ${nc} | ❌ FALLO`;
+                lineLog += `NC: ${nc} | FALLO`;
 
             } else if (resultado === 'fallo_fondos') {
                 const disponible = vexRestante + hexRestante;
-                lineLog += `NC: ${nc} | ❌ FALLO (Sin Hex: necesita ${costoTotal}, disponible ${disponible})`;
+                lineLog += `NC: ${nc} | FALLO (Sin Hex: necesita ${costoTotal}, disponible ${disponible})`;
 
             } else {
                 // ÉXITO — cobrar
@@ -197,16 +197,16 @@ export function calcularConjurosMasivos(pjNombre) {
                 }
                 const isOvercast = !noFalla && !!outcastProp && costoUnit > 0 && nc >= (costoUnit * 2);
                 if (noFalla) {
-                    lineLog += `Infalible | ✅ ÉXITO`;
+                    lineLog += `Infalible | ÉXITO`;
                     if (hzState.mostrarEfectos && efeToPrint) lineLog += ` | ${efeToPrint}`;
                 } else {
                     lineLog += `NC: ${nc} | `;
                     if (hzState.mostrarEfectos) {
-                        lineLog += `✅ ÉXITO`;
+                        lineLog += `ÉXITO`;
                         if (efeToPrint) lineLog += ` | ${efeToPrint}`;
-                        if (isOvercast && outcastProp) lineLog += ` | 🌟 Overcast: ${outcastProp}`;
+                        if (isOvercast && outcastProp) lineLog += ` | Overcast: ${outcastProp}`;
                     } else {
-                        lineLog += isOvercast ? `✅ ÉXITO (Overcast)` : `✅ ÉXITO`;
+                        lineLog += isOvercast ? `ÉXITO (Overcast)` : `ÉXITO`;
                     }
                 }
                 validSpells += cant;
