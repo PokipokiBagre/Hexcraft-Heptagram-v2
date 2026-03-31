@@ -136,3 +136,54 @@ export function actualizarFiltros() {
     const filEl = document.getElementById('filtro-' + estadoUI.filtro);
     if (filEl) filEl.classList.add('active');
 }
+
+// ── Panel de imágenes huérfanas ───────────────────────────────
+export function renderHuerfanas(huerfanas) {
+    const cont = document.getElementById('panel-huerfanas');
+    if (!cont) return;
+
+    if (!huerfanas || huerfanas.length === 0) {
+        cont.innerHTML = `<p style="color:#00ff88;font-family:sans-serif;text-align:center;padding:30px;">
+            ✅ No hay imágenes huérfanas. Todo está en orden.
+        </p>`;
+        return;
+    }
+
+    const totalKB = Math.round(huerfanas.reduce((s, h) => s + (h.size || 0), 0) / 1024);
+
+    let html = `
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px;">
+        <span style="color:#ff9900;font-family:sans-serif;font-size:0.9em;">
+            ⚠️ <strong>${huerfanas.length}</strong> imágenes sin usar · ${totalKB} KB en total
+        </span>
+        <button onclick="window.eliminarTodasHuerfanas()"
+            style="background:#4a0000;border:1px solid #cc2222;color:#ff5555;
+                   padding:7px 18px;border-radius:6px;cursor:pointer;
+                   font-family:'Cinzel';font-size:0.82em;font-weight:bold;">
+            🗑️ Eliminar Todas
+        </button>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:12px;">`;
+
+    huerfanas.forEach((h, idx) => {
+        const safeRuta = h.ruta.replace(/'/g, "\\'");
+        const safeNom  = h.nombre.replace(/'/g, "\\'");
+        html += `
+        <div id="hcard-${idx}" style="background:rgba(40,0,0,0.5);border:1px solid #4a1010;
+                border-radius:8px;padding:8px;text-align:center;position:relative;">
+            <img src="${h.url}" onerror="this.src='${STORAGE_URL}/imginterfaz/no_encontrado.png'"
+                style="width:72px;height:72px;object-fit:cover;border-radius:6px;border:1px solid #555;">
+            <div style="font-size:0.62em;color:#aaa;margin-top:5px;word-break:break-all;
+                        font-family:sans-serif;line-height:1.3;">${h.nombre}</div>
+            <button onclick="window.eliminarHuerfana('${safeRuta}','${safeNom}',${idx})"
+                style="margin-top:6px;width:100%;background:#330000;border:1px solid #aa2222;
+                       color:#ff5555;padding:3px 0;border-radius:4px;cursor:pointer;
+                       font-size:0.7em;font-family:'Rajdhani';">
+                🗑️ Borrar
+            </button>
+        </div>`;
+    });
+
+    html += `</div>`;
+    cont.innerHTML = html;
+}
