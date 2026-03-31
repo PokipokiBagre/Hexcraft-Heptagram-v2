@@ -3,7 +3,7 @@
 // ============================================================
 
 import { pjEditorState } from './panel-personaje-state.js';
-import { crearPersonaje, editarNombrePersonaje, subirImagenPersonaje } from './panel-personaje-logic.js';
+import { crearPersonaje, editarNombrePersonaje, subirImagenPersonaje, eliminarPersonaje } from './panel-personaje-logic.js';
 import { devState, STORAGE_URL, norm } from '../dev-state.js';
 
 // ── API global ────────────────────────────────────────────────
@@ -111,6 +111,22 @@ window.pjEditor = {
         pjEditorState.editandoNombre = null;
         renderColumnaPersonaje();
         // 🔥 FIX REACTIVIDAD: El evento devPersonajesUpdate lanzado en _logic ahora garantiza la reactividad completa
+    },
+
+    async eliminarPersonaje(nombre) {
+        const confirmado = confirm(`⚠️ ¿Eliminar permanentemente a "${nombre}"?\n\nEsto borrará su personaje, inventario de objetos y grimorio de hechizos.\n\nEsta acción NO se puede deshacer.`);
+        if (!confirmado) return;
+
+        _setFeedback(`pje-del-${norm(nombre)}`, '⏳ Eliminando...', '#aaa');
+
+        const result = await eliminarPersonaje(nombre);
+
+        if (result.error) {
+            _setFeedback(`pje-del-${norm(nombre)}`, `❌ ${result.error}`, '#ff4444');
+            return;
+        }
+
+        renderColumnaPersonaje();
     },
 };
 
@@ -432,11 +448,20 @@ function _htmlGrid() {
         <button onclick="window.pjEditor.iniciarEdicion('${safeName}')"
             style="background:#0a0020;border:1px solid #2a1060;color:#7a6aaa;
                    border-radius:4px;padding:3px 10px;cursor:pointer;
-                   font-size:0.68em;font-family:'Rajdhani';transition:0.15s;width:100%;"
+                   font-size:0.68em;font-family:'Rajdhani';transition:0.15s;width:100%;margin-bottom:4px;"
             onmouseover="this.style.borderColor='#6a40cc';this.style.color='#cc88ff'"
             onmouseout="this.style.borderColor='#2a1060';this.style.color='#7a6aaa'">
             ✏️ Renombrar
-        </button>`;
+        </button>
+        <button onclick="window.pjEditor.eliminarPersonaje('${safeName}')"
+            style="background:#1a0000;border:1px solid #4a0000;color:#883333;
+                   border-radius:4px;padding:3px 10px;cursor:pointer;
+                   font-size:0.68em;font-family:'Rajdhani';transition:0.15s;width:100%;"
+            onmouseover="this.style.borderColor='#cc2222';this.style.color='#ff5555'"
+            onmouseout="this.style.borderColor='#4a0000';this.style.color='#883333'">
+            🗑️ Eliminar
+        </button>
+        <div id="pje-del-${k}" style="font-size:0.65em;min-height:1em;text-align:center;font-family:'Rajdhani';margin-top:2px;"></div>`;
 
         html += `
         <div style="background:rgba(8,0,18,0.85);border:1px solid ${borderBase}22;
