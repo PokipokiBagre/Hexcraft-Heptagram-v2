@@ -21,8 +21,9 @@ export function initObjetosDev(catalogo, inventarios) {
 
 export function getCantidadActual(pjNombre, objNombre) {
     if (!pjNombre) return 0;
+    // SIEMPRE usar toLowerCase() — es como initObjetosDev pobla los keys
     const pjKey = pjNombre.toLowerCase();
-    if (objState.colaInventario[pjKey] && objState.colaInventario[pjKey][objNombre] !== undefined) {
+    if (objState.colaInventario[pjKey] !== undefined && objState.colaInventario[pjKey][objNombre] !== undefined) {
         return objState.colaInventario[pjKey][objNombre];
     }
     if (objState.inventariosDB[pjKey] && objState.inventariosDB[pjKey][objNombre]) {
