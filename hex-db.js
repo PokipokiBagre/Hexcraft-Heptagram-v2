@@ -179,7 +179,7 @@ export const db = {
             const [nodos, strings, inventario, afinidades] = await Promise.all([
                 supabase.from('hechizos_nodos').select('*').order('hechizo_id'),
                 supabase.from('hechizos_strings').select('source_id, target_id'),
-                supabase.from('hechizos_inventario').select('*').order('personaje_nombre'),
+                supabase.from('hechizos_inventario').select('*').order('personaje_nombre').limit(5000),
                 supabase.from('hechizos_afinidades').select('*')
             ]);
 
