@@ -143,9 +143,14 @@ window.devMapa = {
     asignarDesdeNodo: (hechizoId, cobrarHex) => {
         const pj = asignState.pjSeleccionado;
         if (!pj) return;
+        // Usar el nombreOriginal del nodo en lugar del ID ("Hechizo 444")
+        const nodo = mapaDevState.nodosDB.find(n => n.id === hechizoId);
+        const idParaAsignar = (nodo && nodo.nombreOriginal && nodo.nombreOriginal !== nodo.id)
+            ? nodo.nombreOriginal
+            : hechizoId;
         const cobrarOriginal = hzState.cobrarAlAsignar;
         hzState.cobrarAlAsignar = cobrarHex;
-        asignarHechizo(pj, hechizoId);
+        asignarHechizo(pj, idParaAsignar);
         hzState.cobrarAlAsignar = cobrarOriginal;
 
         _calcularVistaPj(pj);
@@ -169,7 +174,11 @@ window.devMapa = {
             const tieneDB = inv.includes(idNorm) || inv.includes(norm(n.nombreOriginal || ''));
             const tiene   = inCola !== undefined ? inCola : tieneDB;
 
-            if (!tiene) asignarHechizo(pj, n.id);
+            if (!tiene) {
+                const idParaAsignar = (n.nombreOriginal && n.nombreOriginal !== n.id)
+                    ? n.nombreOriginal : n.id;
+                asignarHechizo(pj, idParaAsignar);
+            }
         });
 
         hzState.cobrarAlAsignar = cobrarOriginal;
@@ -193,7 +202,11 @@ window.devMapa = {
             const tieneDB = inv.includes(idNorm) || inv.includes(norm(n.nombreOriginal || ''));
             const tiene   = inCola !== undefined ? inCola : tieneDB;
 
-            if (tiene) asignarHechizo(pj, n.id);
+            if (tiene) {
+                const idParaAsignar = (n.nombreOriginal && n.nombreOriginal !== n.id)
+                    ? n.nombreOriginal : n.id;
+                asignarHechizo(pj, idParaAsignar);
+            }
         });
 
         hzState.cobrarAlAsignar = cobrarOriginal;
