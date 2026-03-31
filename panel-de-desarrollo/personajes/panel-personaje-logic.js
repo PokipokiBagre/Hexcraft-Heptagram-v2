@@ -71,6 +71,23 @@ export async function editarNombrePersonaje(nombreActual, nuevoNombre) {
     );
     if (existe) return { error: `Ya existe un personaje llamado "${nuevoTrimmed}".` };
 
+    const oldNorm = norm(nombreActual);
+    const newNorm = norm(nuevoTrimmed);
+
+    // 🌟 NUEVO: Mover los archivos de imagen en Supabase Storage
+    try {
+        // Renombramos PNG y JPG. No usamos await para que se hagan en paralelo y sea más rápido.
+        const moverPng = supabase.storage.from(BUCKET).move(`imgpersonajes/${oldNorm}icon.png`, `imgpersonajes/${newNorm}icon.png`);
+        const moverJpg = supabase.storage.from(BUCKET).move(`imgpersonajes/${oldNorm}icon.jpg`, `imgpersonajes/${newNorm}icon.jpg`);
+        
+        // Esperamos a que terminen, pero no lanzamos error si fallan 
+        // (ya que puede que el personaje no tuviera imagen personalizada subida).
+        await Promise.all([moverPng, moverJpg]);
+    } catch (e) {
+        console.warn("Aviso al mover imágenes en Storage:", e);
+    }
+
+    // Actualizar Base de Datos (Gracias al script SQL de Cascade, esto no dará error)
     const { error } = await supabase
         .from('personajes')
         .update({ nombre: nuevoTrimmed })
@@ -78,13 +95,12 @@ export async function editarNombrePersonaje(nombreActual, nuevoNombre) {
 
     if (error) return { error: error.message };
 
+    // Actualizar estado local
     const pj = devState.listaPersonajes.find(p => p.nombre === nombreActual);
     if (pj) pj.nombre = nuevoTrimmed;
     window.__devListaPersonajes = devState.listaPersonajes;
 
-    const oldNorm = norm(nombreActual);
-    const newNorm = norm(nuevoTrimmed);
-
+    // Migrar colas y bases de datos locales al nuevo key
     if (stState.statsDB[nombreActual]) { stState.statsDB[nuevoTrimmed] = stState.statsDB[nombreActual]; delete stState.statsDB[nombreActual]; }
     if (stState.colaStats[nombreActual]) { stState.colaStats[nuevoTrimmed] = stState.colaStats[nombreActual]; delete stState.colaStats[nombreActual]; }
     if (stState.colaNotas[nombreActual]) { stState.colaNotas[nuevoTrimmed] = stState.colaNotas[nombreActual]; delete stState.colaNotas[nombreActual]; }
