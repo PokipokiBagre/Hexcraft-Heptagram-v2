@@ -7,7 +7,7 @@ import {
     asignarHechizo, toggleVisibilidad, setBusquedaHz, setVistaHz, toggleConfigCasteo,
     setNumFilasCast, modFilaCast, setModoDatalist, calcularConjurosMasivos,
     copiarPrimerDado, copiarPrimerHechizo,
-    toggleFilaCobrar, toggleFilaNoFalla
+    toggleFilaCobrar, toggleFilaNoFalla, toggleFilaContrarrestada
 } from './panel-hechizos-logic.js';
 import { norm } from '../dev-state.js';
 
@@ -24,7 +24,8 @@ window.devCalcularConjuros     = calcularConjurosMasivos;
 window.devCopiarPrimerDado     = copiarPrimerDado;
 window.devCopiarPrimerHechizo  = copiarPrimerHechizo;
 window.devToggleFilaCobrar     = toggleFilaCobrar;
-window.devToggleFilaNoFalla    = toggleFilaNoFalla;
+window.devToggleFilaNoFalla        = toggleFilaNoFalla;
+window.devToggleFilaContrarrestada = toggleFilaContrarrestada;
 
 // 🌟 UTILIDAD DE EXTRACCIÓN DIRECTA
 const getVal = (v) => {
@@ -403,6 +404,17 @@ export function renderColumnaHechizos(pjSeleccionado) {
                                color:${fila.noFalla ? '#00ccee' : '#3a3a3a'};
                                transition:0.15s;">
                         ${fila.noFalla ? '🎯' : '⬜'} Infalible
+                    </button>
+
+                    <!-- 🛡️ Contrarrestado -->
+                    <button onclick="window.devToggleFilaContrarrestada(${i})"
+                        title="${fila.contrarrestado ? 'Contrarrestado ACTIVO — el hechizo falla sin gastar recursos. Clic para desactivar.' : 'Marcar como Contrarrestado — fallo forzado sin consumir Hex.'}"
+                        style="padding:3px 9px; border-radius:4px; cursor:pointer; font-size:0.78em; font-weight:bold; font-family:'Rajdhani'; white-space:nowrap;
+                               border:1px solid ${fila.contrarrestado ? '#cc4400' : '#252525'};
+                               background:${fila.contrarrestado ? 'rgba(220,80,0,0.12)' : '#0d0d0d'};
+                               color:${fila.contrarrestado ? '#ff6622' : '#3a3a3a'};
+                               transition:0.15s;">
+                        ${fila.contrarrestado ? '🛡️' : '⬜'} Contrarrestado
                     </button>
 
                     <!-- ±HEX: Sobrecosto / Descuento -->
