@@ -313,11 +313,16 @@ function _generarBotonesPersonajes(fuentePj) {
 
     html += fuentePj.map(p => {
         const activo = asignState.pjSeleccionado === p.nombre;
+        const pjKey  = norm(p.nombre);
+        const inv    = hzState.inventariosDB[pjKey] || [];
+        const tieneHz = inv.length > 0 || Object.keys(hzState.colaAsignaciones[pjKey] || {}).some(k => hzState.colaAsignaciones[pjKey][k]);
         return `<button onclick="window.devMapa.seleccionarPjAsign('${p.nombre.replace(/'/g,"\\'")}')"
             style="padding:5px 11px;border-radius:20px;cursor:pointer;font-family:'Rajdhani';font-size:0.82em;font-weight:bold;transition:0.2s;
             ${activo
                 ? 'background:#4a1880;color:#fff;border:1px solid #b060ff;'
-                : 'background:#0a0018;color:#888;border:1px solid #333;'}">
+                : tieneHz
+                    ? 'background:#0a0018;color:#aaa;border:1px solid #444;'
+                    : 'background:#0d0d0d;color:#666;border:1px solid #333;'}">
             ${_esc(p.nombre)}
         </button>`;
     }).join('');
@@ -369,6 +374,11 @@ function _htmlVistaCanvas() {
             style="flex:1;padding:8px 4px;border-radius:6px;background:#00ffff;color:#000;border:2px solid #00ffff;cursor:pointer;font-weight:bold;font-size:0.74em;font-family:'Cinzel';">
             👆<br>Select
         </button>
+        <button id="mm-tool-lasso" onclick="window.devMapa.setHerramienta('lasso')"
+            title="Dibuja a mano alzada para seleccionar varios nodos"
+            style="flex:1;padding:8px 4px;border-radius:6px;background:#111;color:#ff9900;border:2px solid #ff9900;cursor:pointer;font-weight:bold;font-size:0.74em;font-family:'Cinzel';">
+            ✏️<br>Lasso
+        </button>
         <button id="mm-tool-enlace" onclick="window.devMapa.setHerramienta('enlace')"
             title="Arrastra de un nodo a otro para crear una flecha"
             style="flex:1;padding:8px 4px;border-radius:6px;background:#111;color:#00ffff;border:2px solid #00ffff;cursor:pointer;font-weight:bold;font-size:0.74em;font-family:'Cinzel';">
@@ -389,7 +399,7 @@ function _htmlVistaCanvas() {
         <div style="position:relative;flex:1 1 300px;height:600px;background:#05000a;border:1px solid #2a1060;border-radius:8px;overflow:hidden;min-width:100px;">
             <canvas id="mini-mapa-canvas" style="display:block;width:100%;height:100%;cursor:grab;"></canvas>
             <div style="position:absolute;top:8px;right:8px;color:#2a2a2a;font-size:0.62em;text-align:right;pointer-events:none;line-height:1.7;">
-                Scroll: zoom<br>Drag: mover<br>SHIFT+drag fondo: caja
+                Scroll: zoom<br>Drag: mover<br>SHIFT+drag fondo: caja<br>Lasso: dibujar selección
             </div>
         </div>
         <div id="mm-props-panel"
@@ -677,7 +687,13 @@ function _engacharEventos(canvas) {
         miniMapa.inter.lastMouseX  = e.clientX;
         miniMapa.inter.lastMouseY  = e.clientY;
 
-        if (herr === 'enlace' || herr === 'eliminar-enlace') {
+        if (herr === 'lasso') {
+            mapaDevState.seleccionMultiple.clear();
+            mapaDevState.lassoActivo = true;
+            const rect = canvas.getBoundingClientRect();
+            mapaDevState.lassoPuntos = [{ x: e.clientX - rect.left, y: e.clientY - rect.top }];
+            canvas.style.cursor = 'crosshair';
+        } else if (herr === 'enlace' || herr === 'eliminar-enlace') {
             if (nodo) {
                 mapaDevState.tempLink = { source: nodo, endX: nodo.x, endY: nodo.y };
             }
@@ -708,7 +724,7 @@ function _engacharEventos(canvas) {
                 }
             }
         }
-        canvas.style.cursor = 'grabbing';
+        canvas.style.cursor = herr === 'lasso' ? 'crosshair' : 'grabbing';
     });
 
     canvas.addEventListener('mousemove', (e) => {
@@ -718,7 +734,10 @@ function _engacharEventos(canvas) {
 
         const wp = toWorld(e.clientX, e.clientY);
 
-        if (mapaDevState.tempLink) {
+        if (mapaDevState.lassoActivo) {
+            const rect = canvas.getBoundingClientRect();
+            mapaDevState.lassoPuntos.push({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+        } else if (mapaDevState.tempLink) {
             mapaDevState.tempLink.endX = wp.x;
             mapaDevState.tempLink.endY = wp.y;
             miniMapa.inter.hoveredNode = hitNodo(wp.x, wp.y);
@@ -741,7 +760,7 @@ function _engacharEventos(canvas) {
             const nodo = hitNodo(wp.x, wp.y);
             if (nodo !== miniMapa.inter.hoveredNode) {
                 miniMapa.inter.hoveredNode = nodo;
-                canvas.style.cursor = nodo ? 'pointer' : 'grab';
+                canvas.style.cursor = nodo ? 'pointer' : (mapaDevState.herramienta === 'lasso' ? 'crosshair' : 'grab');
             }
         }
 
@@ -754,7 +773,28 @@ function _engacharEventos(canvas) {
         const nodo = hitNodo(wp.x, wp.y);
         const herr = mapaDevState.herramienta;
 
-        if (mapaDevState.tempLink) {
+        if (mapaDevState.lassoActivo) {
+            mapaDevState.lassoActivo = false;
+            const puntos = mapaDevState.lassoPuntos;
+            if (puntos.length >= 3) {
+                // Ray-casting en coords de pantalla: convertir cada nodo mundo → pantalla
+                const rect = canvas.getBoundingClientRect();
+                const dpr  = window.devicePixelRatio || 1;
+                mapaDevState.nodosDB.forEach(n => {
+                    const sx = n.x * miniMapa.camara.zoom + miniMapa.camara.x;
+                    const sy = n.y * miniMapa.camara.zoom + miniMapa.camara.y;
+                    if (_puntoEnPoligono({ x: sx, y: sy }, puntos)) {
+                        mapaDevState.seleccionMultiple.add(n);
+                    }
+                });
+            }
+            mapaDevState.lassoPuntos = [];
+            _renderPropiedades();
+            if (asignState.pjSeleccionado) {
+                const np = document.getElementById('mm-asign-nodo-panel');
+                if (np) np.innerHTML = _htmlAsignNodo();
+            }
+        } else if (mapaDevState.tempLink) {
             if (nodo && nodo !== mapaDevState.tempLink.source) {
                 if (herr === 'enlace') {
                     crearEnlaceDev(mapaDevState.tempLink.source, nodo);
@@ -794,7 +834,7 @@ function _engacharEventos(canvas) {
 
         miniMapa.inter.isDraggingBg = false;
         miniMapa.inter.draggedNode  = null;
-        canvas.style.cursor = miniMapa.inter.hoveredNode ? 'pointer' : 'grab';
+        canvas.style.cursor = herr === 'lasso' ? 'crosshair' : (miniMapa.inter.hoveredNode ? 'pointer' : 'grab');
     });
 
     canvas.addEventListener('mouseleave', () => {
@@ -802,6 +842,8 @@ function _engacharEventos(canvas) {
         miniMapa.inter.draggedNode  = null;
         miniMapa.inter.hoveredNode  = null;
         mapaDevState.tempLink       = null;
+        mapaDevState.lassoActivo    = false;
+        mapaDevState.lassoPuntos    = [];
         canvas.style.cursor = 'grab';
     });
 
@@ -936,6 +978,20 @@ function _engacharEventos(canvas) {
         miniMapa.inter.hoveredNode  = null;
         pinchDist = 0;
     });
+}
+
+// ── RAY-CASTING: punto dentro de polígono ─────────────────────
+function _puntoEnPoligono(punto, poligono) {
+    let dentro = false;
+    const n = poligono.length;
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+        const xi = poligono[i].x, yi = poligono[i].y;
+        const xj = poligono[j].x, yj = poligono[j].y;
+        const intersecta = ((yi > punto.y) !== (yj > punto.y))
+            && (punto.x < (xj - xi) * (punto.y - yi) / (yj - yi) + xi);
+        if (intersecta) dentro = !dentro;
+    }
+    return dentro;
 }
 
 // ── LOOP DE RENDER ────────────────────────────────────────────
@@ -1181,6 +1237,25 @@ function _dibujarFrame() {
         ctx.strokeRect(bx, by, bw, bh);
         ctx.setLineDash([]);
     }
+
+    // ── LASSO OVERLAY (se dibuja en coords de pantalla, fuera del transform) ──
+    if (mapaDevState.lassoActivo && mapaDevState.lassoPuntos.length > 1) {
+        const dpr = window.devicePixelRatio || 1;
+        // Salir del transform del canvas para dibujar en coords de pantalla
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        const pts = mapaDevState.lassoPuntos;
+        ctx.beginPath();
+        ctx.moveTo(pts[0].x, pts[0].y);
+        for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+        ctx.closePath();
+        ctx.fillStyle   = 'rgba(255,153,0,0.07)';
+        ctx.strokeStyle = '#ff9900';
+        ctx.lineWidth   = 1.5;
+        ctx.setLineDash([5, 3]);
+        ctx.fill();
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
 }
 
 // ── PANEL DE PROPIEDADES ──────────────────────────────────────
@@ -1338,20 +1413,36 @@ function _renderPropiedades() {
 // ── TOOLBAR ───────────────────────────────────────────────────
 function _actualizarToolbar() {
     const herr = mapaDevState.herramienta;
-    const ids  = { cursor: 'mm-tool-cursor', enlace: 'mm-tool-enlace', 'eliminar-enlace': 'mm-tool-cortar' };
-    Object.values(ids).forEach(id => {
+    const ids  = {
+        cursor:            'mm-tool-cursor',
+        lasso:             'mm-tool-lasso',
+        enlace:            'mm-tool-enlace',
+        'eliminar-enlace': 'mm-tool-cortar',
+    };
+    // Reset all
+    Object.entries(ids).forEach(([h, id]) => {
         const el = document.getElementById(id);
         if (!el) return;
-        const isCut = id === 'mm-tool-cortar';
         el.style.background = '#111';
-        el.style.color = isCut ? '#ff4444' : '#00ffff';
+        if (h === 'eliminar-enlace') el.style.color = '#ff4444';
+        else if (h === 'lasso')      el.style.color = '#ff9900';
+        else                         el.style.color = '#00ffff';
     });
+    // Highlight active
     const activeId = ids[herr];
     if (activeId) {
         const el = document.getElementById(activeId);
         if (el) {
-            el.style.background = herr === 'eliminar-enlace' ? '#ff4444' : '#00ffff';
-            el.style.color      = '#000';
+            if (herr === 'eliminar-enlace') {
+                el.style.background = '#ff4444';
+                el.style.color      = '#000';
+            } else if (herr === 'lasso') {
+                el.style.background = '#ff9900';
+                el.style.color      = '#000';
+            } else {
+                el.style.background = '#00ffff';
+                el.style.color      = '#000';
+            }
         }
     }
 }
