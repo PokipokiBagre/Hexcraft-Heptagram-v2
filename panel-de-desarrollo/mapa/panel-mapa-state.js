@@ -15,11 +15,13 @@ export const mapaDevState = {
     filtroVisibilidad: 'todos',   // 'todos' | 'conocidos' | 'ocultos'
 
     // ── Estado del editor (canvas) ───────────────────────────
-    herramienta:       'cursor',  // 'cursor' | 'enlace' | 'eliminar-enlace'
+    herramienta:       'cursor',  // 'cursor' | 'enlace' | 'eliminar-enlace' | 'lasso'
     seleccionMultiple: new Set(),
     tempLink:          null,      // { source: nodo, endX, endY }
     boxStart:          null,      // { x, y } en coords mundo
     boxCurrent:        null,      // { x, y } en coords mundo
+    lassoPuntos:       [],        // [{x,y}] coords pantalla mientras se dibuja
+    lassoActivo:       false,
 
     // ── 🔥 Colas de cambios (Staging) ───────────────────────
 
