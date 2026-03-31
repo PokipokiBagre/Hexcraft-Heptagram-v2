@@ -4,11 +4,12 @@
 
 import { hexAuth } from '../hex-auth.js';
 import { estadoUI, STORAGE_URL } from './extra-state.js';
-import { asegurarBucket, cargarDatos, subirImagen } from './extra-data.js';
+import { asegurarBucket, cargarDatos, subirImagen, cargarHuerfanas, eliminarImagenStorage } from './extra-data.js';
 import { marcarExiste } from './extra-logic.js';
 import {
     renderGrid, mostrarPanelUpload, ocultarPanelUpload,
-    actualizarProgreso, resetProgressUI, actualizarTabs, actualizarFiltros
+    actualizarProgreso, resetProgressUI, actualizarTabs, actualizarFiltros,
+    renderHuerfanas
 } from './extra-ui.js';
 
 // ── Iniciar ──────────────────────────────────────────────────
@@ -154,5 +155,61 @@ window.handleFileSelect = async (e) => {
         }, 3500);
     }
 }
+
+
+// ── Imágenes Huérfanas ────────────────────────────────────────
+let _huerfanasCache = null;
+
+window.abrirHuerfanas = async () => {
+    const panel = document.getElementById('panel-huerfanas');
+    const btn   = document.getElementById('btn-huerfanas');
+    if (!panel) return;
+
+    const visible = panel.style.display !== 'none';
+    if (visible) {
+        panel.style.display = 'none';
+        if (btn) btn.textContent = '🗂️ Ver Imágenes No Usadas';
+        return;
+    }
+
+    panel.style.display = 'block';
+    if (btn) btn.textContent = '⏳ Cargando...';
+    panel.innerHTML = '<p style="color:#aaa;font-family:sans-serif;text-align:center;padding:20px;">Buscando imágenes huérfanas...</p>';
+    panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    _huerfanasCache = await cargarHuerfanas();
+    renderHuerfanas(_huerfanasCache);
+    if (btn) btn.textContent = '🗂️ Ver Imágenes No Usadas';
+};
+
+window.eliminarHuerfana = async (ruta, nombre, idx) => {
+    if (!confirm(`¿Eliminar "${nombre}" del Storage?
+Esta acción no se puede deshacer.`)) return;
+    const card = document.getElementById(`hcard-${idx}`);
+    if (card) card.style.opacity = '0.4';
+    const ok = await eliminarImagenStorage(ruta);
+    if (ok) {
+        if (card) card.remove();
+        if (_huerfanasCache) _huerfanasCache = _huerfanasCache.filter(h => h.ruta !== ruta);
+    } else {
+        if (card) card.style.opacity = '1';
+        alert('Error al eliminar. Intenta de nuevo.');
+    }
+};
+
+window.eliminarTodasHuerfanas = async () => {
+    if (!_huerfanasCache || _huerfanasCache.length === 0) return;
+    if (!confirm(`¿Eliminar las ${_huerfanasCache.length} imágenes huérfanas?
+Esta acción NO se puede deshacer.`)) return;
+    const panel = document.getElementById('panel-huerfanas');
+    if (panel) panel.innerHTML = '<p style="color:#aaa;font-family:sans-serif;text-align:center;padding:20px;">⏳ Eliminando...</p>';
+    let ok = 0;
+    for (const h of _huerfanasCache) {
+        const res = await eliminarImagenStorage(h.ruta);
+        if (res) ok++;
+    }
+    _huerfanasCache = [];
+    if (panel) panel.innerHTML = `<p style="color:#00ff88;font-family:sans-serif;text-align:center;padding:20px;">✅ ${ok} imágenes eliminadas.</p>`;
+};
 
 iniciar();
