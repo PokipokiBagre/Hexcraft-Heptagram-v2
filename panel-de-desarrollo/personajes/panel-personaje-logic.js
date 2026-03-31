@@ -215,3 +215,42 @@ function _convertirAFormatos(file) {
         img.src = url;
     });
 }
+
+// ── ELIMINAR PERSONAJE COMPLETO ───────────────────────────────
+export async function eliminarPersonaje(nombre) {
+    if (!nombre) return { error: 'Nombre inválido.' };
+
+    const normNom = norm(nombre);
+
+    // 1. Eliminar hechizos del inventario
+    await supabase.from('hechizos_inventario').delete().eq('personaje_nombre', nombre);
+
+    // 2. Eliminar objetos del inventario
+    await supabase.from('inventario_objetos').delete().eq('personaje_nombre', nombre);
+
+    // 3. Eliminar el personaje
+    const { error } = await supabase.from('personajes').delete().eq('nombre', nombre);
+    if (error) return { error: error.message };
+
+    // 4. Limpiar estado local
+    devState.listaPersonajes = devState.listaPersonajes.filter(p => p.nombre !== nombre);
+    window.__devListaPersonajes = devState.listaPersonajes;
+
+    delete stState.statsDB[nombre];
+    delete stState.colaStats[nombre];
+    delete stState.colaNotas[nombre];
+    delete objState.inventariosDB[normNom];
+    delete objState.equipadosDB[normNom];
+    delete objState.colaInventario[normNom];
+    delete objState.colaEquipados[normNom];
+    delete hzState.inventariosDB[normNom];
+    delete hzState.colaAsignaciones[normNom];
+
+    if (devState.pjSeleccionado === nombre) {
+        devState.pjSeleccionado = null;
+        document.getElementById('dev-workspace')?.classList.add('oculto');
+    }
+
+    window.dispatchEvent(new Event('devPersonajesUpdate'));
+    return { ok: true };
+}
