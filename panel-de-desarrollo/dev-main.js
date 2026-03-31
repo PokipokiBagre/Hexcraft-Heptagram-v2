@@ -15,6 +15,7 @@ import { renderColumnaHechizos } from './hechizos/panel-hechizos-ui.js';
 import { initMapaDev } from './mapa/panel-mapa-logic.js';
 import { renderColumnaMapa } from './mapa/panel-mapa-ui.js';
 import { renderColumnaPersonaje } from './personajes/panel-personaje-ui.js';
+import { renderColumnaClonar }    from './clonar/panel-clonar-ui.js';
 
 window.cambiarFiltroRol = cambiarFiltroRol;
 window.filtrarPorNombre = filtrarPorNombre;
@@ -299,6 +300,7 @@ function cambiarPanelInferior(panel) {
 
     if (panel === 'mapa')      renderColumnaMapa();
     if (panel === 'personaje') renderColumnaPersonaje();
+    if (panel === 'acciones')  renderColumnaClonar();
 }
 
 function copiarLogGlobal() {
