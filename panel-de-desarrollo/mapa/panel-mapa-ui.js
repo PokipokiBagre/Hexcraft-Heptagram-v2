@@ -1046,7 +1046,7 @@ function _dibujarFrame() {
             if (sP && tP)       color = 'rgba(180,140,255,0.5)';
             else if (sP && tA)  color = 'rgba(212,175,55,0.5)';
             else if (sT && tT)  color = 'rgba(140,120,80,0.25)';
-            else                color = 'rgba(60,60,70,0.15)';
+            else                color = 'rgba(70,70,80,0.35)';
         } else {
             const sV = getVisibilidadActual(s.id);
             const tV = getVisibilidadActual(t.id);
@@ -1092,9 +1092,9 @@ function _dibujarFrame() {
                 colorBorde = 'rgba(160,140,80,0.55)';
                 alpha      = esConocido ? 0.65 : 0.45;
             } else {
-                colorCore  = 'rgba(50,50,55,0.3)';
-                colorBorde = 'rgba(80,80,85,0.3)';
-                alpha      = esConocido ? 0.35 : 0.25;
+                colorCore  = esConocido ? 'rgba(90,90,95,0.85)' : 'rgba(70,70,75,0.75)';
+                colorBorde = esConocido ? 'rgba(110,110,115,0.7)' : 'rgba(90,90,95,0.6)';
+                alpha      = esConocido ? 0.55 : 0.4;
             }
         } else {
             colorCore  = esConocido ? COLOR_DESCUBIERTO : COLOR_OCULTO;
