@@ -112,7 +112,9 @@ window.onload = async () => {
         initObjetosDev(catalogoObj, invObj);
         initStatsDev(statsGlobalMock, estadosListMock);
         initHechizosDev(catalogoHz, invHz || []); 
-
+console.log('invHz total:', invHz?.length);
+console.log('lacossa en invHz:', invHz?.filter(i => i.personaje_nombre === 'Lacossa'));
+        
         // ── Inicializar panel mapa con datos de hechizosData ──
         // Construimos la lista de nodos en el mismo formato que usa estadoMapa
         const nodosParaMapa = catalogoHz.map(n => ({
