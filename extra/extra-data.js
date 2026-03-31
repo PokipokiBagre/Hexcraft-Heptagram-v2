@@ -241,3 +241,45 @@ function convertirAFormatos(file) {
         img.src = url;
     });
 }
+
+// ── IMÁGENES HUÉRFANAS ────────────────────────────────────────
+// Devuelve las imágenes en Storage que no corresponden a ningún
+// personaje activo ni objeto del catálogo.
+export async function cargarHuerfanas() {
+    const { db } = await import('../hex-db.js');
+
+    // 1. Keys en uso por personajes
+    const norm = (str) => str ? str.toString().trim().toLowerCase()
+        .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
+        .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
+        .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n')
+        .replace(/\s+/g,'_').replace(/[^a-z0-9_\-]/g,'') : '';
+
+    const [personajes, catalogo, resStorage] = await Promise.all([
+        db.personajes.getAll(),
+        db.objetos.getCatalogo(),
+        supabase.storage.from(BUCKET).list('imgpersonajes', { limit: 1000 })
+    ]);
+
+    const keysEnUso = new Set();
+    personajes.forEach(p => {
+        const key = norm(p.icono_override || p.nombre) + 'icon';
+        keysEnUso.add(key + '.png');
+        keysEnUso.add(key + '.jpg');
+    });
+
+    const archivos = resStorage.data || [];
+    const huerfanas = archivos.filter(f => !keysEnUso.has(f.name.toLowerCase()));
+
+    return huerfanas.map(f => ({
+        nombre: f.name,
+        ruta:   `imgpersonajes/${f.name}`,
+        url:    `${STORAGE_URL}/imgpersonajes/${f.name}`,
+        size:   f.metadata?.size || 0
+    }));
+}
+
+export async function eliminarImagenStorage(ruta) {
+    const { error } = await supabase.storage.from(BUCKET).remove([ruta]);
+    return !error;
+}
