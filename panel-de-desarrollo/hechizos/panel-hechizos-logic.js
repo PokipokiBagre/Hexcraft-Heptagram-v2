@@ -60,6 +60,14 @@ export function toggleFilaCobrar(i) {
 
 export function toggleFilaNoFalla(i) { hzState.casteoManual.filas[i].noFalla = !hzState.casteoManual.filas[i].noFalla; window.dispatchEvent(new Event('devUIUpdate')); }
 
+export function toggleFilaContrarrestada(i) {
+    const fila = hzState.casteoManual.filas[i];
+    fila.contrarrestado = !fila.contrarrestado;
+    // Contrarrestado y noFalla son mutuamente excluyentes
+    if (fila.contrarrestado) fila.noFalla = false;
+    window.dispatchEvent(new Event('devUIUpdate'));
+}
+
 export function setModoDatalist(modo) { hzState.casteoManual.datalistModo = modo; window.dispatchEvent(new Event('devUIUpdate')); }
 
 export function copiarPrimerHechizo() {
@@ -135,6 +143,7 @@ export function calcularConjurosMasivos(pjNombre) {
         const dado        = parseInt(fila.dado)        || 0;
         const afin        = parseInt(fila.afinidad)    || 0;
         const noFalla     = fila.noFalla === true;
+        // fila.contrarrestado se lee directamente donde se necesita
         const ajusteCosto = parseInt(fila.ajusteCosto) || 0;
         const debeCobrarse = fila.cobrarHex !== null ? fila.cobrarHex : hzState.cobrarAuto;
 
@@ -148,10 +157,14 @@ export function calcularConjurosMasivos(pjNombre) {
             const outcastProp = getValKeys(hechizo, ['overcast 100%','overcast','efecto_overcast']);
             const realName    = hechizo.Nombre || hechizo.nombre;
 
-            let lineLog = `Casteo | ${realName} x${cant} | `;
+            // Prefijo del log: usar afinidad del hechizo en lugar de "Casteo"
+            const afHechizo   = hechizo.Afinidad || hechizo.afinidad || 'Casteo';
+            let lineLog = `${afHechizo} | ${realName} x${cant} | `;
             let resultado = 'exito';
 
-            if (!noFalla) {
+            if (fila.contrarrestado) {
+                resultado = 'contrarrestado';
+            } else if (!noFalla) {
                 if (nc < costoUnit) {
                     resultado = 'fallo_nc';
                 } else if (debeCobrarse && costoTotal > 0) {
@@ -159,7 +172,10 @@ export function calcularConjurosMasivos(pjNombre) {
                 }
             }
 
-            if (resultado === 'fallo_nc') {
+            if (resultado === 'contrarrestado') {
+                lineLog += `NC: ${nc} | 🛡️ Contrarrestado | ❌ FALLO`;
+
+            } else if (resultado === 'fallo_nc') {
                 lineLog += `NC: ${nc} | ❌ FALLO`;
 
             } else if (resultado === 'fallo_fondos') {
@@ -220,7 +236,7 @@ export function calcularConjurosMasivos(pjNombre) {
 
     logsArr.forEach(l => hzState.logCasteosSession.push({ pj: pjNombre, msg: l }));
 
-    hzState.casteoManual.filas = Array.from({ length: 50 }, () => ({ dado:'', nombre:'', afinidad:'', cant:1, cobrarHex:null, noFalla:false, ajusteCosto:0 }));
+    hzState.casteoManual.filas = Array.from({ length: 50 }, () => ({ dado:'', nombre:'', afinidad:'', cant:1, cobrarHex:null, noFalla:false, contrarrestado:false, ajusteCosto:0 }));
     window.dispatchEvent(new Event('devUIUpdate'));
 }
 
