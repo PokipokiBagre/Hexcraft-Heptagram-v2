@@ -111,6 +111,7 @@ window.onload = async () => {
 
         initObjetosDev(catalogoObj, invObj);
         initStatsDev(statsGlobalMock, estadosListMock);
+        console.log('invHz count:', invHz?.length, 'sample:', invHz?.slice(0,3));
         initHechizosDev(catalogoHz, invHz || []); 
 
         // ── Inicializar panel mapa con datos de hechizosData ──
