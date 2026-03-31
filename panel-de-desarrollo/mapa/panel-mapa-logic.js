@@ -16,6 +16,8 @@ export function initMapaDev(nodos, enlaces, colores) {
     mapaDevState.tempLink          = null;
     mapaDevState.boxStart          = null;
     mapaDevState.boxCurrent        = null;
+    mapaDevState.lassoPuntos       = [];
+    mapaDevState.lassoActivo       = false;
 
     mapaDevState.colaVisibilidad   = {};
     mapaDevState.colaPosiciones    = {};
