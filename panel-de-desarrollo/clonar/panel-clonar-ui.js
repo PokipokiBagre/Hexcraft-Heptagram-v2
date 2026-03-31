@@ -21,13 +21,18 @@ window.clonar = {
         clonarState.hechizosSeleccionados.clear();
         clonarState.objetosCantidades = {};
         clonarState.feedback = null;
-        _refresh();
+        // Refrescar solo el selector origen (preserva scroll) + config + destino (puede filtrarse)
+        _refreshSelector('origen');
+        _refreshSelector('destino'); // destino filtra al origen
+        _refreshConfigPanel();
     },
 
     selDestino(nombre) {
         clonarState.pjDestino = nombre;
         clonarState.feedback = null;
-        _refresh();
+        // Solo refrescar el selector destino y el panel de config/preview
+        _refreshSelector('destino');
+        _refreshConfigPanel();
     },
 
     setFiltroOrigen(rol) {
@@ -127,7 +132,14 @@ window.clonar = {
 function _refresh()                { renderColumnaClonar(); }
 function _refreshSelector(lado)    {
     const el = document.getElementById(`clonar-sel-${lado}`);
-    if (el) el.innerHTML = _htmlSelector(lado);
+    if (!el) return;
+    // Guardar posición de scroll antes de re-renderizar
+    const scrollEl = document.getElementById(`clonar-scroll-${lado}`);
+    const scrollTop = scrollEl ? scrollEl.scrollTop : 0;
+    el.innerHTML = _htmlSelector(lado);
+    // Restaurar scroll después del render
+    const newScrollEl = document.getElementById(`clonar-scroll-${lado}`);
+    if (newScrollEl) newScrollEl.scrollTop = scrollTop;
 }
 function _refreshConfigPanel()     {
     const el = document.getElementById('clonar-config');
@@ -294,7 +306,7 @@ function _htmlSelector(lado) {
             style="width:100%;box-sizing:border-box;background:#000;color:#fff;
                    border:1px solid #333;border-radius:5px;padding:6px;
                    font-family:'Rajdhani';font-size:0.85em;outline:none;margin-bottom:7px;">
-        <div style="display:flex;flex-direction:column;gap:4px;max-height:420px;overflow-y:auto;">`;
+        <div id="clonar-scroll-${lado}" style="display:flex;flex-direction:column;gap:4px;max-height:420px;overflow-y:auto;">`;
 
     if (!lista.length) {
         html += `<div style="color:#444;text-align:center;padding:20px;font-size:0.8em;font-style:italic;">
