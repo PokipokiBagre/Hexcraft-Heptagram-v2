@@ -74,7 +74,7 @@ export const hexAuth = {
 
     // ── Getters de estado ──
     estaLogueado() { return this._session !== null; },
-    esAdmin()      { return this._perfil?.rol === 'admin'; },
+    esAdmin()      { return this._perfil?.rol === 'admin' || this._session?.user?.app_metadata?.rol === 'admin'; },
     esJugador()    { return this._perfil?.rol === 'jugador'; },
     getEmail()     { return this._session?.user?.email || null; },
     getPersonaje() { return this._perfil?.personaje_nombre || null; },
@@ -100,7 +100,14 @@ export const hexAuth = {
         }
         this._perfil = perfil;
 
-        return { ok: true, esAdmin: perfil?.rol === 'admin' };
+        // Fallback: si perfiles_usuario no responde, leer rol del JWT metadata
+        if (!perfil) {
+            const metaRol = data.user?.app_metadata?.rol;
+            if (metaRol) this._perfil = { rol: metaRol, personaje_nombre: null };
+        }
+
+        const esAdmin = this._perfil?.rol === 'admin' || data.user?.app_metadata?.rol === 'admin';
+        return { ok: true, esAdmin };
     },
 
     // ── Logout ──
