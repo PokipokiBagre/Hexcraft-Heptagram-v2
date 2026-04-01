@@ -27,46 +27,74 @@ export async function asegurarBucket() {
 
 export async function cargarDatos() {
     const [resP, resO, resI] = await Promise.all([
-        supabase.storage.from(BUCKET).list('imgpersonajes', { limit: 1000 }),
-        supabase.storage.from(BUCKET).list('imgobjetos',    { limit: 1000 }),
-        supabase.storage.from(BUCKET).list('imginterfaz',   { limit: 1000 })
+        supabase.storage.from(BUCKET).list('imgpersonajes', { limit: 1000 }).catch(() => ({ data: [] })),
+        supabase.storage.from(BUCKET).list('imgobjetos',    { limit: 1000 }).catch(() => ({ data: [] })),
+        supabase.storage.from(BUCKET).list('imginterfaz',   { limit: 1000 }).catch(() => ({ data: [] }))
     ]);
 
-    const setPersonajes = new Set((resP.data || []).map(f => f.name.replace(/\.(png|jpg|jpeg|webp)$/i, '').toLowerCase()));
-    const setObjetos    = new Set((resO.data || []).map(f => f.name.replace(/\.(png|jpg|jpeg|webp)$/i, '').toLowerCase()));
-    const setInterfaz   = new Set((resI.data || []).map(f => f.name.replace(/\.(png|jpg|jpeg|webp)$/i, '').toLowerCase()));
+    // Mapas para detección inteligente de formato (.png, .jpg, .webp)
+    const mapP = new Map();
+    const mapO = new Map();
+    const mapI = new Map();
 
-    const personajes = await db.personajes.getAll();
+    const cleanKey = (n) => n.replace(/^img(personajes|objetos|interfaz)\//i, '').toLowerCase();
+
+    (resP.data || []).forEach(f => mapP.set(cleanKey(f.name), f.name));
+    (resO.data || []).forEach(f => mapO.set(cleanKey(f.name), f.name));
+    (resI.data || []).forEach(f => mapI.set(cleanKey(f.name), f.name));
+
+    const [personajes, catalogo] = await Promise.all([
+        db.personajes.getAll().catch(()=>[]),
+        db.objetos.getCatalogo().catch(()=>[])
+    ]);
+
+    // 1. Personajes
     itemsPersonajes.length = 0;
     personajes.forEach(p => {
         const key = norm(p.icono_override || p.nombre) + 'icon';
+        
+        let ext = '.png';
+        let existe = false;
+        if (mapP.has(key + '.png')) { existe = true; ext = '.png'; }
+        else if (mapP.has(key + '.jpg')) { existe = true; ext = '.jpg'; }
+        else if (mapP.has(key + '.webp')) { existe = true; ext = '.webp'; }
+
         itemsPersonajes.push({
             nombre:     p.nombre,
             keyNorm:    key,
             tipoIcono:  'imgpersonajes',
-            urlStorage: `${STORAGE_URL}/imgpersonajes/${key}.png`,
-            urlGithub:  `../img/imgpersonajes/${key}.png`,
-            existe:     setPersonajes.has(key),
+            // Respetamos los nombres de variables (urlStorage) pero con extensión dinámica y fallback directo
+            urlStorage: existe ? `${STORAGE_URL}/imgpersonajes/${key}${ext}?v=${Date.now()}` : `${STORAGE_URL}/imginterfaz/no_encontrado.png?v=${Date.now()}`,
+            urlGithub:  `../img/imgpersonajes/${key}${ext}`,
+            existe:     existe,
             isPlayer:   p.is_player
         });
     });
 
-    const catalogo = await db.objetos.getCatalogo();
+    // 2. Objetos
     itemsObjetos.length = 0;
     catalogo.forEach(o => {
         const key = norm(o.nombre);
+
+        let ext = '.png';
+        let existe = false;
+        if (mapO.has(key + '.png')) { existe = true; ext = '.png'; }
+        else if (mapO.has(key + '.jpg')) { existe = true; ext = '.jpg'; }
+        else if (mapO.has(key + '.webp')) { existe = true; ext = '.webp'; }
+
         itemsObjetos.push({
             nombre:        o.nombre,
             keyNorm:       key,
             tipoIcono:    'imgobjetos',
-            urlStorage:   `${STORAGE_URL}/imgobjetos/${key}.png`,
-            urlGithub:    `../img/imgobjetos/${key}.png`,
-            existe:       setObjetos.has(key),
+            urlStorage:   existe ? `${STORAGE_URL}/imgobjetos/${key}${ext}?v=${Date.now()}` : `${STORAGE_URL}/imginterfaz/no_encontrado.png?v=${Date.now()}`,
+            urlGithub:    `../img/imgobjetos/${key}${ext}`,
+            existe:       existe,
             esPropuesta:  !!o.es_propuesta,
             propuesto_por: o.propuesto_por || ''
         });
     });
 
+    // 3. Interfaz
     const rutasHTML = [
         '../index.html',
         '../objetos/index.html',
@@ -78,7 +106,8 @@ export async function cargarDatos() {
     ];
 
     const imgEncontradas = new Set();
-    // 🚨 BORRADA la línea que agregaba 'icon.png' a la fuerza
+    // ¡RESTAURADO! Aquí está tu amado icon.png a salvo
+    imgEncontradas.add('icon.png');
     imgEncontradas.add('no_encontrado.png');
 
     itemsInterfaz.length = 0;
@@ -107,21 +136,30 @@ export async function cargarDatos() {
     }
 
     imgEncontradas.forEach(archivo => {
-        // 🚨 BLOQUEO EXACTO: Si el archivo se llama icon.png lo ignoramos por completo
-        if (archivo.toLowerCase() === 'icon.png') return;
+        // 🚨 BLOQUEO CORRECTO: Ignoramos 'icon-inicio' que es el que estaba hardcodeado molestando
+        if (archivo.toLowerCase().includes('icon-inicio')) return;
 
         const nombreLimpio = archivo.replace(/\.(png|jpg|jpeg|webp|gif|ico)$/i, '');
         const key = norm(nombreLimpio);
         
         if(!key || key.includes('/') || key.length < 2) return;
 
+        let ext = '.png';
+        let existe = false;
+        if (mapI.has(key + '.png')) { existe = true; ext = '.png'; }
+        else if (mapI.has(key + '.jpg')) { existe = true; ext = '.jpg'; }
+        else if (mapI.has(archivo.toLowerCase())) {
+            existe = true; 
+            ext = archivo.substring(archivo.lastIndexOf('.'));
+        }
+
         itemsInterfaz.push({
             nombre:     archivo, 
             keyNorm:    key,
             tipoIcono:  'imginterfaz',
-            urlStorage: `${STORAGE_URL}/imginterfaz/${key}.png`,
+            urlStorage: existe ? `${STORAGE_URL}/imginterfaz/${key}${ext}?v=${Date.now()}` : `${STORAGE_URL}/imginterfaz/no_encontrado.png?v=${Date.now()}`,
             urlGithub:  `../img/${archivo}`,
-            existe:     setInterfaz.has(key)
+            existe:     existe
         });
     });
 }
@@ -264,13 +302,13 @@ export async function cargarHuerfanas() {
         const estricto = normEstricta(baseNombre);
         const suave    = normSuave(baseNombre);
 
-        // Protegemos la versión estricta (con y sin terminación 'icon')
+        // Blindamos todas las combinaciones posibles (con/sin 'icon' y con/sin extensión)
         keysEnUso.add(estricto + 'icon.png');
         keysEnUso.add(estricto + 'icon.jpg');
         keysEnUso.add(estricto + '.png');
         keysEnUso.add(estricto + '.jpg');
-
-        // Protegemos la versión suave para salvar los paréntesis (con y sin terminación 'icon')
+        
+        // Blindamos la versión suave para proteger Yuko_(Malicia) o similares
         keysEnUso.add(suave + 'icon.png');
         keysEnUso.add(suave + 'icon.jpg');
         keysEnUso.add(suave + '.png');
