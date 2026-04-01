@@ -1,23 +1,25 @@
-
-
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
+import { hexConfigs } from './hex/config.js';
 
-const SUPABASE_URL  = 'https://gkscqurkpyteusqyspsu.supabase.co';
-const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdrc2NxdXJrcHl0ZXVzcXlzcHN1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MTY5NTEsImV4cCI6MjA4OTA5Mjk1MX0.RkCHpPFGy4DZEfhcSpghiPq7162WCunUX1wLrB2aCNc';
-
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
+export let supabase = null;
+export let currentConfig = null;
 
 // ──────────────────────────────────────────────────────────────
 // hexAuth: objeto principal de autenticación
 // ──────────────────────────────────────────────────────────────
 export const hexAuth = {
 
-    // Estado en memoria (se llena al llamar init())
     _session: null,
     _perfil: null,
 
-    // ── Inicializar (llamar al inicio de cada página) ──
     async init() {
+        // 1. Detectar qué base de datos está seleccionada (por defecto hex1 si hay error)
+        const selectedHex = localStorage.getItem('hex_selected') || 'hex1';
+        currentConfig = hexConfigs[selectedHex] || hexConfigs['hex1'];
+
+        // 2. Inicializar el cliente exacto para esta campaña
+        supabase = createClient(currentConfig.dbUrl, currentConfig.dbAnonKey);
+
         const { data: { session } } = await supabase.auth.getSession();
         this._session = session;
 
