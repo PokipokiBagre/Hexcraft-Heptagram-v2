@@ -95,7 +95,14 @@
     // Funciones globales para los botones
     window.seleccionarCampaña = (idHex) => {
         localStorage.setItem('hex_selected', idHex);
-        window.location.reload();
+        // Si el usuario llegó aquí redirigido desde una subpágina, volver a ella
+        const origen = sessionStorage.getItem('hex_redirect_after_select');
+        if (origen) {
+            sessionStorage.removeItem('hex_redirect_after_select');
+            window.location.href = origen;
+        } else {
+            window.location.reload();
+        }
     };
     
     window.cambiarCampaña = () => {
