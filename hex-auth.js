@@ -1,25 +1,25 @@
 import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm';
 import { hexConfigs } from './hex/config.js';
 
-export let supabase = null;
-export let currentConfig = null;
+// 1. Detección síncrona (instantánea) de la base de datos
+const selectedHex = localStorage.getItem('hex_selected') || 'hex1';
+export let currentConfig = hexConfigs[selectedHex] || hexConfigs['hex1'];
+
+// 2. Inicialización inmediata del cliente de Supabase para que ningún módulo tenga que esperar
+export let supabase = createClient(currentConfig.dbUrl, currentConfig.dbAnonKey);
 
 // ──────────────────────────────────────────────────────────────
 // hexAuth: objeto principal de autenticación
 // ──────────────────────────────────────────────────────────────
 export const hexAuth = {
 
+    // Estado en memoria
     _session: null,
     _perfil: null,
 
+    // ── Inicializar (llamar al inicio de cada página) ──
     async init() {
-        // 1. Detectar qué base de datos está seleccionada (por defecto hex1 si hay error)
-        const selectedHex = localStorage.getItem('hex_selected') || 'hex1';
-        currentConfig = hexConfigs[selectedHex] || hexConfigs['hex1'];
-
-        // 2. Inicializar el cliente exacto para esta campaña
-        supabase = createClient(currentConfig.dbUrl, currentConfig.dbAnonKey);
-
+        // Como la BD ya se conectó arriba, aquí solo nos encargamos de la sesión
         const { data: { session } } = await supabase.auth.getSession();
         this._session = session;
 
