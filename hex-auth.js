@@ -71,11 +71,24 @@ export const hexAuth = {
         if (error) return { ok: false, mensaje: error.message };
         this._session = data.session;
 
-        const { data: perfil } = await supabase
-            .from('perfiles_usuario')
-            .select('rol, personaje_nombre')
-            .eq('id', data.user.id)
-            .single();
+        // Forzar el JWT en el cliente antes de cualquier query
+        await supabase.auth.setSession({
+            access_token:  data.session.access_token,
+            refresh_token: data.session.refresh_token
+        });
+
+        // Reintentos: el JWT puede tardar un tick en propagarse al RLS
+        let perfil = null;
+        for (let i = 0; i < 4; i++) {
+            if (i > 0) await new Promise(r => setTimeout(r, 300 * i));
+            const { data: p, error: e } = await supabase
+                .from('perfiles_usuario')
+                .select('rol, personaje_nombre')
+                .eq('id', data.user.id)
+                .single();
+            if (p) { perfil = p; break; }
+            console.warn('Login: intento ' + (i + 1) + ' perfil fallido:', e?.message);
+        }
         this._perfil = perfil;
 
         return { ok: true, esAdmin: perfil?.rol === 'admin' };
