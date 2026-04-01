@@ -59,11 +59,9 @@ export const hexAuth = {
                     .single();
                 if (data) {
                     this._perfil = data;
-                    // Corregir el badge si la página cargó antes de que el token se refrescara
-                    const badge = document.getElementById('hex-session-badge');
-                    if (badge && this.esAdmin() && !badge.querySelector('[onclick]')?.getAttribute('onclick')?.includes('abrirMenuOP')) {
-                        badge.innerHTML = '<span style="background:#4a004a;color:#d4af37;border:1px dashed #d4af37;padding:8px 14px;border-radius:4px;font-weight:bold;font-family:Cinzel,serif;cursor:pointer;font-size:0.85em;" onclick="window.abrirMenuOP&&window.abrirMenuOP()">⚙️ MÁSTER</span>';
-                    }
+                 // Re-renderizar el badge siempre que el token se refresque
+                const badge = document.getElementById('hex-session-badge');
+                if (badge) badge.innerHTML = this.renderStatusBadge();
                 }
             }
             // session=null pero no SIGNED_OUT (refresh en progreso): mantener _perfil intacto
