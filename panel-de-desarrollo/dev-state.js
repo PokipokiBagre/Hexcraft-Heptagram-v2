@@ -1,8 +1,7 @@
-// ============================================================
-// dev-state.js — Estado Global del Panel Máster
-// ============================================================
+import { currentConfig } from '../hex-auth.js';
 
-export const STORAGE_URL = 'https://gkscqurkpyteusqyspsu.supabase.co/storage/v1/object/public/imagenes-hex';
+// 🌟 Dinámico en el panel Máster
+export const STORAGE_URL = currentConfig.storageUrl;
 
 export const devState = {
     pjSeleccionado: null,
