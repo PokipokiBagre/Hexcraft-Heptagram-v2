@@ -174,15 +174,17 @@ function _renderImgCard(img) {
     const keyNorm = _norm(img.key);
     const url     = `${STORAGE_URL}/imginterfaz/${keyNorm}.png?v=${v}`;
     const fbStorage = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
-    const fbSVG     = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='70' height='70'%3E%3Crect width='70' height='70' fill='%230a000f'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234a1880' font-size='22'%3E%3F%3C/text%3E%3C/svg%3E`;
+    
+    // 🌟 NUEVO: SVG con comillas URL-encoded (%22) para que NO ROMPA el atributo HTML onerror
+    const fbSVG     = `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2270%22 height=%2270%22%3E%3Crect width=%2270%22 height=%2270%22 fill=%22%230a000f%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%234a1880%22 font-size=%2222%22%3E%3F%3C/text%3E%3C/svg%3E`;
+    
     const safeKey = img.key.replace(/'/g, "\\'");
     const safeLbl = img.label.replace(/'/g, "\\'");
     const safeZona= img.zona.replace(/'/g, "\\'");
 
-    // 🌟 NUEVO: Lógica robusta para evitar bucles infinitos en el onerror
-    let onErrorScript = `this.onerror=function(){ this.onerror=null; this.src="${fbSVG}"; }; this.src='${fbStorage}';`;
+    let onErrorScript = `this.onerror=function(){ this.onerror=null; this.src='${fbSVG}'; }; this.src='${fbStorage}';`;
     if (img.key === 'no_encontrado') {
-        onErrorScript = `this.onerror=null; this.src="${fbSVG}";`;
+        onErrorScript = `this.onerror=null; this.src='${fbSVG}';`;
     }
 
     return `
@@ -190,7 +192,7 @@ function _renderImgCard(img) {
          onclick="window._paginaAbrirUpload('${safeKey}','${img.archivo}','${safeLbl}','${safeZona}')"
          title="${img.zona}">
         <span class="pag-upload-badge">📤</span>
-        <img id="pag-grid-img-${img.key}" src="${url}" onerror='${onErrorScript}'>
+        <img id="pag-grid-img-${img.key}" src="${url}" onerror="${onErrorScript}">
         <div class="pag-img-label">${img.label}</div>
         <div class="pag-img-zona">${img.zona}</div>
     </div>`;
@@ -202,7 +204,9 @@ function _renderPreviewCompleto(c) {
     const bgUrl    = `${STORAGE_URL}/imginterfaz/hex-002.png?v=${v}`;
     const iconUrl  = `${STORAGE_URL}/imginterfaz/icon.png?v=${v}`;
     const fb       = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
-    const fbSVG    = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='70' height='70'%3E%3Crect width='70' height='70' fill='%230a000f'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234a1880' font-size='22'%3E%3F%3C/text%3E%3C/svg%3E`;
+    
+    // SVG seguro también aquí
+    const fbSVG    = `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2270%22 height=%2270%22%3E%3Crect width=%2270%22 height=%2270%22 fill=%22%230a000f%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%234a1880%22 font-size=%2222%22%3E%3F%3C/text%3E%3C/svg%3E`;
 
     const gridItems = [
         { key:'objetos',      label:'OBJETOS' },
@@ -294,7 +298,7 @@ function _norm(str) {
         .replace(/\s+/g,'_').replace(/[^a-z0-9_\-]/g,'') : '';
 }
 
-// 🌟 NUEVO: Función wrapper calcada de extra-data.js para subidas seguras anti-bloqueo
+// 🌟 Función segura anti-bloqueo
 function _uploadSeguroPagina(ruta, file, tipoContenido) {
     const solicitud = supabase.storage.from(BUCKET)
         .upload(ruta, file, { upsert: true, contentType: tipoContenido, cacheControl: '3600' });
@@ -330,7 +334,6 @@ async function _ejecutarSubidaPagina(file) {
         const fileJPG = new File([blobJPG], `${keyNorm}.jpg`, { type: 'image/jpeg' });
 
         setP(50, 'Subiendo PNG...');
-        // 🌟 Usamos la nueva función segura con timeout y caché
         const { error: e1 } = await _uploadSeguroPagina(`imginterfaz/${keyNorm}.png`, filePNG, 'image/png');
         if (e1) throw new Error(e1.message);
 
