@@ -200,30 +200,6 @@ window.devMapa = {
         _marcarGuardar();
     },
 
-    devolverDesdeNodo: (hechizoId) => {
-        const pj = asignState.pjSeleccionado;
-        if (!pj) return;
-        const nodo = mapaDevState.nodosDB.find(n => n.id === hechizoId);
-        const idParaAsignar = (nodo && nodo.nombreOriginal && nodo.nombreOriginal !== nodo.id)
-            ? nodo.nombreOriginal
-            : hechizoId;
-
-        // Quitar el hechizo (toggle → false)
-        const cobrarOriginal = hzState.cobrarAlAsignar;
-        hzState.cobrarAlAsignar = false;
-        asignarHechizo(pj, idParaAsignar); // toggle — si lo tiene, lo quita
-        hzState.cobrarAlAsignar = cobrarOriginal;
-
-        // Devolver HEX si tenía costo
-        if (nodo && nodo.hex > 0) {
-            modPjStat(pj, 'hex', null, +nodo.hex, true, false);
-        }
-
-        _calcularVistaPj(pj);
-        _renderPanelAsignacion();
-        _marcarGuardar();
-    },
-
     quitarMasivo: () => {
         const pj = asignState.pjSeleccionado;
         if (!pj) return;
@@ -293,30 +269,58 @@ function _calcularVistaPj(nombre) {
     asignState.posesiones.forEach(n => rastrear(n));
 }
 
-// ── Buscador del canvas (busca y centra la cámara en el nodo) ─
+// ── Buscador del canvas (busca y centra la cámara en el/los nodo/s) ─
+// Soporta múltiples términos separados por coma:
+//   "murcielago, pinguino, teurgia"  →  selecciona los 3 nodos
 let _busquedaCanvas = '';
 function _actualizarBuscadorCanvas(texto) {
     _busquedaCanvas = (texto || '').toLowerCase().trim();
-    if (!_busquedaCanvas) return;
-    const nodo = mapaDevState.nodosDB.find(n =>
-        (n.id || '').toLowerCase().includes(_busquedaCanvas) ||
-        (n.nombreOriginal || '').toLowerCase().includes(_busquedaCanvas)
-    );
-    if (nodo && miniMapa.canvas) {
-        const c    = miniMapa.canvas.getBoundingClientRect();
-        const zoom = miniMapa.camara.zoom;
-        miniMapa.camara.x = (c.width  / 2) - (nodo.x * zoom);
-        miniMapa.camara.y = (c.height / 2) - (nodo.y * zoom);
+    if (!_busquedaCanvas) {
         mapaDevState.seleccionMultiple.clear();
-        mapaDevState.seleccionMultiple.add(nodo);
         _renderPropiedades();
-        // También actualizar el panel de asignación para reflejar el nodo recién seleccionado
-        if (asignState.pjSeleccionado) {
-            _calcularVistaPj(asignState.pjSeleccionado);
-            const np = document.getElementById('mm-asign-nodo-panel');
-            if (np) np.innerHTML = _htmlAsignNodo();
-        }
+        return;
     }
+
+    // Separar por comas y limpiar espacios en blanco de cada término
+    const terminos = _busquedaCanvas
+        .split(',')
+        .map(t => t.trim())
+        .filter(t => t.length > 0);
+
+    // Para cada término buscar el mejor nodo coincidente
+    const encontrados = new Set();
+    terminos.forEach(termino => {
+        // Primero intentar coincidencia exacta (mayor prioridad)
+        let nodo = mapaDevState.nodosDB.find(n =>
+            (n.id || '').toLowerCase() === termino ||
+            (n.nombreOriginal || '').toLowerCase() === termino
+        );
+        // Si no hay exacta, buscar coincidencia parcial
+        if (!nodo) {
+            nodo = mapaDevState.nodosDB.find(n =>
+                (n.id || '').toLowerCase().includes(termino) ||
+                (n.nombreOriginal || '').toLowerCase().includes(termino)
+            );
+        }
+        if (nodo) encontrados.add(nodo);
+    });
+
+    if (!encontrados.size || !miniMapa.canvas) return;
+
+    // Actualizar selección múltiple
+    mapaDevState.seleccionMultiple.clear();
+    encontrados.forEach(n => mapaDevState.seleccionMultiple.add(n));
+
+    // Centrar cámara en el centroide de todos los nodos encontrados
+    const lista = Array.from(encontrados);
+    const cx = lista.reduce((s, n) => s + n.x, 0) / lista.length;
+    const cy = lista.reduce((s, n) => s + n.y, 0) / lista.length;
+    const rect = miniMapa.canvas.getBoundingClientRect();
+    const zoom = miniMapa.camara.zoom;
+    miniMapa.camara.x = (rect.width  / 2) - (cx * zoom);
+    miniMapa.camara.y = (rect.height / 2) - (cy * zoom);
+
+    _renderPropiedades();
 }
 
 // ── RENDER PRINCIPAL ──────────────────────────────────────────
@@ -656,13 +660,8 @@ function _htmlAsignNodo() {
             ` : `
             <button onclick="window.devMapa.asignarDesdeNodo('${safeId}', false)"
                 style="flex:1;padding:8px;background:rgba(180,0,0,0.15);color:#ff6666;border:1px solid #aa3333;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
-                ❌ QUITAR
+                ❌ QUITAR HECHIZO
             </button>
-            ${hexCost > 0 ? `
-            <button onclick="window.devMapa.devolverDesdeNodo('${safeId}')"
-                style="flex:1;padding:8px;background:rgba(0,120,180,0.15);color:#66ccff;border:1px solid #3399bb;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
-                ↩️ QUITAR (+${hexCost} HEX)
-            </button>` : ''}
             `}
         </div>
         ${n.efecto ? `<div style="font-size:0.75em;color:#aaa;border-top:1px dashed #2a1060;padding-top:8px;line-height:1.4;">${_esc(n.efecto)}</div>` : ''}
