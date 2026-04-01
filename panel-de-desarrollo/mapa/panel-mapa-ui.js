@@ -24,6 +24,7 @@ import {
 
 import { hzState } from '../hechizos/panel-hechizos-state.js';
 import { asignarHechizo } from '../hechizos/panel-hechizos-logic.js';
+import { modPjStat } from '../estadisticas/panel-stats-logic.js'; // 🌟 AÑADIDO: Para descontar HEX
 import { norm } from '../dev-state.js';
 
 // ── Colores fijos (ya no viene de mapaColores por afinidad para el canvas) ──
@@ -143,13 +144,18 @@ window.devMapa = {
     asignarDesdeNodo: (hechizoId, cobrarHex) => {
         const pj = asignState.pjSeleccionado;
         if (!pj) return;
-        // Usar el nombreOriginal del nodo en lugar del ID ("Hechizo 444")
         const nodo = mapaDevState.nodosDB.find(n => n.id === hechizoId);
         const idParaAsignar = (nodo && nodo.nombreOriginal && nodo.nombreOriginal !== nodo.id)
             ? nodo.nombreOriginal
             : hechizoId;
+        
+        // 🌟 ARREGLO CLAVE: Descontamos el HEX manualmente aquí mismo
+        if (cobrarHex && nodo && nodo.hex > 0) {
+            modPjStat(pj, 'hex', null, -nodo.hex, true, false);
+        }
+
         const cobrarOriginal = hzState.cobrarAlAsignar;
-        hzState.cobrarAlAsignar = cobrarHex;
+        hzState.cobrarAlAsignar = false; // Lo apagamos temporalmente para evitar doble cobro si el otro logic interviene
         asignarHechizo(pj, idParaAsignar);
         hzState.cobrarAlAsignar = cobrarOriginal;
 
@@ -158,14 +164,15 @@ window.devMapa = {
         _marcarGuardar();
     },
 
-    // 🌟 NUEVA LÓGICA: ASIGNACIÓN MÚLTIPLE
     asignarMasivo: (cobrarHex) => {
         const pj = asignState.pjSeleccionado;
         if (!pj) return;
         const pjKey = norm(pj);
         const inv   = hzState.inventariosDB[pjKey] || [];
+        
+        let costoTotal = 0;
         const cobrarOriginal = hzState.cobrarAlAsignar;
-        hzState.cobrarAlAsignar = cobrarHex;
+        hzState.cobrarAlAsignar = false; // Desactivar auto-cobro por si acaso
 
         const cands = Array.from(mapaDevState.seleccionMultiple);
         cands.forEach(n => {
@@ -175,11 +182,17 @@ window.devMapa = {
             const tiene   = inCola !== undefined ? inCola : tieneDB;
 
             if (!tiene) {
+                costoTotal += (n.hex || 0); // Sumar costo de lo que NO tiene
                 const idParaAsignar = (n.nombreOriginal && n.nombreOriginal !== n.id)
                     ? n.nombreOriginal : n.id;
                 asignarHechizo(pj, idParaAsignar);
             }
         });
+
+        // 🌟 ARREGLO CLAVE: Cobrar el acumulado
+        if (cobrarHex && costoTotal > 0) {
+            modPjStat(pj, 'hex', null, -costoTotal, true, false);
+        }
 
         hzState.cobrarAlAsignar = cobrarOriginal;
         _calcularVistaPj(pj);
@@ -580,7 +593,6 @@ function _htmlAsignNodo() {
     if (esConocido) {
         textoNombre = `<span style="color:#ddd;font-weight:bold;">${_esc(n.nombreOriginal || n.id)}</span> <span style="color:#888;font-size:0.85em;">(${n.hex} HEX)</span>`;
     } else {
-        // 🌟 CORRECCIÓN DEL GRIS DEL TACHADO
         textoNombre = `
             <div style="color:#aaa;">Hechizo ${_extractNum(n.id)} <span style="color:#777;font-size:0.85em;">(${n.hex} HEX)</span></div>
             <div style="color:#aaa;text-decoration:line-through;font-size:0.82em;">${_esc(n.nombreOriginal || n.id)} (${n.hex} HEX)</div>`;
@@ -670,7 +682,6 @@ function _centrarCamaraAuto() {
     miniMapa.camara.y = (rect.height / 2) - ((minY + h / 2) * miniMapa.camara.zoom);
 }
 
-// ── EVENTOS ───────────────────────────────────────────────────
 // ── EVENTOS ───────────────────────────────────────────────────
 function _engacharEventos(canvas) {
     const toWorld = (cx, cy) => {
@@ -872,7 +883,7 @@ function _engacharEventos(canvas) {
         miniMapa.camara.zoom = nz;
     }, { passive: false });
 
-    // 📱 FIX: Eventos táctiles nativos reconstruidos para soportar selección, nodos y arrastre
+    // 📱 FIX: Eventos táctiles
     let pinchDist = 0;
     
     canvas.addEventListener('touchstart', (e) => {
@@ -977,7 +988,6 @@ function _engacharEventos(canvas) {
         } else if (miniMapa.inter.draggedNode) {
             if (miniMapa.inter.hasDragged) _marcarGuardar();
         } else if (miniMapa.inter.isDraggingBg && !miniMapa.inter.hasDragged) {
-            // Si fue un tap rápido en el fondo y no se arrastró, se deselecciona todo
             mapaDevState.seleccionMultiple.clear();
             _renderPropiedades();
             if (asignState.pjSeleccionado) {
@@ -1120,7 +1130,6 @@ function _dibujarFrame() {
 
         ctx.globalAlpha = alpha;
         
-        // ⚡ FIX RENDIMIENTO: Sin blur constante
         ctx.shadowBlur  = (isHovered || isSel) ? 22 / sf : 0;
         ctx.shadowColor = colorBorde;
 
@@ -1160,7 +1169,6 @@ function _dibujarFrame() {
             ctx.globalAlpha = 1.0;
         }
 
-        // ⚡ FIX RENDIMIENTO: Zoom > 0.15 en vez de 0.05
         if (miniMapa.camara.zoom > 0.15 || isHovered || isSel) {
             const fs = Math.round((esConocido ? 26 : 20) + (isHovered ? 4 : 0));
             ctx.textAlign    = 'center';
@@ -1254,7 +1262,6 @@ function _dibujarFrame() {
     // ── LASSO OVERLAY (se dibuja en coords de pantalla, fuera del transform) ──
     if (mapaDevState.lassoActivo && mapaDevState.lassoPuntos.length > 1) {
         const dpr = window.devicePixelRatio || 1;
-        // Salir del transform del canvas para dibujar en coords de pantalla
         ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
         const pts = mapaDevState.lassoPuntos;
         ctx.beginPath();
@@ -1432,7 +1439,6 @@ function _actualizarToolbar() {
         enlace:            'mm-tool-enlace',
         'eliminar-enlace': 'mm-tool-cortar',
     };
-    // Reset all
     Object.entries(ids).forEach(([h, id]) => {
         const el = document.getElementById(id);
         if (!el) return;
@@ -1441,7 +1447,6 @@ function _actualizarToolbar() {
         else if (h === 'lasso')      el.style.color = '#ff9900';
         else                         el.style.color = '#00ffff';
     });
-    // Highlight active
     const activeId = ids[herr];
     if (activeId) {
         const el = document.getElementById(activeId);
