@@ -8,6 +8,7 @@ import { modificar, modificarMulti, transferir, descargarLogExcel, descargarEsta
 import { refrescarUI, dibujarMenuOP, dibujarInventarios, dibujarCatalogo, dibujarControl, dibujarCreacionObjeto, dibujarCreacionMulti, dibujarGrillaPersonajes, dibujarPartyLoot, dibujarTransferencia, dibujarResumenVisual, dibujarModalEdicionObjeto, dibujarPropuestas, dibujarFormularioPropuesta } from './obj-ui.js';
 import { hexAuth } from '../hex-auth.js';
 import { db } from '../hex-db.js';
+import { hexAuth, currentConfig } from '../hex-auth.js';
 
 window.actualizarBotonSyncObj = () => {
     const btn = document.getElementById('btn-sync-global');
@@ -56,8 +57,12 @@ async function iniciar() {
     const favicon = document.querySelector("link[rel='icon']");
     if (favicon) favicon.href = `${db.storage.urlBase}/imginterfaz/icon.png`;
 
-    if (performance.getEntriesByType("navigation")[0]?.type === "reload") { localStorage.removeItem('hex_obj_v4'); }
-    const cache = localStorage.getItem('hex_obj_v4');
+    // 🌟 Limpiamos el caché dinámico correcto
+    if (performance.getEntriesByType("navigation")[0]?.type === "reload") { 
+        localStorage.removeItem(`hex_obj_${currentConfig.id}`); 
+    }
+    
+    const cache = localStorage.getItem(`hex_obj_${currentConfig.id}`);
     const loader = document.getElementById('loader');
 
     await hexAuth.init();
@@ -67,9 +72,12 @@ async function iniciar() {
         await cargarTodoDesdeCSV(); 
     } else { 
         const p = JSON.parse(cache); 
-        Object.assign(invGlobal, p.inv); Object.assign(objGlobal, p.obj); historial.push(...(p.his || [])); 
+        Object.assign(invGlobal, p.inv); 
+        Object.assign(objGlobal, p.obj); 
+        historial.push(...(p.his || [])); 
         if(p.modoSync !== undefined) estadoUI.modoSincronizado = p.modoSync;
         if(p.colaCambios) estadoUI.colaCambios = p.colaCambios;
+        if(p.eqp) Object.assign(eqpGlobal, p.eqp); // 🌟 Faltaba cargar el equipo del caché
         
         await cargarTodoDesdeCSV(); 
     }
