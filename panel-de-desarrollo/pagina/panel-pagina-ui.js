@@ -40,10 +40,8 @@ export function renderColumnaPagina() {
     contenedor.innerHTML = `
     <div style="display:grid; grid-template-columns:1fr 420px; gap:28px; max-width:1400px; margin:0 auto; align-items:start;">
 
-        <!-- ═══ COLUMNA IZQUIERDA ═══ -->
         <div style="display:flex; flex-direction:column; gap:20px;">
 
-            <!-- Encabezado -->
             <div class="pag-card">
                 <div class="pag-card-title">🏷️ Encabezado de la Campaña</div>
                 <label class="pag-label">Título principal</label>
@@ -62,7 +60,6 @@ export function renderColumnaPagina() {
                     placeholder="Descripción de la campaña...">${_esc(c.lore||'')}</textarea>
             </div>
 
-            <!-- Hilos -->
             <div class="pag-card">
                 <div class="pag-card-title">🔗 Hilos Activos</div>
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
@@ -85,7 +82,6 @@ export function renderColumnaPagina() {
                 </div>
             </div>
 
-            <!-- Gestor de imágenes -->
             <div class="pag-card">
                 <div class="pag-card-title">🖼️ Imágenes del Index Principal</div>
                 <p style="color:#666; font-size:0.78em; font-family:sans-serif; margin:0 0 14px 0;">
@@ -96,7 +92,6 @@ export function renderColumnaPagina() {
                 </div>
             </div>
 
-            <!-- Guardar -->
             <div style="display:flex; align-items:center; gap:16px; padding-bottom:10px;">
                 <button id="btn-guardar-pagina" onclick="window._paginaGuardar()" class="pag-btn-guardar">
                     💾 GUARDAR TEXTOS EN LA BD
@@ -105,7 +100,6 @@ export function renderColumnaPagina() {
             </div>
         </div>
 
-        <!-- ═══ COLUMNA DERECHA: Preview + Upload ═══ -->
         <div style="position:sticky; top:20px; display:flex; flex-direction:column; gap:16px;">
 
             <div class="pag-card" style="padding:14px;">
@@ -117,7 +111,6 @@ export function renderColumnaPagina() {
                 </div>
             </div>
 
-            <!-- Panel upload — aparece debajo de la preview al clicar una imagen -->
             <div id="pag-upload-panel" style="display:none;">
                 <div class="pag-card" style="border-color:#7b2fff;">
                     <div class="pag-card-title" style="color:#b07aff; margin-bottom:6px;">
@@ -180,20 +173,24 @@ function _renderImgCard(img) {
     const v       = Date.now();
     const keyNorm = _norm(img.key);
     const url     = `${STORAGE_URL}/imginterfaz/${keyNorm}.png?v=${v}`;
-    // Fallback: primero intenta no_encontrado del storage, luego placeholder SVG inline
     const fbStorage = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
     const fbSVG     = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='70' height='70'%3E%3Crect width='70' height='70' fill='%230a000f'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234a1880' font-size='22'%3E%3F%3C/text%3E%3C/svg%3E`;
     const safeKey = img.key.replace(/'/g, "\\'");
     const safeLbl = img.label.replace(/'/g, "\\'");
     const safeZona= img.zona.replace(/'/g, "\\'");
 
+    // 🌟 NUEVO: Lógica robusta para evitar bucles infinitos en el onerror
+    let onErrorScript = `this.onerror=function(){ this.onerror=null; this.src="${fbSVG}"; }; this.src='${fbStorage}';`;
+    if (img.key === 'no_encontrado') {
+        onErrorScript = `this.onerror=null; this.src="${fbSVG}";`;
+    }
+
     return `
     <div class="pag-img-card" data-imgkey="${img.key}"
          onclick="window._paginaAbrirUpload('${safeKey}','${img.archivo}','${safeLbl}','${safeZona}')"
          title="${img.zona}">
         <span class="pag-upload-badge">📤</span>
-        <img id="pag-grid-img-${img.key}" src="${url}"
-             onerror="this.onerror=null; this.src='${fbStorage}'; this.onerror=()=>{ this.onerror=null; this.src='${fbSVG}'; }">
+        <img id="pag-grid-img-${img.key}" src="${url}" onerror='${onErrorScript}'>
         <div class="pag-img-label">${img.label}</div>
         <div class="pag-img-zona">${img.zona}</div>
     </div>`;
@@ -205,6 +202,7 @@ function _renderPreviewCompleto(c) {
     const bgUrl    = `${STORAGE_URL}/imginterfaz/hex-002.png?v=${v}`;
     const iconUrl  = `${STORAGE_URL}/imginterfaz/icon.png?v=${v}`;
     const fb       = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
+    const fbSVG    = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='70' height='70'%3E%3Crect width='70' height='70' fill='%230a000f'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234a1880' font-size='22'%3E%3F%3C/text%3E%3C/svg%3E`;
 
     const gridItems = [
         { key:'objetos',      label:'OBJETOS' },
@@ -217,18 +215,18 @@ function _renderPreviewCompleto(c) {
         { key:'panel-dev',    label:'PANEL MÁSTER' },
     ];
 
+    const onErrorGeneral = `this.onerror=function(){ this.onerror=null; this.src='${fbSVG}'; }; this.src='${fb}';`;
+
     return `
     <div style="background:#0a0012; font-family:'Cinzel',serif; color:#d4af37; border-radius:10px; overflow:hidden; border:1px solid #2a0050;">
 
-        <!-- Navbar simulada -->
         <div style="background:#05000a; border-bottom:1px solid #2a0050; padding:8px 16px; display:flex; justify-content:space-between; align-items:center;">
-            <img id="prev-icon" src="${iconUrl}" onerror="this.onerror=null;this.src='${fb}'"
+            <img id="prev-icon" src="${iconUrl}" onerror="${onErrorGeneral}"
                  style="width:24px; height:24px; border-radius:4px;">
             <span style="font-size:0.55em; color:#555; font-family:sans-serif;">🔄 Cambiar Campaña</span>
             <span style="background:#4a004a; color:#d4af37; border:1px dashed #d4af37; padding:3px 8px; border-radius:3px; font-size:0.55em;">⚙️ MÁSTER</span>
         </div>
 
-        <!-- Header con fondo -->
         <div id="prev-header-bg"
              style="background:linear-gradient(rgba(18,0,36,.7),rgba(18,0,36,.7)),url('${bgUrl}') center/cover;
                     padding:28px 16px 20px 16px; text-align:center;">
@@ -240,17 +238,14 @@ function _renderPreviewCompleto(c) {
             </p>
         </div>
 
-        <!-- Lore -->
         <div style="background:rgba(20,0,40,.5); border:1px solid #2a0050; border-radius:6px;
                     padding:10px 14px; margin:10px 14px; font-size:0.5em; color:#bbb;
                     font-family:sans-serif; font-style:italic; line-height:1.5;">
             <span id="prev-lore">${_esc(c.lore||'Descripción de la campaña...')}</span>
         </div>
 
-        <!-- Título Sistemas -->
         <p style="font-size:0.55em; color:#d4af37; margin:10px 14px 6px 14px; text-align:center;">Sistemas</p>
 
-        <!-- Grid de sistemas — 2 columnas como el real -->
         <div style="padding:0 14px 10px 14px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
             ${gridItems.map(gi => `
             <div style="background:rgba(10,0,20,.8); border:1px solid #2a0050; border-radius:5px; overflow:hidden; text-align:center; padding:6px;">
@@ -262,7 +257,6 @@ function _renderPreviewCompleto(c) {
             </div>`).join('')}
         </div>
 
-        <!-- Estado Actual simulado -->
         <p style="font-size:0.55em; color:#d4af37; margin:6px 14px 4px 14px; text-align:center;">Estado Actual</p>
         <div style="padding:0 14px; display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-bottom:8px;">
             ${['Jugadores','NPCs','Misiones'].map(l => `
@@ -272,17 +266,16 @@ function _renderPreviewCompleto(c) {
             </div>`).join('')}
         </div>
 
-        <!-- Hilos activos -->
         <p style="font-size:0.55em; color:#d4af37; margin:6px 14px 4px 14px; text-align:center;">Hilos Activos</p>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:0 14px 14px 14px;">
             <div style="background:rgba(10,0,20,.8); border:1px solid #2a0050; border-radius:5px; overflow:hidden; position:relative; height:44px;">
-                <img src="${STORAGE_URL}/imginterfaz/hex-002.png?v=${v}" style="width:100%;height:100%;object-fit:cover;opacity:0.5;">
+                <img id="prev-img-hex-002" src="${bgUrl}" onerror="${onErrorGeneral}" style="width:100%;height:100%;object-fit:cover;opacity:0.5;">
                 <div id="prev-nombre-rol" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.42em;color:#d4af37;text-shadow:0 0 6px #000;">
                     ${_esc(c.nombre_rol||'ROL ACTUAL')}
                 </div>
             </div>
             <div style="background:rgba(10,0,20,.8); border:1px solid #2a0050; border-radius:5px; overflow:hidden; position:relative; height:44px;">
-                <img src="${STORAGE_URL}/imginterfaz/met-004.png?v=${v}" onerror="this.onerror=null;this.src='${fb}'" style="width:100%;height:100%;object-fit:cover;opacity:0.5;">
+                <img id="prev-img-met-004" src="${STORAGE_URL}/imginterfaz/met-004.png?v=${v}" onerror="${onErrorGeneral}" style="width:100%;height:100%;object-fit:cover;opacity:0.5;">
                 <div id="prev-nombre-meta" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.42em;color:#d4af37;text-shadow:0 0 6px #000;">
                     ${_esc(c.nombre_meta||'META')}
                 </div>
@@ -299,6 +292,19 @@ function _norm(str) {
         .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i')
         .replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n')
         .replace(/\s+/g,'_').replace(/[^a-z0-9_\-]/g,'') : '';
+}
+
+// 🌟 NUEVO: Función wrapper calcada de extra-data.js para subidas seguras anti-bloqueo
+function _uploadSeguroPagina(ruta, file, tipoContenido) {
+    const solicitud = supabase.storage.from(BUCKET)
+        .upload(ruta, file, { upsert: true, contentType: tipoContenido, cacheControl: '3600' });
+    
+    let timerId;
+    const tiempoLimite = new Promise((_, reject) => {
+        timerId = setTimeout(() => reject(new Error("Conexión interrumpida por suspensión de pestaña.")), 25000);
+    });
+
+    return Promise.race([solicitud, tiempoLimite]).finally(() => clearTimeout(timerId));
 }
 
 async function _ejecutarSubidaPagina(file) {
@@ -324,13 +330,12 @@ async function _ejecutarSubidaPagina(file) {
         const fileJPG = new File([blobJPG], `${keyNorm}.jpg`, { type: 'image/jpeg' });
 
         setP(50, 'Subiendo PNG...');
-        const { error: e1 } = await supabase.storage.from(BUCKET)
-            .upload(`imginterfaz/${keyNorm}.png`, filePNG, { upsert: true, contentType: 'image/png' });
+        // 🌟 Usamos la nueva función segura con timeout y caché
+        const { error: e1 } = await _uploadSeguroPagina(`imginterfaz/${keyNorm}.png`, filePNG, 'image/png');
         if (e1) throw new Error(e1.message);
 
         setP(80, 'Subiendo JPG...');
-        const { error: e2 } = await supabase.storage.from(BUCKET)
-            .upload(`imginterfaz/${keyNorm}.jpg`, fileJPG, { upsert: true, contentType: 'image/jpeg' });
+        const { error: e2 } = await _uploadSeguroPagina(`imginterfaz/${keyNorm}.jpg`, fileJPG, 'image/jpeg');
         if (e2) throw new Error(e2.message);
 
         setP(100, '✅ ¡Imagen actualizada!', '#00ff88');
@@ -353,11 +358,18 @@ async function _ejecutarSubidaPagina(file) {
             if (prevIcon) prevIcon.src = nuevaUrl;
         }
 
-        // 4. Fondo del header (hex-002 usa background-image, no <img>)
+        // 4. Fondo del header (hex-002) - ID ahora capturable
         if (key === 'hex-002') {
             const hdr = document.getElementById('prev-header-bg');
-            if (hdr) hdr.style.backgroundImage =
-                `linear-gradient(rgba(18,0,36,.7),rgba(18,0,36,.7)),url('${nuevaUrl}')`;
+            if (hdr) hdr.style.backgroundImage = `linear-gradient(rgba(18,0,36,.7),rgba(18,0,36,.7)),url('${nuevaUrl}')`;
+            const prevHex = document.getElementById('prev-img-hex-002');
+            if (prevHex) prevHex.src = nuevaUrl;
+        }
+
+        // 5. Imagen de la tarjeta META (met-004) - ID ahora capturable
+        if (key === 'met-004') {
+            const prevMeta = document.getElementById('prev-img-met-004');
+            if (prevMeta) prevMeta.src = nuevaUrl;
         }
 
         setTimeout(() => window._paginaCerrarUpload(), 1800);
