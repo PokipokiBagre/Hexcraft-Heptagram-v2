@@ -9,9 +9,20 @@ import {
     copiarPrimerDado, copiarPrimerHechizo,
     toggleFilaCobrar, toggleFilaNoFalla, toggleFilaContrarrestada
 } from './panel-hechizos-logic.js';
+import { modPjStat } from '../estadisticas/panel-stats-logic.js';
 import { norm } from '../dev-state.js';
 
 window.devAsignarHz            = asignarHechizo;
+
+// Asignar con costo manual (override del costo base):
+// costoOverride = 0 → gratis, costo/2 → descuento, costo*2 → sobrecosto
+window.devAsignarHzCosto = (pjNombre, hechizoId, costoOverride) => {
+    const cobrarOriginal = hzState.cobrarAlAsignar;
+    hzState.cobrarAlAsignar = false; // Apagar cobro automático
+    if (costoOverride > 0) modPjStat(pjNombre, 'hex', null, -costoOverride, true, false);
+    asignarHechizo(pjNombre, hechizoId);
+    hzState.cobrarAlAsignar = cobrarOriginal;
+};
 window.devToggleVisibilidadHz  = toggleVisibilidad;
 window.devBusquedaHz           = setBusquedaHz;
 window.devSetVistaHz           = setVistaHz;
@@ -215,9 +226,31 @@ function generarTarjetaAsignar(hechizo, pjNombre, loTiene) {
         ? `border: 1px solid #003300; border-top: 3px solid ${borderColor}; box-shadow: inset 0 0 15px rgba(0,255,0,0.08);`
         : `border: 1px solid #222; border-top: 3px solid ${borderColor};`;
 
+    const safePN  = pjNombre.replace(/'/g, "\\'");
+    const costoMitad  = Math.round(costo * 0.5);
+    const costoDoble  = costo * 2;
+
     const btnAsignar = loTiene
-        ? `<button onclick="window.devAsignarHz('${pjNombre.replace(/'/g, "\\'")}', '${hId}')" style="width:100%; background:rgba(255,0,0,0.1); color:#ff5555; border:1px solid rgba(255,0,0,0.3); border-radius:4px; padding:6px; cursor:pointer; font-weight:bold; font-family:'Cinzel'; transition:0.2s;">❌ DEASIGNAR</button>`
-        : `<button onclick="window.devAsignarHz('${pjNombre.replace(/'/g, "\\'")}', '${hId}')" style="width:100%; background:rgba(0,255,0,0.05); color:#44ff44; border:1px solid rgba(0,255,0,0.3); border-radius:4px; padding:6px; cursor:pointer; font-weight:bold; font-family:'Cinzel'; transition:0.2s;">➕ ENSEÑAR</button>`;
+        ? `<button onclick="window.devAsignarHz('${safePN}', '${hId}')" style="width:100%; background:rgba(255,0,0,0.1); color:#ff5555; border:1px solid rgba(255,0,0,0.3); border-radius:4px; padding:6px; cursor:pointer; font-weight:bold; font-family:'Cinzel'; transition:0.2s;">❌ DEASIGNAR</button>`
+        : `<div style="display:flex;gap:6px;flex-wrap:wrap;">
+            <button onclick="window.devAsignarHz('${safePN}', '${hId}')"
+                style="flex:1;min-width:100px;background:rgba(0,255,0,0.05);color:#44ff44;border:1px solid rgba(0,255,0,0.3);border-radius:4px;padding:6px;cursor:pointer;font-weight:bold;font-family:'Cinzel';font-size:0.82em;transition:0.2s;">
+                ✅ ENSEÑAR
+            </button>
+            ${costo > 0 ? `
+            <button onclick="window.devAsignarHzCosto('${safePN}', '${hId}', ${costoMitad})"
+                style="flex:1;min-width:100px;background:rgba(0,120,200,0.1);color:#66aaff;border:1px solid rgba(0,120,200,0.4);border-radius:4px;padding:6px;cursor:pointer;font-weight:bold;font-family:'Cinzel';font-size:0.82em;transition:0.2s;">
+                🔵 −${costoMitad} HEX
+            </button>
+            <button onclick="window.devAsignarHzCosto('${safePN}', '${hId}', ${costo})"
+                style="flex:1;min-width:100px;background:rgba(180,140,0,0.1);color:#d4af37;border:1px solid rgba(180,140,0,0.4);border-radius:4px;padding:6px;cursor:pointer;font-weight:bold;font-family:'Cinzel';font-size:0.82em;transition:0.2s;">
+                💰 −${costo} HEX
+            </button>
+            <button onclick="window.devAsignarHzCosto('${safePN}', '${hId}', ${costoDoble})"
+                style="flex:1;min-width:100px;background:rgba(200,60,0,0.1);color:#ff8844;border:1px solid rgba(200,60,0,0.4);border-radius:4px;padding:6px;cursor:pointer;font-weight:bold;font-family:'Cinzel';font-size:0.82em;transition:0.2s;">
+                🔴 −${costoDoble} HEX
+            </button>` : ''}
+           </div>`;
 
     const btnVisibilidad = `<button onclick="window.devToggleVisibilidadHz('${hId}')" style="background:#111; color:#aaa; border:1px solid #555; border-radius:4px; padding:6px; cursor:pointer; font-size:0.8em; white-space:nowrap;">${isKnown ? '👁️ Ocultar Globalmente' : '🙈 Hacer Público'}</button>`;
 
