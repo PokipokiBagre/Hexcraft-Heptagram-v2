@@ -6,12 +6,22 @@ import { supabase } from '../hex-auth.js';
 import { db }       from '../hex-db.js';
 import { BUCKET, STORAGE_URL, itemsPersonajes, itemsObjetos, itemsInterfaz } from './extra-state.js';
 
-const norm = (str) => str ? str.toString().trim().toLowerCase()
+// Normalización estricta (sin paréntesis, para IDs)
+const normEstricta = (str) => str ? str.toString().trim().toLowerCase()
     .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
     .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
     .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n')
     .replace(/\s+/g,'_')
     .replace(/[^a-z0-9_\-]/g,'') : '';
+
+// Normalización suave (conserva paréntesis y corchetes, para proteger huérfanas)
+const normSuave = (str) => str ? str.toString().trim().toLowerCase()
+    .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
+    .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
+    .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n')
+    .replace(/\s+/g,'_') : '';
+
+const norm = normEstricta;
 
 export async function asegurarBucket() {
     try {
@@ -26,37 +36,56 @@ export async function asegurarBucket() {
 }
 
 export async function cargarDatos() {
-    const [resP, resO, resI] = await Promise.all([
-        supabase.storage.from(BUCKET).list('imgpersonajes', { limit: 1000 }),
-        supabase.storage.from(BUCKET).list('imgobjetos',    { limit: 1000 }),
-        supabase.storage.from(BUCKET).list('imginterfaz',   { limit: 1000 })
-    ]);
+    // Peticiones seguras con catch para evitar que el Promise.all colapse por un timeout
+    const pResP = supabase.storage.from(BUCKET).list('imgpersonajes', { limit: 1000 }).catch(() => ({ data: [] }));
+    const pResO = supabase.storage.from(BUCKET).list('imgobjetos',    { limit: 1000 }).catch(() => ({ data: [] }));
+    const pResI = supabase.storage.from(BUCKET).list('imginterfaz',   { limit: 1000 }).catch(() => ({ data: [] }));
+    
+    const [resP, resO, resI] = await Promise.all([pResP, pResO, pResI]);
 
     const mapP = new Map();
     const mapO = new Map();
     const mapI = new Map();
 
-    resP.data?.forEach(f => mapP.set(f.name.toLowerCase(), f.name));
-    resO.data?.forEach(f => mapO.set(f.name.toLowerCase(), f.name));
-    resI.data?.forEach(f => mapI.set(f.name.toLowerCase(), f.name));
+    // Limpiamos los nombres por si la API de Storage devuelve la ruta completa (ej: "imgpersonajes/adrienicon.png")
+    const cleanKey = (n) => n.replace(/^imgpersonajes\//i, '')
+                             .replace(/^imgobjetos\//i, '')
+                             .replace(/^imginterfaz\//i, '')
+                             .toLowerCase();
+
+    (resP.data || []).forEach(f => mapP.set(cleanKey(f.name), f.name));
+    (resO.data || []).forEach(f => mapO.set(cleanKey(f.name), f.name));
+    (resI.data || []).forEach(f => mapI.set(cleanKey(f.name), f.name));
 
     const [personajes, catalogo] = await Promise.all([
-        db.personajes.getAll(),
-        db.objetos.getCatalogo()
+        db.personajes.getAll().catch(()=>[]),
+        db.objetos.getCatalogo().catch(()=>[])
     ]);
 
     // 1. Personajes
     itemsPersonajes.length = 0;
     personajes.forEach(p => {
         const keyNorm = norm(p.icono_override || p.nombre) + 'icon';
-        const existe  = mapP.has(keyNorm + '.png') || mapP.has(keyNorm + '.jpg');
+        const filePng = keyNorm + '.png';
+        const fileJpg = keyNorm + '.jpg';
+        const fileWebp = keyNorm + '.webp';
+        
+        let existe = false;
+        let ext = '.png';
+        
+        // 🌟 ARREGLO CLAVE: Evalúa exactamente qué formato existe para no enviar enlaces rotos
+        if (mapP.has(filePng)) { existe = true; ext = '.png'; }
+        else if (mapP.has(fileJpg)) { existe = true; ext = '.jpg'; }
+        else if (mapP.has(fileWebp)) { existe = true; ext = '.webp'; }
+
         itemsPersonajes.push({
             tipo: 'imgpersonajes',
             key: keyNorm,
             nombre: p.nombre,
             rol: p.is_player ? 'Jugador' : 'NPC',
             existe,
-            url: existe ? `${STORAGE_URL}/imgpersonajes/${keyNorm}.png?v=${Date.now()}` : ''
+            // 🌟 ARREGLO CLAVE: Si no existe, inyectamos directamente el no_encontrado.png
+            url: existe ? `${STORAGE_URL}/imgpersonajes/${keyNorm}${ext}?v=${Date.now()}` : `${STORAGE_URL}/imginterfaz/no_encontrado.png?v=${Date.now()}`
         });
     });
     itemsPersonajes.sort((a,b) => a.nombre.localeCompare(b.nombre));
@@ -65,7 +94,13 @@ export async function cargarDatos() {
     itemsObjetos.length = 0;
     catalogo.forEach(o => {
         const keyNorm = norm(o.nombre);
-        const existe  = mapO.has(keyNorm + '.png') || mapO.has(keyNorm + '.jpg');
+        let existe = false;
+        let ext = '.png';
+        
+        if (mapO.has(keyNorm + '.png')) { existe = true; ext = '.png'; }
+        else if (mapO.has(keyNorm + '.jpg')) { existe = true; ext = '.jpg'; }
+        else if (mapO.has(keyNorm + '.webp')) { existe = true; ext = '.webp'; }
+
         itemsObjetos.push({
             tipo: 'imgobjetos',
             key: keyNorm,
@@ -73,7 +108,7 @@ export async function cargarDatos() {
             rareza: o.rareza || 'Común',
             existe,
             esPropuesta: (o.tipo === 'Propuesta'),
-            url: existe ? `${STORAGE_URL}/imgobjetos/${keyNorm}.png?v=${Date.now()}` : ''
+            url: existe ? `${STORAGE_URL}/imgobjetos/${keyNorm}${ext}?v=${Date.now()}` : `${STORAGE_URL}/imginterfaz/no_encontrado.png?v=${Date.now()}`
         });
     });
     itemsObjetos.sort((a,b) => {
@@ -83,9 +118,7 @@ export async function cargarDatos() {
     });
 
     // 3. Interfaz
-    // 🌟 REMOVIDO: icon-inicio (selector de campañas) ya que se maneja hardcodeado.
     const INTERFAZ_ITEMS = [
-        { key: 'icon',         archivo: 'icon.png',         label: 'Icono / Favicon',       zona: 'Favicon del sitio' },
         { key: 'hex-002',      archivo: 'hex-002.png',      label: 'Fondo del Header',       zona: 'Imagen de fondo del título principal' },
         { key: 'met-004',      archivo: 'met-004.png',      label: 'Tarjeta Meta',           zona: 'Sección "Hilos Activos" → Meta' },
         { key: 'estadisticas', archivo: 'estadisticas.jpg', label: 'Tarjeta Estadísticas',   zona: 'Grid principal → Estadísticas' },
@@ -101,15 +134,22 @@ export async function cargarDatos() {
 
     itemsInterfaz.length = 0;
     INTERFAZ_ITEMS.forEach(it => {
-        const ext = it.archivo.split('.').pop();
-        const existe = mapI.has(it.key.toLowerCase() + '.' + ext);
+        const extBase = it.archivo.split('.').pop();
+        const keyNorm = it.key.toLowerCase();
+        let existe = false;
+        let ext = `.${extBase}`;
+        
+        if (mapI.has(keyNorm + `.${extBase}`)) { existe = true; }
+        else if (mapI.has(keyNorm + '.png')) { existe = true; ext = '.png'; }
+        else if (mapI.has(keyNorm + '.jpg')) { existe = true; ext = '.jpg'; }
+
         itemsInterfaz.push({
             tipo: 'imginterfaz',
             key: it.key,
             nombre: it.label,
             rol: it.zona,
             existe,
-            url: existe ? `${STORAGE_URL}/imginterfaz/${it.key}.${ext}?v=${Date.now()}` : ''
+            url: existe ? `${STORAGE_URL}/imginterfaz/${keyNorm}${ext}?v=${Date.now()}` : `${STORAGE_URL}/imginterfaz/no_encontrado.png?v=${Date.now()}`
         });
     });
 }
@@ -125,8 +165,8 @@ export async function subirImagen(file, tipo, item) {
     };
 
     const keyNorm = (tipo === 'imgpersonajes')
-        ? norm(item.icono_override || item.nombre) + 'icon'
-        : norm(item.nombre);
+        ? normEstricta(item.icono_override || item.nombre) + 'icon'
+        : normEstricta(item.nombre);
 
     try {
         setP(20, 'Convirtiendo formatos...');
@@ -150,7 +190,7 @@ export async function subirImagen(file, tipo, item) {
     }
 }
 
-// Wrap Promise.race para timeout y evitar bloqueos en pestañas inactivas
+// Wrap Promise.race para timeout y evitar bloqueos
 function _uploadSeguro(ruta, file, tipoContenido) {
     const solicitud = supabase.storage.from(BUCKET)
         .upload(ruta, file, { upsert: true, contentType: tipoContenido, cacheControl: '3600' });
@@ -199,45 +239,42 @@ function _convertirFormatos(file) {
 }
 
 // ── GESTIÓN DE IMÁGENES HUÉRFANAS ────────────────────────────────────────
-// Devuelve las imágenes en Storage que no corresponden a ningún
-// personaje activo ni objeto del catálogo.
 export async function cargarHuerfanas() {
     const { db } = await import('../hex-db.js');
 
-    // Normalización estricta (quita paréntesis y caracteres especiales)
-    const normEstricta = (str) => str ? str.toString().trim().toLowerCase()
-        .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
-        .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
-        .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n')
-        .replace(/\s+/g,'_').replace(/[^a-z0-9_\-]/g,'') : '';
-
-    // 🌟 NUEVO: Normalización suave (mantiene paréntesis y corchetes)
-    const normSuave = (str) => str ? str.toString().trim().toLowerCase()
-        .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
-        .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
-        .replace(/[úùüû]/g,'u').replace(/[ñ]/g,'n')
-        .replace(/\s+/g,'_') : '';
-
-    const [personajes, resStorage] = await Promise.all([
-        db.personajes.getAll(),
-        supabase.storage.from(BUCKET).list('imgpersonajes', { limit: 1000 })
+    const [personajes, catalogo, resStorage] = await Promise.all([
+        db.personajes.getAll().catch(()=>[]),
+        db.objetos.getCatalogo().catch(()=>[]),
+        supabase.storage.from(BUCKET).list('imgpersonajes', { limit: 1000 }).catch(()=>({data:[]}))
     ]);
 
     const keysEnUso = new Set();
     
+    // Proteger imágenes de personajes (con y sin paréntesis)
     personajes.forEach(p => {
         const baseName = p.icono_override || p.nombre;
-        
         const estricto = normEstricta(baseName);
         const suave    = normSuave(baseName);
 
-        // Generar variantes para proteger TODAS las posibles combinaciones en Storage
-        // Así yuko_(malicia) y yuko_malicia estarán a salvo ambas.
         const variantes = [
             estricto + 'icon', suave + 'icon',
             estricto, suave
         ];
 
+        variantes.forEach(v => {
+            keysEnUso.add(v + '.png');
+            keysEnUso.add(v + '.jpg');
+            keysEnUso.add(v + '.webp');
+        });
+    });
+
+    // Proteger imágenes de objetos (con y sin paréntesis)
+    catalogo.forEach(o => {
+        const estricto = normEstricta(o.nombre);
+        const suave    = normSuave(o.nombre);
+
+        const variantes = [estricto, suave];
+        
         variantes.forEach(v => {
             keysEnUso.add(v + '.png');
             keysEnUso.add(v + '.jpg');
