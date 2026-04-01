@@ -105,61 +105,53 @@ export function renderColumnaPagina() {
             </div>
         </div>
 
-        <!-- ═══ COLUMNA DERECHA: Preview ═══ -->
+        <!-- ═══ COLUMNA DERECHA: Preview + Upload ═══ -->
         <div style="position:sticky; top:20px; display:flex; flex-direction:column; gap:16px;">
 
             <div class="pag-card" style="padding:14px;">
                 <div class="pag-card-title" style="margin-bottom:12px;">👁 Previsualización en Vivo</div>
-                <!-- Contenedor con overflow hidden para recortar el exceso del scale -->
                 <div style="overflow:hidden; border-radius:6px; height:340px;">
                     <div style="transform-origin:top left; transform:scale(0.55); width:182%;">
                         <div id="pag-preview">${_renderPreviewCompleto(c)}</div>
                     </div>
                 </div>
             </div>
-        </div>
-    </div>
 
-    <!-- ═══ MODAL de upload (overlay fijo) ═══ -->
-    <div id="pag-upload-panel" style="display:none; position:fixed; inset:0; z-index:99999;
-         background:rgba(0,0,0,0.75); backdrop-filter:blur(4px);
-         align-items:center; justify-content:center;"
-         onclick="if(event.target===this) window._paginaCerrarUpload()">
-        <div class="pag-card" style="border-color:#7b2fff; width:360px; max-width:90vw; position:relative;">
-            <button onclick="window._paginaCerrarUpload()"
-                style="position:absolute; top:10px; right:12px; background:none; border:none;
-                       color:#555; font-size:1.2em; cursor:pointer; line-height:1;"
-                title="Cerrar">✕</button>
-            <div class="pag-card-title" style="color:#b07aff; margin-bottom:6px;">
-                📤 Subir: <span id="pag-upload-nombre" style="color:#fff;"></span>
-            </div>
-            <p id="pag-upload-zona-label"
-               style="color:#555; font-size:0.72em; font-family:sans-serif; margin:0 0 12px 0;"></p>
-            <div id="pag-drop-zone" class="pag-drop-zone"
-                onclick="document.getElementById('pag-file-input').click()"
-                ondragover="event.preventDefault(); this.classList.add('drag-over')"
-                ondragleave="this.classList.remove('drag-over')"
-                ondrop="window._paginaHandleDrop(event)">
-                <div style="font-size:2em; margin-bottom:6px;">🖼️</div>
-                <p style="color:#b07aff; font-family:'Cinzel'; font-weight:bold; font-size:0.85em; margin:0 0 4px 0;">Arrastra aquí o haz clic</p>
-                <p style="color:#555; font-size:0.75em; font-family:sans-serif; margin:0;">JPG, PNG, WEBP</p>
-            </div>
-            <input type="file" id="pag-file-input" accept="image/*" style="display:none"
-                onchange="window._paginaFileSelect(event)">
-            <div id="pag-upload-progress" style="display:none; margin-top:10px;">
-                <div style="height:5px; background:#111; border-radius:3px; overflow:hidden;">
-                    <div id="pag-prog-fill" style="height:100%; width:0%; background:#7b2fff; transition:width 0.3s;"></div>
+            <!-- Panel upload — aparece debajo de la preview al clicar una imagen -->
+            <div id="pag-upload-panel" style="display:none;">
+                <div class="pag-card" style="border-color:#7b2fff;">
+                    <div class="pag-card-title" style="color:#b07aff; margin-bottom:6px;">
+                        📤 Subir: <span id="pag-upload-nombre" style="color:#fff;"></span>
+                    </div>
+                    <p id="pag-upload-zona-label"
+                       style="color:#555; font-size:0.72em; font-family:sans-serif; margin:0 0 12px 0;"></p>
+                    <div id="pag-drop-zone" class="pag-drop-zone"
+                        onclick="document.getElementById('pag-file-input').click()"
+                        ondragover="event.preventDefault(); this.classList.add('drag-over')"
+                        ondragleave="this.classList.remove('drag-over')"
+                        ondrop="window._paginaHandleDrop(event)">
+                        <div style="font-size:2em; margin-bottom:6px;">🖼️</div>
+                        <p style="color:#b07aff; font-family:'Cinzel'; font-weight:bold; font-size:0.85em; margin:0 0 4px 0;">Arrastra aquí o haz clic</p>
+                        <p style="color:#555; font-size:0.75em; font-family:sans-serif; margin:0;">JPG, PNG, WEBP</p>
+                    </div>
+                    <input type="file" id="pag-file-input" accept="image/*" style="display:none"
+                        onchange="window._paginaFileSelect(event)">
+                    <div id="pag-upload-progress" style="display:none; margin-top:10px;">
+                        <div style="height:5px; background:#111; border-radius:3px; overflow:hidden;">
+                            <div id="pag-prog-fill" style="height:100%; width:0%; background:#7b2fff; transition:width 0.3s;"></div>
+                        </div>
+                        <p id="pag-prog-msg" style="color:#888; font-size:0.75em; font-family:sans-serif; text-align:center; margin:5px 0 0 0;"></p>
+                    </div>
+                    <button onclick="window._paginaCerrarUpload()"
+                        style="margin-top:10px; background:#1a0000; border:1px solid #4a1818;
+                               color:#aa4444; padding:6px 14px; border-radius:4px;
+                               cursor:pointer; font-family:'Cinzel'; font-size:0.75em;">
+                        Cancelar
+                    </button>
                 </div>
-                <p id="pag-prog-msg" style="color:#888; font-size:0.75em; font-family:sans-serif; text-align:center; margin:5px 0 0 0;"></p>
             </div>
-            <button onclick="window._paginaCerrarUpload()"
-                style="margin-top:12px; background:#1a0000; border:1px solid #4a1818;
-                       color:#aa4444; padding:6px 14px; border-radius:4px;
-                       cursor:pointer; font-family:'Cinzel'; font-size:0.75em; width:100%;">
-                Cancelar
-            </button>
+
         </div>
-    </div>
     </div>
 
     <style>
@@ -186,8 +178,11 @@ export function renderColumnaPagina() {
 // ── Card de cada imagen ──────────────────────────────────────
 function _renderImgCard(img) {
     const v       = Date.now();
-    const url     = `${STORAGE_URL}/imginterfaz/${img.key}.png?v=${v}`;
-    const fallback= `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
+    const keyNorm = _norm(img.key);
+    const url     = `${STORAGE_URL}/imginterfaz/${keyNorm}.png?v=${v}`;
+    // Fallback: primero intenta no_encontrado del storage, luego placeholder SVG inline
+    const fbStorage = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
+    const fbSVG     = `data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='70' height='70'%3E%3Crect width='70' height='70' fill='%230a000f'/%3E%3Ctext x='50%25' y='50%25' dominant-baseline='middle' text-anchor='middle' fill='%234a1880' font-size='22'%3E%3F%3C/text%3E%3C/svg%3E`;
     const safeKey = img.key.replace(/'/g, "\\'");
     const safeLbl = img.label.replace(/'/g, "\\'");
     const safeZona= img.zona.replace(/'/g, "\\'");
@@ -198,7 +193,7 @@ function _renderImgCard(img) {
          title="${img.zona}">
         <span class="pag-upload-badge">📤</span>
         <img id="pag-grid-img-${img.key}" src="${url}"
-             onerror="this.onerror=null;this.src='${fallback}'">
+             onerror="this.onerror=null; this.src='${fbStorage}'; this.onerror=()=>{ this.onerror=null; this.src='${fbSVG}'; }">
         <div class="pag-img-label">${img.label}</div>
         <div class="pag-img-zona">${img.zona}</div>
     </div>`;
@@ -457,10 +452,13 @@ function _exponerGlobales() {
         _uploadTarget = { key, archivo };
         document.getElementById('pag-upload-nombre').textContent     = label;
         document.getElementById('pag-upload-zona-label').textContent = zona;
-        document.getElementById('pag-upload-panel').style.display    = 'flex';
+        document.getElementById('pag-upload-panel').style.display    = 'block';
         document.getElementById('pag-upload-progress').style.display = 'none';
         document.getElementById('pag-prog-fill').style.width         = '0%';
         document.getElementById('pag-prog-msg').textContent          = '';
+        // Scroll al top del contenedor para que el panel derecho quede visible
+        const contenedor = document.getElementById('content-pagina');
+        if (contenedor) contenedor.scrollIntoView({ behavior: 'smooth', block: 'start' });
     };
 
     window._paginaCerrarUpload = () => {
