@@ -40,18 +40,33 @@ export const hexAuth = {
         }
 
         // Escuchar cambios de sesión en tiempo real
-        supabase.auth.onAuthStateChange(async (_event, session) => {
+        // NOTA: en Supabase v2, este callback se dispara INMEDIATAMENTE al registrarse.
+        // Si el JWT está vencido, el primer disparo llega con session=null ANTES del refresh,
+        // borrando el _perfil ya cargado. Solo limpiamos en SIGNED_OUT explícito.
+        supabase.auth.onAuthStateChange(async (event, session) => {
             this._session = session;
+
+            if (event === 'SIGNED_OUT') {
+                this._perfil = null;
+                return;
+            }
+
             if (session) {
                 const { data } = await supabase
                     .from('perfiles_usuario')
                     .select('rol, personaje_nombre, email')
                     .eq('id', session.user.id)
                     .single();
-                if (data) this._perfil = data;
-            } else {
-                this._perfil = null;
+                if (data) {
+                    this._perfil = data;
+                    // Corregir el badge si la página cargó antes de que el token se refrescara
+                    const badge = document.getElementById('hex-session-badge');
+                    if (badge && this.esAdmin() && !badge.querySelector('[onclick]')?.getAttribute('onclick')?.includes('abrirMenuOP')) {
+                        badge.innerHTML = '<span style="background:#4a004a;color:#d4af37;border:1px dashed #d4af37;padding:8px 14px;border-radius:4px;font-weight:bold;font-family:Cinzel,serif;cursor:pointer;font-size:0.85em;" onclick="window.abrirMenuOP&&window.abrirMenuOP()">⚙️ MÁSTER</span>';
+                    }
+                }
             }
+            // session=null pero no SIGNED_OUT (refresh en progreso): mantener _perfil intacto
         });
 
         return this.esAdmin();
