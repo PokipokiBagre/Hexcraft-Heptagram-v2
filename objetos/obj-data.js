@@ -9,20 +9,23 @@ import { supabase } from '../hex-auth.js';
 // ── Carga inicial desde Supabase ─────────────────────────────
 export async function cargarTodoDesdeCSV() {
     try {
-        // 🌟 Consultamos inventario_objetos directamente para traer la columna "equipado"
         const [personajesArr, objetosArr, inventObjRes] = await Promise.all([
             db.personajes.getAll(),
             db.objetos.getCatalogo(),
             supabase.from('inventario_objetos').select('*') 
         ]);
-        const inventObjArr = inventObjRes.data || [];
+        
+        // 🌟 BLINDAJE
+        const safePersonajes = Array.isArray(personajesArr) ? personajesArr : [];
+        const safeObjetos = Array.isArray(objetosArr) ? objetosArr : [];
+        const inventObjArr = inventObjRes?.data ? inventObjRes.data : [];
 
         for (let k in invGlobal) delete invGlobal[k];
         for (let k in objGlobal) delete objGlobal[k];
         for (let k in statsGlobal) delete statsGlobal[k];
         for (let k in eqpGlobal) delete eqpGlobal[k];
 
-        personajesArr.forEach(p => {
+        safePersonajes.forEach(p => {
             statsGlobal[p.nombre] = { 
                 isPlayer: p.is_player, 
                 isActive: p.is_active, 
@@ -34,7 +37,7 @@ export async function cargarTodoDesdeCSV() {
 
         // Separar propuestas de objetos aprobados
         propuestasGlobal.length = 0;
-        objetosArr.forEach(o => {
+        safeObjetos.forEach(o => {
             if (o.es_propuesta) {
                 propuestasGlobal.push(o);
             } else {
@@ -47,7 +50,7 @@ export async function cargarTodoDesdeCSV() {
             const obj = item.objeto_nombre;
             if (invGlobal[pj]) {
                 invGlobal[pj][obj] = item.cantidad;
-                eqpGlobal[pj][obj] = item.equipado || false; // 🌟 Guardamos estado de equipación
+                eqpGlobal[pj][obj] = item.equipado || false; 
             }
         });
 
