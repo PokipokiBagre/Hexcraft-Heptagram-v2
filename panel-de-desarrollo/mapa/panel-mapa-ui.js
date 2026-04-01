@@ -141,7 +141,7 @@ window.devMapa = {
         _renderPanelAsignacion();
     },
 
-    asignarDesdeNodo: (hechizoId, cobrarHex) => {
+    asignarDesdeNodo: (hechizoId, cobrarHex, multiplicador = 1) => {
         const pj = asignState.pjSeleccionado;
         if (!pj) return;
         const nodo = mapaDevState.nodosDB.find(n => n.id === hechizoId);
@@ -151,7 +151,8 @@ window.devMapa = {
         
         // 🌟 ARREGLO CLAVE: Descontamos el HEX manualmente aquí mismo
         if (cobrarHex && nodo && nodo.hex > 0) {
-            modPjStat(pj, 'hex', null, -nodo.hex, true, false);
+            const costoFinal = Math.round(nodo.hex * multiplicador);
+            modPjStat(pj, 'hex', null, -costoFinal, true, false);
         }
 
         const cobrarOriginal = hzState.cobrarAlAsignar;
@@ -164,7 +165,7 @@ window.devMapa = {
         _marcarGuardar();
     },
 
-    asignarMasivo: (cobrarHex) => {
+    asignarMasivo: (cobrarHex, multiplicador = 1) => {
         const pj = asignState.pjSeleccionado;
         if (!pj) return;
         const pjKey = norm(pj);
@@ -189,9 +190,9 @@ window.devMapa = {
             }
         });
 
-        // 🌟 ARREGLO CLAVE: Cobrar el acumulado
+        // 🌟 ARREGLO CLAVE: Cobrar el acumulado con multiplicador
         if (cobrarHex && costoTotal > 0) {
-            modPjStat(pj, 'hex', null, -costoTotal, true, false);
+            modPjStat(pj, 'hex', null, -Math.round(costoTotal * multiplicador), true, false);
         }
 
         hzState.cobrarAlAsignar = cobrarOriginal;
@@ -583,18 +584,26 @@ function _htmlAsignNodo() {
             <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
                 ${faltantes > 0 ? `
                 <button onclick="window.devMapa.asignarMasivo(false)"
-                    style="flex:1;padding:8px;background:rgba(0,180,100,0.15);color:#00cc88;border:1px solid #00aa66;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
+                    style="flex:1;min-width:110px;padding:8px;background:rgba(0,180,100,0.15);color:#00cc88;border:1px solid #00aa66;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
                     ✅ DAR FALTANTES (0 HEX)
                 </button>
                 ${costoTotal > 0 ? `
-                <button onclick="window.devMapa.asignarMasivo(true)"
-                    style="flex:1;padding:8px;background:rgba(180,140,0,0.15);color:#d4af37;border:1px solid #b09030;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
+                <button onclick="window.devMapa.asignarMasivo(true, 0.5)"
+                    style="flex:1;min-width:110px;padding:8px;background:rgba(0,120,200,0.15);color:#66aaff;border:1px solid #3377cc;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
+                    🔵 DAR FALTANTES (−${Math.round(costoTotal * 0.5)} HEX)
+                </button>
+                <button onclick="window.devMapa.asignarMasivo(true, 1)"
+                    style="flex:1;min-width:110px;padding:8px;background:rgba(180,140,0,0.15);color:#d4af37;border:1px solid #b09030;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
                     💰 DAR FALTANTES (−${costoTotal} HEX)
+                </button>
+                <button onclick="window.devMapa.asignarMasivo(true, 2)"
+                    style="flex:1;min-width:110px;padding:8px;background:rgba(200,60,0,0.15);color:#ff8844;border:1px solid #cc5522;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
+                    🔴 DAR FALTANTES (−${costoTotal * 2} HEX)
                 </button>` : ''}
                 ` : ''}
                 ${poseidos > 0 ? `
                 <button onclick="window.devMapa.quitarMasivo()"
-                    style="flex:1;padding:8px;background:rgba(180,0,0,0.15);color:#ff6666;border:1px solid #aa3333;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
+                    style="flex:1;min-width:110px;padding:8px;background:rgba(180,0,0,0.15);color:#ff6666;border:1px solid #aa3333;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
                     ❌ QUITAR TODOS
                 </button>
                 ` : ''}
@@ -649,13 +658,21 @@ function _htmlAsignNodo() {
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
             ${!tiene ? `
             <button onclick="window.devMapa.asignarDesdeNodo('${safeId}', false)"
-                style="flex:1;padding:8px;background:rgba(0,180,100,0.15);color:#00cc88;border:1px solid #00aa66;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
+                style="flex:1;min-width:110px;padding:8px;background:rgba(0,180,100,0.15);color:#00cc88;border:1px solid #00aa66;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
                 ✅ DAR (sin cobrar)
             </button>
             ${hexCost > 0 ? `
-            <button onclick="window.devMapa.asignarDesdeNodo('${safeId}', true)"
-                style="flex:1;padding:8px;background:rgba(180,140,0,0.15);color:#d4af37;border:1px solid #b09030;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
+            <button onclick="window.devMapa.asignarDesdeNodo('${safeId}', true, 0.5)"
+                style="flex:1;min-width:110px;padding:8px;background:rgba(0,120,200,0.15);color:#66aaff;border:1px solid #3377cc;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
+                🔵 DAR (−${Math.round(hexCost * 0.5)} HEX)
+            </button>
+            <button onclick="window.devMapa.asignarDesdeNodo('${safeId}', true, 1)"
+                style="flex:1;min-width:110px;padding:8px;background:rgba(180,140,0,0.15);color:#d4af37;border:1px solid #b09030;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
                 💰 DAR (−${hexCost} HEX)
+            </button>
+            <button onclick="window.devMapa.asignarDesdeNodo('${safeId}', true, 2)"
+                style="flex:1;min-width:110px;padding:8px;background:rgba(200,60,0,0.15);color:#ff8844;border:1px solid #cc5522;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
+                🔴 DAR (−${hexCost * 2} HEX)
             </button>` : ''}
             ` : `
             <button onclick="window.devMapa.asignarDesdeNodo('${safeId}', false)"
