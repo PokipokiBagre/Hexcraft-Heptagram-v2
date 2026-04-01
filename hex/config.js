@@ -22,7 +22,7 @@ export const hexConfigs = {
         dbAnonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9waGpjandqZ2VtZ3JobW92cnZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzQ5ODY1OTIsImV4cCI6MjA5MDU2MjU5Mn0.UGZucFY1cCPUAM42eddJXAPW8jbceA2k3qchJRfkBRs',
         storageUrl: 'https://ophjcjwjgemgrhmovrvt.supabase.co/storage/v1/object/public/imagenes-hex',
         ui: {
-            titulo: 'MANOLO HEPTAGRAM',
+            titulo: 'HEX 2',
             subtitulo: 'Segunda campaña en un universo paralelo',
             lore: 'Esta es la configuración de la segunda campaña. Aquí puedes escribir una introducción completamente distinta.',
             linkRol: 'https://8chan.moe/hisrol/',
