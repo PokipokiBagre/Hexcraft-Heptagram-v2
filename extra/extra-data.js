@@ -47,7 +47,7 @@ export async function cargarDatos() {
             urlStorage: `${STORAGE_URL}/imgpersonajes/${key}.png`,
             urlGithub:  `../img/imgpersonajes/${key}.png`,
             existe:     setPersonajes.has(key),
-            isPlayer:   p.is_player   // ← necesario para distinguir NPC de jugador
+            isPlayer:   p.is_player
         });
     });
 
@@ -78,7 +78,7 @@ export async function cargarDatos() {
     ];
 
     const imgEncontradas = new Set();
-    imgEncontradas.add('icon.png');
+    // 🚨 BORRADA la línea que agregaba 'icon.png' a la fuerza
     imgEncontradas.add('no_encontrado.png');
 
     itemsInterfaz.length = 0;
@@ -107,8 +107,8 @@ export async function cargarDatos() {
     }
 
     imgEncontradas.forEach(archivo => {
-        // 🌟 ARREGLO 1: Ignoramos explícitamente la imagen hardcodeada del index
-        if (archivo.includes('icon-inicio')) return;
+        // 🚨 BLOQUEO EXACTO: Si el archivo se llama icon.png lo ignoramos por completo
+        if (archivo.toLowerCase() === 'icon.png') return;
 
         const nombreLimpio = archivo.replace(/\.(png|jpg|jpeg|webp|gif|ico)$/i, '');
         const key = norm(nombreLimpio);
@@ -126,7 +126,6 @@ export async function cargarDatos() {
     });
 }
 
-// 👉 Envuelve la llamada a Supabase en una protección con Autodestrucción
 function uploadSeguro(ruta, file, tipoContenido) {
     const solicitud = supabase.storage.from(BUCKET)
         .upload(ruta, file, { upsert: true, contentType: tipoContenido, cacheControl: '3600' });
@@ -239,7 +238,6 @@ function convertirAFormatos(file) {
 export async function cargarHuerfanas() {
     const { db } = await import('../hex-db.js');
 
-    // 🌟 ARREGLO 2: Normalización estricta (sin paréntesis) y suave (con paréntesis)
     const normEstricta = (str) => str ? str.toString().trim().toLowerCase()
         .replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e')
         .replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o')
@@ -260,15 +258,21 @@ export async function cargarHuerfanas() {
 
     const keysEnUso = new Set();
     
-    // Agregamos a la "lista blanca" ambas versiones (estricta y suave) para blindar imágenes con paréntesis
     personajes.forEach(p => {
         const baseNombre = p.icono_override || p.nombre;
         
-        const estricto = normEstricta(baseNombre) + 'icon';
-        const suave    = normSuave(baseNombre) + 'icon';
+        const estricto = normEstricta(baseNombre);
+        const suave    = normSuave(baseNombre);
 
+        // Protegemos la versión estricta (con y sin terminación 'icon')
+        keysEnUso.add(estricto + 'icon.png');
+        keysEnUso.add(estricto + 'icon.jpg');
         keysEnUso.add(estricto + '.png');
         keysEnUso.add(estricto + '.jpg');
+
+        // Protegemos la versión suave para salvar los paréntesis (con y sin terminación 'icon')
+        keysEnUso.add(suave + 'icon.png');
+        keysEnUso.add(suave + 'icon.jpg');
         keysEnUso.add(suave + '.png');
         keysEnUso.add(suave + '.jpg');
     });
