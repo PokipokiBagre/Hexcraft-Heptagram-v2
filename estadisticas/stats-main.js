@@ -69,7 +69,6 @@ window.sincronizarUI = () => {
     }
 
     window.scrollTo(0, scrollVentana);
-};
 
 // ============================================================================
 // 2. LÓGICA DE ACTUALIZACIÓN DE ESTADÍSTICAS Y VIDAS
