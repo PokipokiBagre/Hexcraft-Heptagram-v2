@@ -2,17 +2,19 @@
 // extra-state.js — Estado del módulo Extra
 // ============================================================
 
-export const BUCKET = 'imagenes-hex';
-export const SUPABASE_URL = 'https://gkscqurkpyteusqyspsu.supabase.co'; // Asegúrate de mantener tu URL real
-export const STORAGE_URL  = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}`;
+import { currentConfig } from '../hex-auth.js';
+
+export const BUCKET      = 'imagenes-hex';
+export const SUPABASE_URL = currentConfig.dbUrl;
+export const STORAGE_URL  = currentConfig.storageUrl;
 
 export let estadoUI = {
-    tab:          'personajes', // 'personajes' | 'objetos' | 'interfaz'
-    filtro:       'todos',      // 'todos' | 'falta' | 'ok'
+    tab:          'personajes',
+    filtro:       'todos',
     busqueda:     '',
-    uploadTarget: null          // { keyNorm, tipoIcono, nombre }
+    uploadTarget: null
 };
 
 export let itemsPersonajes = [];
 export let itemsObjetos    = [];
-export let itemsInterfaz   = []; // <-- NUEVO
+export let itemsInterfaz   = [];
