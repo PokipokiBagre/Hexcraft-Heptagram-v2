@@ -1,8 +1,9 @@
 import { statsGlobal, listaEstados, estadoUI, dbExtra } from './stats-state.js';
 import { calcularVidaRojaMax, calcularVexMax, getMayorAfinidad } from './stats-logic.js';
+import { currentConfig } from '../hex-auth.js';
 
-// 🌟 CORRECCIÓN: Conectar al Storage de Supabase en lugar de carpetas locales
-const STORAGE_URL = 'https://gkscqurkpyteusqyspsu.supabase.co/storage/v1/object/public/imagenes-hex';
+// 🌟 Ahora la URL de imágenes se adapta a la campaña activa
+const STORAGE_URL = currentConfig.storageUrl;
 
 const normalizar = (str) => str.toString().trim().toLowerCase().replace(/[áàäâ]/g,'a').replace(/[éèëê]/g,'e').replace(/[íìïî]/g,'i').replace(/[óòöô]/g,'o').replace(/[úùüû]/g,'u').replace(/\s+/g,'_').replace(/[^a-z0-9ñ_]/g,'');
 const calcTotal = (base, spells, spellEff, buff) => (base || 0) + (spells || 0) + (spellEff || 0) + (buff || 0);
