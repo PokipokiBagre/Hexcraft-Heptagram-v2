@@ -13,6 +13,7 @@ import { AFINIDADES_LISTA } from './estadisticas/panel-stats-state.js';
 import { getCantidadActual } from './objetos/panel-objetos-logic.js'; 
 import { mapaDevState } from './mapa/panel-mapa-state.js';
 import { contarCambiosPendientes as contarCambiosMapa } from './mapa/panel-mapa-logic.js';
+import { haycambiosPagina } from './pagina/panel-pagina-logic.js';
 
 export function revisarCambiosPendientes() {
     const btnSync = document.getElementById('btn-sync-global');
@@ -32,6 +33,8 @@ export function revisarCambiosPendientes() {
     if (Object.keys(hzState.colaVisibilidad).length > 0) hayCambios = true;
     // 🗺️ Cambios del panel mapa
     if (contarCambiosMapa() > 0) hayCambios = true;
+    // 📄 Cambios de config de página
+    if (haycambiosPagina()) hayCambios = true;
 
     if (hayCambios) btnSync.classList.remove('oculto');
     else btnSync.classList.add('oculto');
