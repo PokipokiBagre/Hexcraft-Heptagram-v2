@@ -200,6 +200,30 @@ window.devMapa = {
         _marcarGuardar();
     },
 
+    devolverDesdeNodo: (hechizoId) => {
+        const pj = asignState.pjSeleccionado;
+        if (!pj) return;
+        const nodo = mapaDevState.nodosDB.find(n => n.id === hechizoId);
+        const idParaAsignar = (nodo && nodo.nombreOriginal && nodo.nombreOriginal !== nodo.id)
+            ? nodo.nombreOriginal
+            : hechizoId;
+
+        // Quitar el hechizo (toggle → false)
+        const cobrarOriginal = hzState.cobrarAlAsignar;
+        hzState.cobrarAlAsignar = false;
+        asignarHechizo(pj, idParaAsignar); // toggle — si lo tiene, lo quita
+        hzState.cobrarAlAsignar = cobrarOriginal;
+
+        // Devolver HEX si tenía costo
+        if (nodo && nodo.hex > 0) {
+            modPjStat(pj, 'hex', null, +nodo.hex, true, false);
+        }
+
+        _calcularVistaPj(pj);
+        _renderPanelAsignacion();
+        _marcarGuardar();
+    },
+
     quitarMasivo: () => {
         const pj = asignState.pjSeleccionado;
         if (!pj) return;
@@ -286,6 +310,12 @@ function _actualizarBuscadorCanvas(texto) {
         mapaDevState.seleccionMultiple.clear();
         mapaDevState.seleccionMultiple.add(nodo);
         _renderPropiedades();
+        // También actualizar el panel de asignación para reflejar el nodo recién seleccionado
+        if (asignState.pjSeleccionado) {
+            _calcularVistaPj(asignState.pjSeleccionado);
+            const np = document.getElementById('mm-asign-nodo-panel');
+            if (np) np.innerHTML = _htmlAsignNodo();
+        }
     }
 }
 
@@ -626,8 +656,13 @@ function _htmlAsignNodo() {
             ` : `
             <button onclick="window.devMapa.asignarDesdeNodo('${safeId}', false)"
                 style="flex:1;padding:8px;background:rgba(180,0,0,0.15);color:#ff6666;border:1px solid #aa3333;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
-                ❌ QUITAR HECHIZO
+                ❌ QUITAR
             </button>
+            ${hexCost > 0 ? `
+            <button onclick="window.devMapa.devolverDesdeNodo('${safeId}')"
+                style="flex:1;padding:8px;background:rgba(0,120,180,0.15);color:#66ccff;border:1px solid #3399bb;border-radius:6px;cursor:pointer;font-family:'Cinzel';font-size:0.75em;font-weight:bold;">
+                ↩️ QUITAR (+${hexCost} HEX)
+            </button>` : ''}
             `}
         </div>
         ${n.efecto ? `<div style="font-size:0.75em;color:#aaa;border-top:1px dashed #2a1060;padding-top:8px;line-height:1.4;">${_esc(n.efecto)}</div>` : ''}
