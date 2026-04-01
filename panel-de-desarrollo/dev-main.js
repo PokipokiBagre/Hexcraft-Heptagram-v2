@@ -16,6 +16,9 @@ import { initMapaDev } from './mapa/panel-mapa-logic.js';
 import { renderColumnaMapa } from './mapa/panel-mapa-ui.js';
 import { renderColumnaPersonaje } from './personajes/panel-personaje-ui.js';
 import { renderColumnaClonar }    from './clonar/panel-clonar-ui.js';
+import { initPaginaDev }           from './pagina/panel-pagina-ui.js';
+import { renderColumnaPagina }     from './pagina/panel-pagina-ui.js';
+import { haycambiosPagina }        from './pagina/panel-pagina-logic.js';
 
 window.cambiarFiltroRol = cambiarFiltroRol;
 window.filtrarPorNombre = filtrarPorNombre;
@@ -23,6 +26,7 @@ window.seleccionarPersonajeDev = seleccionarPersonajeDev;
 window.copiarLogGlobal = copiarLogGlobal;
 window.ejecutarGuardadoGlobal = ejecutarGuardadoGlobal;
 window.cambiarPanelInferior = cambiarPanelInferior;
+window.renderColumnaPagina = renderColumnaPagina;
 
 window.onload = async () => {
     const favicon = document.getElementById("dynamic-favicon");
@@ -172,6 +176,7 @@ console.log('lacossa en invHz:', invHz?.filter(i => i.personaje_nombre === 'Laco
         }
 
         initMapaDev(nodosParaMapa, enlacesParaMapa, coloresParaMapa);
+        await initPaginaDev();
 
         // Renderizado inicial del panel mapa (pestaña activa por defecto)
         renderColumnaMapa();
@@ -277,7 +282,7 @@ function seleccionarPersonajeDev(nombre) {
 
 // ── Navegación de paneles inferiores ─────────────────────────
 function cambiarPanelInferior(panel) {
-    const paneles = ['mapa', 'personaje', 'acciones'];
+    const paneles = ['mapa', 'personaje', 'acciones', 'pagina'];
     paneles.forEach(p => {
         document.getElementById(`panel-inf-${p}`)?.classList.add('oculto');
         const tab = document.getElementById(`tab-inf-${p}`);
@@ -299,6 +304,7 @@ function cambiarPanelInferior(panel) {
     if (panel === 'mapa')      renderColumnaMapa();
     if (panel === 'personaje') renderColumnaPersonaje();
     if (panel === 'acciones')  renderColumnaClonar();
+    if (panel === 'pagina')    renderColumnaPagina();
 }
 
 function copiarLogGlobal() {
