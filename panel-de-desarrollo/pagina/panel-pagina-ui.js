@@ -174,13 +174,13 @@ function _renderImgCard(img) {
     const keyNorm = _norm(img.key);
     const url     = `${STORAGE_URL}/imginterfaz/${keyNorm}.png?v=${v}`;
     const fbStorage = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
-    
-    // 🌟 NUEVO: SVG con comillas URL-encoded (%22) para que NO ROMPA el atributo HTML onerror
     const fbSVG     = `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2270%22 height=%2270%22%3E%3Crect width=%2270%22 height=%2270%22 fill=%22%230a000f%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%234a1880%22 font-size=%2222%22%3E%3F%3C/text%3E%3C/svg%3E`;
     
-    const safeKey = img.key.replace(/'/g, "\\'");
-    const safeLbl = img.label.replace(/'/g, "\\'");
-    const safeZona= img.zona.replace(/'/g, "\\'");
+    // 🌟 ARREGLO CLAVE: Escapar las comillas dobles usando &quot; para que el atributo
+    // onclick="" y el title="" no se rompan a la mitad del string en el HTML.
+    const safeKey  = img.key.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const safeLbl  = img.label.replace(/'/g, "\\'").replace(/"/g, '&quot;');
+    const safeZona = img.zona.replace(/'/g, "\\'").replace(/"/g, '&quot;');
 
     let onErrorScript = `this.onerror=function(){ this.onerror=null; this.src='${fbSVG}'; }; this.src='${fbStorage}';`;
     if (img.key === 'no_encontrado') {
@@ -190,7 +190,7 @@ function _renderImgCard(img) {
     return `
     <div class="pag-img-card" data-imgkey="${img.key}"
          onclick="window._paginaAbrirUpload('${safeKey}','${img.archivo}','${safeLbl}','${safeZona}')"
-         title="${img.zona}">
+         title="${safeZona}">
         <span class="pag-upload-badge">📤</span>
         <img id="pag-grid-img-${img.key}" src="${url}" onerror="${onErrorScript}">
         <div class="pag-img-label">${img.label}</div>
@@ -204,8 +204,6 @@ function _renderPreviewCompleto(c) {
     const bgUrl    = `${STORAGE_URL}/imginterfaz/hex-002.png?v=${v}`;
     const iconUrl  = `${STORAGE_URL}/imginterfaz/icon.png?v=${v}`;
     const fb       = `${STORAGE_URL}/imginterfaz/no_encontrado.png`;
-    
-    // SVG seguro también aquí
     const fbSVG    = `data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2270%22 height=%2270%22%3E%3Crect width=%2270%22 height=%2270%22 fill=%22%230a000f%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%234a1880%22 font-size=%2222%22%3E%3F%3C/text%3E%3C/svg%3E`;
 
     const gridItems = [
@@ -298,7 +296,6 @@ function _norm(str) {
         .replace(/\s+/g,'_').replace(/[^a-z0-9_\-]/g,'') : '';
 }
 
-// 🌟 Función segura anti-bloqueo
 function _uploadSeguroPagina(ruta, file, tipoContenido) {
     const solicitud = supabase.storage.from(BUCKET)
         .upload(ruta, file, { upsert: true, contentType: tipoContenido, cacheControl: '3600' });
