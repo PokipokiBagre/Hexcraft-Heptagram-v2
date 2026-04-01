@@ -4,6 +4,7 @@ import { dibujarCatalogo, dibujarResumenVisual, dibujarDetalle, dibujarMenuOP, d
 import { generarCSVExportacion, descargarArchivoCSV, calcularVidaRojaMax, getMysticBonus, esNPCSistema } from './stats-logic.js';
 import { hexAuth, supabase } from '../hex-auth.js';
 import { db } from '../hex-db.js';
+import { currentConfig } from '../hex-auth.js';
 
 // ============================================================
 // stats-main.js — VERSIÓN SUPABASE (ESTABILIDAD MÁXIMA)
@@ -17,7 +18,9 @@ if (!estadoUI.hexLog) estadoUI.hexLog = {};
 // 1. MOTOR DE RENDERIZADO UNIVERSAL
 // ============================================================================
 window.sincronizarUI = () => {
-    localStorage.setItem('hex_stats_v2', JSON.stringify({ stats: statsGlobal, party: estadoUI.party }));
+    // 🌟 BLINDAJE: Solo guardamos la party, NO los stats (esos vienen frescos de la DB).
+    // Y le ponemos el ID de la campaña actual para que nunca se crucen.
+    localStorage.setItem(`hex_party_${currentConfig.id}`, JSON.stringify(estadoUI.party));
     window.actualizarBotonSync();
 
     const scrollVentana = window.scrollY;
@@ -41,6 +44,10 @@ window.sincronizarUI = () => {
             if (estadoUI.vistaActual === 'hex') updateHexLogText();
         }
     }
+
+    // Restaurar el scroll donde estaba el usuario
+    window.scrollTo(0, scrollVentana);
+};
 
     const modal = document.getElementById('modal-op');
     if (modal && !modal.classList.contains('oculto')) {
@@ -690,7 +697,10 @@ async function iniciar() {
         const favicon = document.querySelector("link[rel='icon']");
         if (favicon) favicon.href = `${db.storage.urlBase}/imginterfaz/icon.png`;
 
-        if (performance.getEntriesByType("navigation")[0]?.type === "reload") localStorage.removeItem('hex_stats_v2');
+        // 🌟 Limpieza de seguridad: borramos el caché viejo si existía
+        if (performance.getEntriesByType("navigation")[0]?.type === "reload") {
+            localStorage.removeItem('hex_stats_v2'); 
+        }
 
         await hexAuth.init();
 
@@ -722,15 +732,14 @@ async function iniciar() {
 
         await cargarDiccionarioEstados();
 
-        const cache = localStorage.getItem('hex_stats_v2');
-        if (!cache) {
-            await cargarTodoDesdeCSV(barra);
-        } else {
-            const parsed = JSON.parse(cache);
-            Object.assign(statsGlobal, parsed.stats);
-            if(parsed.party) estadoUI.party = parsed.party;
-            cargarTodoDesdeCSV(barra); 
+        // 🌟 LECTURA DE CACHÉ AISLADO (Solo la configuración visual de la Party)
+        const partyCache = localStorage.getItem(`hex_party_${currentConfig.id}`);
+        if (partyCache) {
+            estadoUI.party = JSON.parse(partyCache);
         }
+
+        // 🌟 Descarga de datos 100% puros desde la BD de la campaña actual
+        await cargarTodoDesdeCSV(barra);
 
         if (loader) setTimeout(() => loader.classList.add('oculto'), 500);
 
