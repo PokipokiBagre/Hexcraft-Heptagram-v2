@@ -3,63 +3,64 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Hexcraft Heptagram</title>
+    <title id="doc-title">Cargando Sistema...</title>
     <link rel="icon" type="image/png" id="dynamic-favicon">
-    <link rel="stylesheet" href="style.css?v=3.1">
+    <link rel="stylesheet" href="style.css?v=3.2">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        /* Estilos para el Selector de Campañas */
+        #hex-selector {
+            position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+            background: radial-gradient(circle at center, #1a0033 0%, #000000 100%);
+            z-index: 999999; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+        }
+        .hex-btn {
+            background: linear-gradient(145deg, #1f003b, #0a0014);
+            border: 2px solid #d4af37; color: #d4af37;
+            padding: 20px 40px; margin: 10px; border-radius: 8px;
+            font-family: 'Cinzel', serif; font-size: 1.5em; font-weight: bold;
+            cursor: pointer; transition: 0.3s; width: 300px;
+        }
+        .hex-btn:hover { background: #d4af37; color: #000; transform: scale(1.05); }
+    </style>
 </head>
 <body>
-    <div class="container-hex">
 
-        <div style="display:flex; justify-content:flex-end; margin-bottom: 10px;">
+    <div id="hex-selector" style="display: none;">
+        <h1 style="font-size: 3em; margin-bottom: 40px;">SELECCIONA LA CAMPAÑA</h1>
+        <button class="hex-btn" onclick="seleccionarCampaña('hex1')">HEXCRAFT 1</button>
+        <button class="hex-btn" onclick="seleccionarCampaña('hex2')">HEXCRAFT 2</button>
+        <button class="hex-btn" onclick="seleccionarCampaña('hex3')">HEXCRAFT 3</button>
+        <button class="hex-btn" onclick="seleccionarCampaña('hex4')">HEXCRAFT 4</button>
+    </div>
+
+    <div class="container-hex" id="main-content" style="display: none;">
+
+        <div style="display:flex; justify-content:space-between; margin-bottom: 10px;">
+            <button onclick="cambiarCampaña()" style="background:transparent; color:#888; border:1px solid #555; padding:5px 10px; border-radius:4px; cursor:pointer; font-family:'Cinzel';">🔄 Cambiar Campaña</button>
             <div id="hex-session-badge"></div>
         </div>
 
         <header class="hero-section">
-            <h1 style="font-size: 3.5em; margin: 0; text-shadow: 0 0 20px rgba(0,0,0,0.9);">HEXCRAFT HEPTAGRAM</h1>
-            <p style="color: #fff; margin-top: 10px; letter-spacing: 2px; font-size: 1.2em; text-transform: uppercase;">
-                Campaña de rol mágica estructurada en el tablón Hisrol
-            </p>
+            <h1 id="ui-titulo" style="font-size: 3.5em; margin: 0; text-shadow: 0 0 20px rgba(0,0,0,0.9);">CARGANDO...</h1>
+            <p id="ui-subtitulo" style="color: #fff; margin-top: 10px; letter-spacing: 2px; font-size: 1.2em; text-transform: uppercase;">...</p>
         </header>
 
-        <section class="lore-summary">
-            HEX es un sistema de rol con actividad diaria alojado en Hisrol. La progresión se gestiona
-            mediante hilos donde el entorno reacciona a las entradas del usuario. El desarrollo integra
-            una infraestructura de videos informativos y un mapa de hechizos dinámico que registra la
-            evolución del sistema en tiempo real.
+        <section id="ui-lore" class="lore-summary">
+            Cargando registros...
         </section>
 
         <h2 style="margin-top: 40px; margin-bottom: 20px;">Sistemas</h2>
         <div class="main-grid">
-            <a href="objetos/index.html" class="grid-item">
-                <img data-img="objetos.jpg" alt="Objetos">
-                <span>OBJETOS</span>
-            </a>
-            <a href="estadisticas/index.html" class="grid-item">
-                <img data-img="estadisticas.jpg" alt="Estadísticas">
-                <span>ESTADÍSTICAS</span>
-            </a>
-            <a href="misiones/index.html" class="grid-item">
-                <img data-img="misiones.png" alt="Misiones">
-                <span>MISIONES</span>
-            </a>
-            <a href="hechizos/index.html" class="grid-item">
-                <img data-img="hechizos.jpg" alt="Hechizos">
-                <span>HECHIZOS</span>
-            </a>
-            <a href="mapa/index.html" class="grid-item">
-                <img data-img="mapa.png" alt="Mapa">
-                <span>MAPA DE HECHIZOS</span>
-            </a>
-            <a href="extra/index.html" class="grid-item">
-                <img data-img="extra.png" alt="Extra">
-                <span>IMAGENES</span>
-            </a>
-            <a href="region/index.html" class="grid-item">
-                <img data-img="region.png" alt="Region">
-                <span>MAPA REGIONAL</span>
-            </a>
+            <a href="objetos/index.html" class="grid-item"><img data-img="objetos.jpg" alt="Objetos"><span>OBJETOS</span></a>
+            <a href="estadisticas/index.html" class="grid-item"><img data-img="estadisticas.jpg" alt="Estadísticas"><span>ESTADÍSTICAS</span></a>
+            <a href="misiones/index.html" class="grid-item"><img data-img="misiones.png" alt="Misiones"><span>MISIONES</span></a>
+            <a href="hechizos/index.html" class="grid-item"><img data-img="hechizos.jpg" alt="Hechizos"><span>HECHIZOS</span></a>
+            <a href="mapa/index.html" class="grid-item"><img data-img="mapa.png" alt="Mapa"><span>MAPA DE HECHIZOS</span></a>
+            <a href="extra/index.html" class="grid-item"><img data-img="extra.png" alt="Extra"><span>IMAGENES</span></a>
+            <a href="region/index.html" class="grid-item"><img data-img="region.png" alt="Region"><span>MAPA REGIONAL</span></a>
             
             <a href="panel-de-desarrollo/index.html" class="grid-item" id="btn-panel-dev" style="display: none; border-color: #ff00ff; box-shadow: inset 0 0 15px rgba(255,0,255,0.2);">
                 <img data-img="panel-dev.png" alt="Panel de Desarrollo" style="border-color: #ff00ff;">
@@ -69,48 +70,74 @@
 
         <h2 style="margin-top:40px; margin-bottom:15px;">Estado Actual</h2>
         <div id="dashboard" class="dashboard-grid">
-            <div class="dash-card" style="grid-column: 1/-1; text-align:center; color:#555; font-family:sans-serif; padding:30px;">
-                Cargando datos...
-            </div>
+            <div class="dash-card" style="grid-column: 1/-1; text-align:center; color:#555; padding:30px;">Cargando datos...</div>
         </div>
 
         <h2 style="margin-top: 50px; margin-bottom: 20px;">Hilos Activos</h2>
         <section class="direct-access">
-            <a href="https://8chan.moe/hisrol/res/127489.html" target="_blank" class="access-card">
+            <a id="ui-link-rol" href="#" target="_blank" class="access-card">
                 <img data-img="hex-002.png" alt="Rol Actual">
-                <div class="overlay"><span>ROL ACTUAL</span></div>
+                <div class="overlay"><span id="ui-nombre-rol">ROL</span></div>
             </a>
-            <a href="https://8chan.moe/hisrol/res/128745.html" target="_blank" class="access-card">
+            <a id="ui-link-meta" href="#" target="_blank" class="access-card">
                 <img data-img="met-004.png" alt="Meta">
-                <div class="overlay"><span>META</span></div>
+                <div class="overlay"><span id="ui-nombre-meta">META</span></div>
             </a>
         </section>
 
     </div>
 
 <script type="module">
-    import { hexAuth } from './hex-auth.js';
-    import { db }      from './hex-db.js';
+    import { hexAuth, currentConfig } from './hex-auth.js';
+    import { db } from './hex-db.js';
     import { supabase } from './hex-auth.js';
 
+    // Funciones globales para los botones
+    window.seleccionarCampaña = (idHex) => {
+        localStorage.setItem('hex_selected', idHex);
+        window.location.reload();
+    };
+    
+    window.cambiarCampaña = () => {
+        localStorage.removeItem('hex_selected');
+        window.location.reload();
+    };
+
     async function iniciar() {
+        // Verificar si hay campaña seleccionada
+        if (!localStorage.getItem('hex_selected')) {
+            document.getElementById('hex-selector').style.display = 'flex';
+            return;
+        }
+
+        document.getElementById('main-content').style.display = 'block';
+
+        // 1. Inicializamos la autenticación (ahora sabe a qué BD conectarse)
+        await hexAuth.init();
+
+        // 2. Inyectar textos dinámicos desde config.js
+        document.getElementById('doc-title').innerText = currentConfig.ui.titulo;
+        document.getElementById('ui-titulo').innerText = currentConfig.ui.titulo;
+        document.getElementById('ui-subtitulo').innerText = currentConfig.ui.subtitulo;
+        document.getElementById('ui-lore').innerText = currentConfig.ui.lore;
+        
+        document.getElementById('ui-link-rol').href = currentConfig.ui.linkRol;
+        document.getElementById('ui-nombre-rol').innerText = currentConfig.ui.nombreRol;
+        document.getElementById('ui-link-meta').href = currentConfig.ui.linkMeta;
+        document.getElementById('ui-nombre-meta').innerText = currentConfig.ui.nombreMeta;
+
+        // 3. Renderizar interfaz
         const favicon = document.getElementById("dynamic-favicon");
         if (favicon) favicon.href = db.storage.getUrlInterfaz('icon.png');
 
-        // 1. Inicializamos la autenticación
-        await hexAuth.init();
-
-        // 2. Mostramos el estado de la sesión (Badge)
         const badge = document.getElementById('hex-session-badge');
         if (badge) badge.innerHTML = hexAuth.renderStatusBadge();
 
-        // 🌟 3. LÓGICA DE SEGURIDAD: Mostramos el Panel de Desarrollo SOLO si es MÁSTER (Admin)
         if (hexAuth.esAdmin()) {
             const btnDev = document.getElementById('btn-panel-dev');
-            if (btnDev) btnDev.style.display = 'flex'; // Se usa flex porque así está definido el .grid-item en el CSS
+            if (btnDev) btnDev.style.display = 'flex';
         }
 
-        // 4. Cargar el resto del contenido
         cargarImagenesNube();
         await cargarDashboard();
     }
