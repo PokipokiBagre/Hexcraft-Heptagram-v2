@@ -26,14 +26,12 @@ export function revisarCambiosPendientes() {
     if (Object.values(objState.colaNuevosObjetos).some(o => o.nombre.trim() !== '')) hayCambios = true;
     if (Object.keys(objState.colaEdicionObjetos).length > 0) hayCambios = true;
     if (Object.keys(stState.colaStats).length > 0) hayCambios = true;
-    if (Object.keys(stState.colaNotas).length > 0) hayCambios = true; // 🌟 Detectamos si hay notas pendientes
+    if (Object.keys(stState.colaNotas).length > 0) hayCambios = true;
     if (Object.keys(stState.colaEstadosConfig).length > 0) hayCambios = true;
     if (stState.colaBorrarEstados.length > 0) hayCambios = true;
     if (Object.keys(hzState.colaAsignaciones).length > 0) hayCambios = true; 
     if (Object.keys(hzState.colaVisibilidad).length > 0) hayCambios = true;
-    // 🗺️ Cambios del panel mapa
     if (contarCambiosMapa() > 0) hayCambios = true;
-    // 📄 Cambios de config de página
     if (haycambiosPagina()) hayCambios = true;
 
     if (hayCambios) btnSync.classList.remove('oculto');
@@ -270,7 +268,6 @@ export function actualizarLogGlobal() {
         });
     }
 
-    // 🗺️ Entradas del log del panel mapa (cambios globales, sin PJ)
     if (mapaDevState.logSesion && mapaDevState.logSesion.length > 0) {
         if (!logPorPJ['__global__']) logPorPJ['__global__'] = [];
         mapaDevState.logSesion.forEach(item => {
@@ -362,19 +359,24 @@ export async function ejecutarGuardadoGlobal() {
             }
         }
 
-        // 🌟 Juntamos PJs con cambios de stats Y PJs con cambios en notas
         const pjsConCambiosStats = new Set([...Object.keys(stState.colaStats), ...Object.keys(stState.colaNotas)]);
 
         for (const pjKey of pjsConCambiosStats) {
             const realPj = devState.listaPersonajes.find(p => norm(p.nombre) === norm(pjKey))?.nombre || pjKey;
             const cambios = stState.colaStats[pjKey] || {};
             const notasCambios = stState.colaNotas[pjKey] || {};
-            let updatedPj = JSON.parse(JSON.stringify(stState.statsDB[pjKey]));
             
-            // Garantizamos que exista el objeto de notas
-            if (!updatedPj.notasAfinidad) updatedPj.notasAfinidad = {};
+            // 🌟 ARREGLO CLAVE: Inicialización segura para evitar TypeError silencioso si la BD está vacía o incompleta
+            let updatedPj = stState.statsDB[pjKey] ? JSON.parse(JSON.stringify(stState.statsDB[pjKey])) : {
+                hex: 0, asistencia: 0, vidaRojaActual: 0, baseVidaRojaMax: 0, baseVidaAzul: 0, baseGuardaDorada: 0, baseDanoRojo: 0, baseDanoAzul: 0, baseElimDorada: 0,
+                afinidadesBase: {}, hechizosEfecto: {}, buffs: {}, notasAfinidad: {}, estados: {}
+            };
+            if (!updatedPj.afinidadesBase) updatedPj.afinidadesBase = {};
+            if (!updatedPj.hechizosEfecto) updatedPj.hechizosEfecto = {};
+            if (!updatedPj.buffs) updatedPj.buffs = {};
+            if (!updatedPj.notasAfinidad)  updatedPj.notasAfinidad = {};
+            if (!updatedPj.estados)        updatedPj.estados = {};
 
-            // Aplicar stats matemáticos
             for (const flatKey in cambios) {
                 if (flatKey.endsWith('.null') || flatKey.startsWith('__')) continue; 
                 const keys = flatKey.split('.');
@@ -385,7 +387,6 @@ export async function ejecutarGuardadoGlobal() {
                 }
             }
 
-            // 🌟 Aplicar cambios de notas de texto
             for (const flatKey in notasCambios) {
                 updatedPj.notasAfinidad[flatKey] = notasCambios[flatKey];
             }
@@ -432,7 +433,7 @@ export async function ejecutarGuardadoGlobal() {
                 buff_vida_roja: updatedPj.buffs.vidaRojaMaxExtra || 0,
                 buff_vida_azul: updatedPj.buffs.vidaAzulExtra || 0,
                 buff_guarda: updatedPj.buffs.guardaDoradaExtra || 0,
-                notas_afinidad: updatedPj.notasAfinidad // 🌟 LA NUEVA COLUMNA DE BD
+                notas_afinidad: updatedPj.notasAfinidad 
             });
         }
 
@@ -457,8 +458,17 @@ export async function ejecutarGuardadoGlobal() {
             visPromises.push(supabase.from('hechizos_nodos').update({ es_conocido: hzState.colaVisibilidad[hzId] }).eq('hechizo_id', hzId));
         }
 
-        if (deletePromises.length > 0) await Promise.all(deletePromises);
-        if (visPromises.length > 0) await Promise.all(visPromises); 
+        // 🌟 ARREGLO CLAVE: Esperamos las promesas de delete y visibilidad comprobando explícitamente errores
+        if (deletePromises.length > 0) {
+            const resultDeletes = await Promise.all(deletePromises);
+            const errDel = resultDeletes.find(r => r && r.error);
+            if (errDel) throw new Error("Ejecutando deletes: " + errDel.error.message);
+        }
+        if (visPromises.length > 0) {
+            const resultVis = await Promise.all(visPromises);
+            const errVis = resultVis.find(r => r && r.error);
+            if (errVis) throw new Error("Actualizando visibilidad: " + errVis.error.message);
+        }
 
         if (catalogUpserts.length > 0) {
             const { error: errCat } = await supabase.from('objetos').upsert(catalogUpserts, { onConflict: 'nombre' });
@@ -482,10 +492,7 @@ export async function ejecutarGuardadoGlobal() {
         }
 
         // 🗺️ GUARDAR CAMBIOS DEL MAPA ────────────────────────────────────
-        // 1. Visibilidad de nodos (colaVisibilidad del panel mapa)
-        //    Nota: hzState.colaVisibilidad ya cubre los cambios hechos desde el panel de hechizos.
-        //    mapaDevState.colaVisibilidad cubre los cambios hechos desde el panel mapa.
-        //    Ambos escriben a la misma tabla, así que los procesamos por separado para evitar conflictos.
+        
         const mapaVisPromises = [];
         for (const hzId in mapaDevState.colaVisibilidad) {
             mapaVisPromises.push(
@@ -496,11 +503,10 @@ export async function ejecutarGuardadoGlobal() {
         }
         if (mapaVisPromises.length > 0) {
             const resultados = await Promise.all(mapaVisPromises);
-            const errVis = resultados.find(r => r.error);
+            const errVis = resultados.find(r => r && r.error);
             if (errVis) throw new Error("Visibilidad mapa: " + errVis.error.message);
         }
 
-        // 2. Metadatos de nodos editados desde el panel mapa (nombre, hex, clase, etc.)
         const mapaMetaUpserts = [];
         for (const hzId in mapaDevState.colaMetadatos) {
             const meta = mapaDevState.colaMetadatos[hzId];
@@ -532,7 +538,6 @@ export async function ejecutarGuardadoGlobal() {
             }
         }
 
-        // 3. Colores de afinidad modificados desde el panel mapa
         const mapaColoresUpserts = Object.entries(mapaDevState.colaColores).map(([afinidad, colores]) => ({
             afinidad,
             color_t: colores.t,
@@ -545,34 +550,32 @@ export async function ejecutarGuardadoGlobal() {
             if (errCol) throw new Error("Colores mapa: " + errCol.message);
         }
 
-// 4. 🗑️ NODOS ELIMINADOS (borra sus enlaces primero para evitar FK)
+        // 🌟 ARREGLO CLAVE: .or(`source_id.eq."${nodeId}",...`) <-- Comillas dobles estrictas agregadas para PostgREST
         for (const nodeId of mapaDevState.colaEliminados.nodos) {
-            // Eliminar todos los enlaces que referencian este nodo
-            await supabase.from('hechizos_strings')
+            const { error: errStr } = await supabase.from('hechizos_strings')
                 .delete()
-                .or(`source_id.eq.${nodeId},target_id.eq.${nodeId}`);
-            // Eliminar el nodo
-            await supabase.from('hechizos_nodos')
+                .or(`source_id.eq."${nodeId}",target_id.eq."${nodeId}"`);
+            if (errStr) throw new Error("Eliminando cuerdas del nodo: " + errStr.message);
+                
+            const { error: errNod } = await supabase.from('hechizos_nodos')
                 .delete()
                 .eq('hechizo_id', nodeId);
+            if (errNod) throw new Error("Eliminando nodo: " + errNod.message);
         }
  
-        // 5. 🗑️ ENLACES ELIMINADOS (los no cubiertos por la eliminación de nodos)
         for (const enlace of mapaDevState.colaEliminados.enlaces) {
-            // Evitar duplicar deletes si el nodo ya fue borrado arriba
             if (mapaDevState.colaEliminados.nodos.has(enlace.source) ||
                 mapaDevState.colaEliminados.nodos.has(enlace.target)) continue;
-            await supabase.from('hechizos_strings')
+                
+            const { error: errDelEnl } = await supabase.from('hechizos_strings')
                 .delete()
                 .eq('source_id', enlace.source)
                 .eq('target_id', enlace.target);
+            if (errDelEnl) throw new Error("Eliminando enlace manual: " + errDelEnl.message);
         }
  
-        // 6. ➕ NUEVOS NODOS
-        // Leemos el estado actualizado directamente de nodosDB (por si el usuario
-        // editó el nodo después de crearlo — colaMetadatos ya lo cubre también).
         const nodosNuevosUpserts = mapaDevState.colaNuevosNodos
-            .filter(id => !mapaDevState.colaEliminados.nodos.has(id)) // Ignorar si fue eliminado
+            .filter(id => !mapaDevState.colaEliminados.nodos.has(id))
             .map(id => {
                 const n = mapaDevState.nodosDB.find(nd => nd.id === id);
                 if (!n) return null;
@@ -603,10 +606,8 @@ export async function ejecutarGuardadoGlobal() {
             }
         }
  
-        // 7. ➕ NUEVOS ENLACES
         const enlacesNuevosUpserts = mapaDevState.colaNuevosEnlaces
             .filter(e =>
-                // Ignorar si alguno de sus nodos fue eliminado
                 !mapaDevState.colaEliminados.nodos.has(e.source) &&
                 !mapaDevState.colaEliminados.nodos.has(e.target)
             )
