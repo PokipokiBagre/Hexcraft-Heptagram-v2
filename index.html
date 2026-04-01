@@ -12,28 +12,92 @@
         /* Estilos para el Selector de Campañas */
         #hex-selector {
             position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
-            background: radial-gradient(circle at center, #1a0033 0%, #000000 100%);
+            background: radial-gradient(ellipse at 40% 30%, #1a0033 0%, #05000a 60%, #000000 100%);
             z-index: 999999; display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
+            align-items: center; justify-content: center; overflow-y: auto;
+            padding: 40px 20px; box-sizing: border-box;
         }
-        .hex-btn {
-            background: linear-gradient(145deg, #1f003b, #0a0014);
-            border: 2px solid #d4af37; color: #d4af37;
-            padding: 20px 40px; margin: 10px; border-radius: 8px;
-            font-family: 'Cinzel', serif; font-size: 1.5em; font-weight: bold;
-            cursor: pointer; transition: 0.3s; width: 300px;
+        #hex-selector h1 {
+            font-size: 2.2em; margin-bottom: 8px; color: #d4af37;
+            font-family: 'Cinzel', serif; letter-spacing: 4px; text-align: center;
+            text-shadow: 0 0 30px rgba(212,175,55,0.5);
         }
-        .hex-btn:hover { background: #d4af37; color: #000; transform: scale(1.05); }
+        #hex-selector .selector-sub {
+            color: #555; font-family: sans-serif; font-size: 0.85em;
+            letter-spacing: 2px; text-transform: uppercase; margin-bottom: 40px; text-align: center;
+        }
+        .hex-campaigns-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+            gap: 16px;
+            max-width: 1000px;
+            width: 100%;
+        }
+        .hex-campaign-card {
+            background: linear-gradient(160deg, #110022, #07000f);
+            border: 1px solid #3a1860;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: border-color 0.25s, transform 0.2s, box-shadow 0.25s;
+            overflow: hidden;
+            display: flex; flex-direction: column;
+            position: relative;
+        }
+        .hex-campaign-card:hover {
+            border-color: #d4af37;
+            transform: translateY(-4px);
+            box-shadow: 0 8px 32px rgba(212,175,55,0.2);
+        }
+        .hex-campaign-card:hover .hex-card-overlay { opacity: 1; }
+        .hex-card-img-wrap {
+            width: 100%; height: 120px; overflow: hidden; position: relative;
+            background: #080010;
+        }
+        .hex-card-img-wrap img {
+            width: 100%; height: 100%; object-fit: cover; opacity: 0.7;
+            transition: opacity 0.3s, transform 0.3s;
+        }
+        .hex-campaign-card:hover .hex-card-img-wrap img { opacity: 0.9; transform: scale(1.05); }
+        .hex-card-icon {
+            position: absolute; bottom: -18px; left: 50%; transform: translateX(-50%);
+            width: 40px; height: 40px; border-radius: 50%;
+            border: 2px solid #3a1860; overflow: hidden; background: #05000a;
+            transition: border-color 0.25s;
+        }
+        .hex-campaign-card:hover .hex-card-icon { border-color: #d4af37; }
+        .hex-card-icon img { width: 100%; height: 100%; object-fit: cover; }
+        .hex-card-body {
+            padding: 28px 16px 16px 16px; text-align: center; flex: 1; display: flex; flex-direction: column;
+        }
+        .hex-card-name {
+            font-family: 'Cinzel', serif; font-size: 0.95em; font-weight: bold;
+            color: #d4af37; letter-spacing: 2px; margin-bottom: 6px;
+        }
+        .hex-card-desc {
+            font-family: sans-serif; font-size: 0.72em; color: #666;
+            line-height: 1.4; flex: 1;
+        }
+        .hex-card-badge {
+            display: inline-block; margin-top: 12px; padding: 5px 14px;
+            background: rgba(212,175,55,0.08); border: 1px solid rgba(212,175,55,0.3);
+            border-radius: 20px; font-family: 'Cinzel', serif; font-size: 0.7em; color: #d4af37;
+            transition: background 0.2s;
+        }
+        .hex-campaign-card:hover .hex-card-badge { background: rgba(212,175,55,0.18); }
+        .hex-card-overlay {
+            position: absolute; inset: 0; background: rgba(212,175,55,0.04);
+            opacity: 0; transition: opacity 0.25s; pointer-events: none;
+        }
     </style>
 </head>
 <body>
 
     <div id="hex-selector" style="display: none;">
-        <h1 style="font-size: 3em; margin-bottom: 40px;">SELECCIONA LA CAMPAÑA</h1>
-        <button class="hex-btn" onclick="seleccionarCampaña('hex1')">HEXCRAFT 1</button>
-        <button class="hex-btn" onclick="seleccionarCampaña('hex2')">HEXCRAFT 2</button>
-        <button class="hex-btn" onclick="seleccionarCampaña('hex3')">HEXCRAFT 3</button>
-        <button class="hex-btn" onclick="seleccionarCampaña('hex4')">HEXCRAFT 4</button>
+        <h1>⬡ HEXCRAFT</h1>
+        <p class="selector-sub">Selecciona la campaña</p>
+        <div class="hex-campaigns-grid" id="hex-campaigns-grid">
+            <!-- Las campañas se generan dinámicamente desde JS -->
+        </div>
     </div>
 
     <div class="container-hex" id="main-content" style="display: none;">
@@ -92,10 +156,17 @@
     import { db } from './hex-db.js';
     import { supabase } from './hex-auth.js';
 
+    // Definición de campañas disponibles
+    const CAMPAÑAS = [
+        { id: 'hex1', nombre: 'Hexcraft 1', desc: 'La campaña original. El inicio del sistema HEX.' },
+        { id: 'hex2', nombre: 'Hexcraft 2', desc: 'Segunda iteración. Nuevas mecánicas y territorios.' },
+        { id: 'hex3', nombre: 'Hexcraft 3', desc: 'El caos se expande. Facciones en guerra.' },
+        { id: 'hex4', nombre: 'Hexcraft 4', desc: 'La era del Heptagram. El tablón renace.' },
+    ];
+
     // Funciones globales para los botones
     window.seleccionarCampaña = (idHex) => {
         localStorage.setItem('hex_selected', idHex);
-        // Si el usuario llegó aquí redirigido desde una subpágina, volver a ella
         const origen = sessionStorage.getItem('hex_redirect_after_select');
         if (origen) {
             sessionStorage.removeItem('hex_redirect_after_select');
@@ -114,6 +185,7 @@
         // Verificar si hay campaña seleccionada
         if (!localStorage.getItem('hex_selected')) {
             document.getElementById('hex-selector').style.display = 'flex';
+            renderizarSelectorCampañas();
             return;
         }
 
@@ -300,6 +372,45 @@
             console.error('Dashboard error:', e);
             dash.innerHTML = `<div class="dash-card" style="grid-column:1/-1;text-align:center;color:#ff4444;font-family:sans-serif;">Error cargando el dashboard: ${e.message}</div>`;
         }
+    }
+
+    function renderizarSelectorCampañas() {
+        // Necesitamos las URLs del storage — usamos la config de hex1 como base para el storage URL
+        // Las imágenes de cada campaña se cargan desde su propio bucket/folder si existen
+        // Por ahora usamos un storage URL genérico; ajusta HEX_CONFIGS si tienes uno global accesible
+        const grid = document.getElementById('hex-campaigns-grid');
+        if (!grid) return;
+
+        // Intentar obtener el storage URL base desde las configs disponibles
+        // Como aún no se ha elegido campaña, usamos la primera config conocida o un fallback
+        const STORAGE_BASES = {
+            hex1: null, hex2: null, hex3: null, hex4: null,
+        };
+        // Si tienes HEX_CONFIGS exportado globalmente puedes usarlo aquí
+        // Por ahora construimos las cards con placeholder y cargamos ícono si está disponible
+        grid.innerHTML = CAMPAÑAS.map(c => {
+            const storageBase = STORAGE_BASES[c.id];
+            const iconSrc  = storageBase ? `${storageBase}/imginterfaz/icon.png` : '';
+            const bgSrc    = storageBase ? `${storageBase}/imginterfaz/hex-002.png` : '';
+            const iconAttr = iconSrc  ? `src="${iconSrc}"  onerror="this.src=''"` : `src="" style="display:none"`;
+            const bgAttr   = bgSrc    ? `src="${bgSrc}"    onerror="this.style.opacity='0'"` : `src="" style="opacity:0"`;
+
+            return `
+            <div class="hex-campaign-card" onclick="seleccionarCampaña('${c.id}')">
+                <div class="hex-card-overlay"></div>
+                <div class="hex-card-img-wrap">
+                    <img ${bgAttr} alt="${c.nombre}">
+                    <div class="hex-card-icon">
+                        <img ${iconAttr} alt="⬡">
+                    </div>
+                </div>
+                <div class="hex-card-body">
+                    <div class="hex-card-name">${c.nombre.toUpperCase()}</div>
+                    <div class="hex-card-desc">${c.desc}</div>
+                    <div class="hex-card-badge">ENTRAR →</div>
+                </div>
+            </div>`;
+        }).join('');
     }
 
     iniciar();
