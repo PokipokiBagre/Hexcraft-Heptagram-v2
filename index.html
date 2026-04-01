@@ -70,8 +70,12 @@
             padding: 28px 16px 16px 16px; text-align: center; flex: 1; display: flex; flex-direction: column;
         }
         .hex-card-name {
-            font-family: 'Cinzel', serif; font-size: 0.95em; font-weight: bold;
-            color: #d4af37; letter-spacing: 2px; margin-bottom: 6px;
+            font-family: 'Cinzel', serif; font-size: 0.85em; font-weight: bold;
+            color: #d4af37; letter-spacing: 1px; margin-bottom: 5px; line-height: 1.3;
+        }
+        .hex-card-id {
+            font-family: sans-serif; font-size: 0.62em; color: #5a3a8a;
+            letter-spacing: 3px; text-transform: uppercase; margin-bottom: 4px;
         }
         .hex-card-desc {
             font-family: sans-serif; font-size: 0.72em; color: #666;
@@ -155,14 +159,9 @@
     import { hexAuth, currentConfig } from './hex-auth.js';
     import { db } from './hex-db.js';
     import { supabase } from './hex-auth.js';
+    import { hexConfigs } from './hex/config.js';
 
-    // Definición de campañas disponibles
-    const CAMPAÑAS = [
-        { id: 'hex1', nombre: 'Hexcraft 1', desc: 'La campaña original. El inicio del sistema HEX.' },
-        { id: 'hex2', nombre: 'Hexcraft 2', desc: 'Segunda iteración. Nuevas mecánicas y territorios.' },
-        { id: 'hex3', nombre: 'Hexcraft 3', desc: 'El caos se expande. Facciones en guerra.' },
-        { id: 'hex4', nombre: 'Hexcraft 4', desc: 'La era del Heptagram. El tablón renace.' },
-    ];
+    // Campañas construidas dinámicamente desde hexConfigs (config.js)
 
     // Funciones globales para los botones
     window.seleccionarCampaña = (idHex) => {
@@ -185,7 +184,7 @@
         // Verificar si hay campaña seleccionada
         if (!localStorage.getItem('hex_selected')) {
             document.getElementById('hex-selector').style.display = 'flex';
-            renderizarSelectorCampañas();
+            await renderizarSelectorCampañas();
             return;
         }
 
@@ -374,43 +373,52 @@
         }
     }
 
-    function renderizarSelectorCampañas() {
-        // Necesitamos las URLs del storage — usamos la config de hex1 como base para el storage URL
-        // Las imágenes de cada campaña se cargan desde su propio bucket/folder si existen
-        // Por ahora usamos un storage URL genérico; ajusta HEX_CONFIGS si tienes uno global accesible
+    async function renderizarSelectorCampañas() {
         const grid = document.getElementById('hex-campaigns-grid');
         if (!grid) return;
 
-        // Intentar obtener el storage URL base desde las configs disponibles
-        // Como aún no se ha elegido campaña, usamos la primera config conocida o un fallback
-        const STORAGE_BASES = {
-            hex1: null, hex2: null, hex3: null, hex4: null,
-        };
-        // Si tienes HEX_CONFIGS exportado globalmente puedes usarlo aquí
-        // Por ahora construimos las cards con placeholder y cargamos ícono si está disponible
-        grid.innerHTML = CAMPAÑAS.map(c => {
-            const storageBase = STORAGE_BASES[c.id];
-            const iconSrc  = storageBase ? `${storageBase}/imginterfaz/icon.png` : '';
-            const bgSrc    = storageBase ? `${storageBase}/imginterfaz/hex-002.png` : '';
-            const iconAttr = iconSrc  ? `src="${iconSrc}"  onerror="this.src=''"` : `src="" style="display:none"`;
-            const bgAttr   = bgSrc    ? `src="${bgSrc}"    onerror="this.style.opacity='0'"` : `src="" style="opacity:0"`;
+        const campañas = Object.values(hexConfigs);
+
+        // Render inmediato con datos de config.js
+        grid.innerHTML = campañas.map(cfg => {
+            const base    = cfg.storageUrl || '';
+            const bgSrc   = `${base}/imginterfaz/hex-002.png`;
+            const iconSrc = `${base}/imginterfaz/icon.png`;
+            const nombre  = cfg.ui?.titulo    || cfg.nombreCorto || cfg.id.toUpperCase();
+            const desc    = cfg.ui?.subtitulo || '';
 
             return `
-            <div class="hex-campaign-card" onclick="seleccionarCampaña('${c.id}')">
+            <div class="hex-campaign-card" onclick="seleccionarCampaña('${cfg.id}')">
                 <div class="hex-card-overlay"></div>
                 <div class="hex-card-img-wrap">
-                    <img ${bgAttr} alt="${c.nombre}">
+                    <img src="${bgSrc}" onerror="this.style.opacity='0'" alt="${nombre}">
                     <div class="hex-card-icon">
-                        <img ${iconAttr} alt="⬡">
+                        <img src="${iconSrc}" onerror="this.style.opacity='0'" alt="">
                     </div>
                 </div>
                 <div class="hex-card-body">
-                    <div class="hex-card-name">${c.nombre.toUpperCase()}</div>
-                    <div class="hex-card-desc">${c.desc}</div>
+                    <div class="hex-card-id">${(cfg.nombreCorto || cfg.id).toUpperCase()}</div>
+                    <div class="hex-card-name" id="card-titulo-${cfg.id}">${nombre}</div>
+                    <div class="hex-card-desc" id="card-desc-${cfg.id}">${desc}</div>
                     <div class="hex-card-badge">ENTRAR →</div>
                 </div>
             </div>`;
         }).join('');
+
+        // Override asíncrono: carga título/subtítulo real de Supabase de cada campaña
+        const { createClient } = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/+esm');
+        for (const cfg of campañas) {
+            try {
+                const sb = createClient(cfg.dbUrl, cfg.dbAnonKey);
+                const { data } = await sb.from('config_ui').select('titulo,subtitulo').eq('hex_id','default').single();
+                if (data) {
+                    const elT = document.getElementById(`card-titulo-${cfg.id}`);
+                    const elD = document.getElementById(`card-desc-${cfg.id}`);
+                    if (elT && data.titulo)    elT.textContent = data.titulo;
+                    if (elD && data.subtitulo) elD.textContent = data.subtitulo;
+                }
+            } catch(e) { /* fallback de config.js ya está visible */ }
+        }
     }
 
     iniciar();
