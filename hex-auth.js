@@ -71,13 +71,7 @@ export const hexAuth = {
         if (error) return { ok: false, mensaje: error.message };
         this._session = data.session;
 
-        // Forzar el JWT en el cliente antes de cualquier query
-        await supabase.auth.setSession({
-            access_token:  data.session.access_token,
-            refresh_token: data.session.refresh_token
-        });
-
-        // Reintentos: el JWT puede tardar un tick en propagarse al RLS
+        // Pequeña espera para que el JWT se propague al RLS antes de la query
         let perfil = null;
         for (let i = 0; i < 4; i++) {
             if (i > 0) await new Promise(r => setTimeout(r, 300 * i));
