@@ -6,7 +6,6 @@ import { invGlobal, objGlobal, statsGlobal, historial, estadoUI, guardar } from 
 import { cargarTodoDesdeCSV, sincronizarObjetosBD, proponerObjeto, aprobarPropuesta as aprobarProp, rechazarPropuesta as rechazarProp, aprobarTodasPropuestas, getPropuestasParaPersonaje } from './obj-data.js';
 import { modificar, modificarMulti, transferir, descargarLogExcel, descargarEstadoExcel, agregarObjetoManual, agregarObjetosMulti, eliminarObjetoCompletamente, editarObjetoCatalogo, toggleEquipacion } from './obj-logic.js'; // 🌟 IMPORT AÑADIDO
 import { refrescarUI, dibujarMenuOP, dibujarInventarios, dibujarCatalogo, dibujarControl, dibujarCreacionObjeto, dibujarCreacionMulti, dibujarGrillaPersonajes, dibujarPartyLoot, dibujarTransferencia, dibujarResumenVisual, dibujarModalEdicionObjeto, dibujarPropuestas, dibujarFormularioPropuesta } from './obj-ui.js';
-import { hexAuth } from '../hex-auth.js';
 import { db } from '../hex-db.js';
 import { hexAuth, currentConfig } from '../hex-auth.js';
 
