@@ -45,10 +45,6 @@ window.sincronizarUI = () => {
         }
     }
 
-    // Restaurar el scroll donde estaba el usuario
-    window.scrollTo(0, scrollVentana);
-};
-
     const modal = document.getElementById('modal-op');
     if (modal && !modal.classList.contains('oculto')) {
         const modalBody = document.getElementById('modal-op-body');
@@ -68,7 +64,9 @@ window.sincronizarUI = () => {
         }
     }
 
+    // Restaurar el scroll donde estaba el usuario
     window.scrollTo(0, scrollVentana);
+};
 
 // ============================================================================
 // 2. LÓGICA DE ACTUALIZACIÓN DE ESTADÍSTICAS Y VIDAS
