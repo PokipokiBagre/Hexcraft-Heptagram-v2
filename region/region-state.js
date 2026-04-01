@@ -2,9 +2,9 @@
 // region-state.js — Estado global del Editor de Mapa Regional
 // ============================================================
 
-export const SUPABASE_URL = 'https://gkscqurkpyteusqyspsu.supabase.co';
-export const BUCKET       = 'imagenes-hex';
-export const STORAGE_URL  = `${SUPABASE_URL}/storage/v1/object/public/${BUCKET}`;
+import { currentConfig } from '../hex-auth.js';
+export const BUCKET      = 'imagenes-hex';
+export const STORAGE_URL = currentConfig.storageUrl;
 
 export const HEX_SIZE = 48;
 export const OVER_OFFSET_X = 0;                 
