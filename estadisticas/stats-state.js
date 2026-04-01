@@ -1,3 +1,5 @@
+import { currentConfig } from '../hex-auth.js';
+
 export let statsGlobal = {};
 export let listaEstados = []; 
 export let estadoUI = {
@@ -8,19 +10,17 @@ export let estadoUI = {
     filtroAct: 'Todos',
     party: [null, null, null, null, null, null], 
     hexLog: {},
-    colaCambios: { stats: {} } // Inicializado aquí para máxima seguridad
+    colaCambios: { stats: {} } 
 };
 
 export let dbExtra = {
     objetosCount: {},   
-    inventarios: {},    // Array de nombres de objetos por PJ
-    infoObjetos: {},    // Rarezas
+    inventarios: {},    
+    infoObjetos: {},    
     hechizos: { inventario: [], nodos: [], nodosOcultos: [] }
 };
 
 export function guardar() {
-    localStorage.setItem('hex_stats_v2', JSON.stringify({ 
-        stats: statsGlobal,
-        party: estadoUI.party
-    }));
+    // Solo guardamos la party de forma aislada
+    localStorage.setItem(`hex_party_${currentConfig.id}`, JSON.stringify(estadoUI.party));
 }
