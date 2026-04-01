@@ -122,16 +122,35 @@
         // 1. Inicializamos la autenticación (ahora sabe a qué BD conectarse)
         await hexAuth.init();
 
-        // 2. Inyectar textos dinámicos desde config.js
-        document.getElementById('doc-title').innerText = currentConfig.ui.titulo;
-        document.getElementById('ui-titulo').innerText = currentConfig.ui.titulo;
-        document.getElementById('ui-subtitulo').innerText = currentConfig.ui.subtitulo;
-        document.getElementById('ui-lore').innerText = currentConfig.ui.lore;
-        
-        document.getElementById('ui-link-rol').href = currentConfig.ui.linkRol;
-        document.getElementById('ui-nombre-rol').innerText = currentConfig.ui.nombreRol;
-        document.getElementById('ui-link-meta').href = currentConfig.ui.linkMeta;
-        document.getElementById('ui-nombre-meta').innerText = currentConfig.ui.nombreMeta;
+        // 2. Inyectar textos — primero config.js (fallback), luego override desde Supabase
+        const _cfgUI = currentConfig.ui;
+        document.getElementById('doc-title').innerText    = _cfgUI.titulo;
+        document.getElementById('ui-titulo').innerText    = _cfgUI.titulo;
+        document.getElementById('ui-subtitulo').innerText = _cfgUI.subtitulo;
+        document.getElementById('ui-lore').innerText      = _cfgUI.lore;
+        document.getElementById('ui-link-rol').href       = _cfgUI.linkRol;
+        document.getElementById('ui-nombre-rol').innerText= _cfgUI.nombreRol;
+        document.getElementById('ui-link-meta').href      = _cfgUI.linkMeta;
+        document.getElementById('ui-nombre-meta').innerText= _cfgUI.nombreMeta;
+
+        // Override con config_ui de Supabase (editada desde el panel OP)
+        try {
+            const { data: dbUI } = await supabase
+                .from('config_ui')
+                .select('*')
+                .eq('hex_id', 'default')
+                .single();
+            if (dbUI) {
+                if (dbUI.titulo)      { document.getElementById('doc-title').innerText    = dbUI.titulo;
+                                        document.getElementById('ui-titulo').innerText    = dbUI.titulo; }
+                if (dbUI.subtitulo)     document.getElementById('ui-subtitulo').innerText = dbUI.subtitulo;
+                if (dbUI.lore)          document.getElementById('ui-lore').innerText      = dbUI.lore;
+                if (dbUI.link_rol)      document.getElementById('ui-link-rol').href       = dbUI.link_rol;
+                if (dbUI.nombre_rol)    document.getElementById('ui-nombre-rol').innerText= dbUI.nombre_rol;
+                if (dbUI.link_meta)     document.getElementById('ui-link-meta').href      = dbUI.link_meta;
+                if (dbUI.nombre_meta)   document.getElementById('ui-nombre-meta').innerText= dbUI.nombre_meta;
+            }
+        } catch(e) { /* Si falla, ya está el fallback de config.js cargado arriba */ }
 
         // 3. Renderizar interfaz
         const favicon = document.getElementById("dynamic-favicon");
