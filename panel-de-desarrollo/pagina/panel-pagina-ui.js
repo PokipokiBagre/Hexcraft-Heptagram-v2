@@ -117,41 +117,49 @@ export function renderColumnaPagina() {
                     </div>
                 </div>
             </div>
-
-            <!-- Panel upload (aparece al clicar una imagen) -->
-            <div id="pag-upload-panel" style="display:none;">
-                <div class="pag-card" style="border-color:#7b2fff;">
-                    <div class="pag-card-title" style="color:#b07aff; margin-bottom:6px;">
-                        📤 Subir: <span id="pag-upload-nombre" style="color:#fff;"></span>
-                    </div>
-                    <p id="pag-upload-zona-label"
-                       style="color:#555; font-size:0.72em; font-family:sans-serif; margin:0 0 12px 0;"></p>
-                    <div id="pag-drop-zone" class="pag-drop-zone"
-                        onclick="document.getElementById('pag-file-input').click()"
-                        ondragover="event.preventDefault(); this.classList.add('drag-over')"
-                        ondragleave="this.classList.remove('drag-over')"
-                        ondrop="window._paginaHandleDrop(event)">
-                        <div style="font-size:2em; margin-bottom:6px;">🖼️</div>
-                        <p style="color:#b07aff; font-family:'Cinzel'; font-weight:bold; font-size:0.85em; margin:0 0 4px 0;">Arrastra aquí o haz clic</p>
-                        <p style="color:#555; font-size:0.75em; font-family:sans-serif; margin:0;">JPG, PNG, WEBP</p>
-                    </div>
-                    <input type="file" id="pag-file-input" accept="image/*" style="display:none"
-                        onchange="window._paginaFileSelect(event)">
-                    <div id="pag-upload-progress" style="display:none; margin-top:10px;">
-                        <div style="height:5px; background:#111; border-radius:3px; overflow:hidden;">
-                            <div id="pag-prog-fill" style="height:100%; width:0%; background:#7b2fff; transition:width 0.3s;"></div>
-                        </div>
-                        <p id="pag-prog-msg" style="color:#888; font-size:0.75em; font-family:sans-serif; text-align:center; margin:5px 0 0 0;"></p>
-                    </div>
-                    <button onclick="window._paginaCerrarUpload()"
-                        style="margin-top:10px; background:#1a0000; border:1px solid #4a1818;
-                               color:#aa4444; padding:6px 14px; border-radius:4px;
-                               cursor:pointer; font-family:'Cinzel'; font-size:0.75em;">
-                        Cancelar
-                    </button>
-                </div>
-            </div>
         </div>
+    </div>
+
+    <!-- ═══ MODAL de upload (overlay fijo) ═══ -->
+    <div id="pag-upload-panel" style="display:none; position:fixed; inset:0; z-index:99999;
+         background:rgba(0,0,0,0.75); backdrop-filter:blur(4px);
+         align-items:center; justify-content:center;"
+         onclick="if(event.target===this) window._paginaCerrarUpload()">
+        <div class="pag-card" style="border-color:#7b2fff; width:360px; max-width:90vw; position:relative;">
+            <button onclick="window._paginaCerrarUpload()"
+                style="position:absolute; top:10px; right:12px; background:none; border:none;
+                       color:#555; font-size:1.2em; cursor:pointer; line-height:1;"
+                title="Cerrar">✕</button>
+            <div class="pag-card-title" style="color:#b07aff; margin-bottom:6px;">
+                📤 Subir: <span id="pag-upload-nombre" style="color:#fff;"></span>
+            </div>
+            <p id="pag-upload-zona-label"
+               style="color:#555; font-size:0.72em; font-family:sans-serif; margin:0 0 12px 0;"></p>
+            <div id="pag-drop-zone" class="pag-drop-zone"
+                onclick="document.getElementById('pag-file-input').click()"
+                ondragover="event.preventDefault(); this.classList.add('drag-over')"
+                ondragleave="this.classList.remove('drag-over')"
+                ondrop="window._paginaHandleDrop(event)">
+                <div style="font-size:2em; margin-bottom:6px;">🖼️</div>
+                <p style="color:#b07aff; font-family:'Cinzel'; font-weight:bold; font-size:0.85em; margin:0 0 4px 0;">Arrastra aquí o haz clic</p>
+                <p style="color:#555; font-size:0.75em; font-family:sans-serif; margin:0;">JPG, PNG, WEBP</p>
+            </div>
+            <input type="file" id="pag-file-input" accept="image/*" style="display:none"
+                onchange="window._paginaFileSelect(event)">
+            <div id="pag-upload-progress" style="display:none; margin-top:10px;">
+                <div style="height:5px; background:#111; border-radius:3px; overflow:hidden;">
+                    <div id="pag-prog-fill" style="height:100%; width:0%; background:#7b2fff; transition:width 0.3s;"></div>
+                </div>
+                <p id="pag-prog-msg" style="color:#888; font-size:0.75em; font-family:sans-serif; text-align:center; margin:5px 0 0 0;"></p>
+            </div>
+            <button onclick="window._paginaCerrarUpload()"
+                style="margin-top:12px; background:#1a0000; border:1px solid #4a1818;
+                       color:#aa4444; padding:6px 14px; border-radius:4px;
+                       cursor:pointer; font-family:'Cinzel'; font-size:0.75em; width:100%;">
+                Cancelar
+            </button>
+        </div>
+    </div>
     </div>
 
     <style>
@@ -208,9 +216,10 @@ function _renderPreviewCompleto(c) {
         { key:'estadisticas', label:'ESTADÍSTICAS' },
         { key:'misiones',     label:'MISIONES' },
         { key:'hechizos',     label:'HECHIZOS' },
-        { key:'mapa',         label:'MAPA HEX' },
+        { key:'mapa',         label:'MAPA DE HECHIZOS' },
         { key:'extra',        label:'IMÁGENES' },
-        { key:'region',       label:'REGIÓN' },
+        { key:'region',       label:'MAPA REGIONAL' },
+        { key:'panel-dev',    label:'PANEL MÁSTER' },
     ];
 
     return `
@@ -243,30 +252,43 @@ function _renderPreviewCompleto(c) {
             <span id="prev-lore">${_esc(c.lore||'Descripción de la campaña...')}</span>
         </div>
 
-        <!-- Grid de sistemas -->
-        <div style="padding:0 14px 10px 14px;">
-            <p style="font-size:0.55em; color:#d4af37; margin:10px 0 8px 0;">Sistemas</p>
-            <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:6px;">
-                ${gridItems.map(gi => `
-                <div style="background:rgba(10,0,20,.8); border:1px solid #2a0050; border-radius:5px; overflow:hidden; text-align:center; padding:4px;">
-                    <img id="prev-grid-img-${gi.key}"
-                         src="${STORAGE_URL}/imginterfaz/${gi.key}.png?v=${v}"
-                         onerror="this.onerror=null;this.src='${STORAGE_URL}/imginterfaz/${gi.key}.jpg?v=${v}'"
-                         style="width:100%; height:30px; object-fit:cover; border-radius:3px;">
-                    <div style="font-size:0.45em; color:#d4af37; padding:2px 0;">${gi.label}</div>
-                </div>`).join('')}
-            </div>
+        <!-- Título Sistemas -->
+        <p style="font-size:0.55em; color:#d4af37; margin:10px 14px 6px 14px; text-align:center;">Sistemas</p>
+
+        <!-- Grid de sistemas — 2 columnas como el real -->
+        <div style="padding:0 14px 10px 14px; display:grid; grid-template-columns:1fr 1fr; gap:6px;">
+            ${gridItems.map(gi => `
+            <div style="background:rgba(10,0,20,.8); border:1px solid #2a0050; border-radius:5px; overflow:hidden; text-align:center; padding:6px;">
+                <img id="prev-grid-img-${gi.key}"
+                     src="${STORAGE_URL}/imginterfaz/${gi.key}.png?v=${v}"
+                     onerror="this.onerror=null;this.src='${STORAGE_URL}/imginterfaz/${gi.key}.jpg?v=${v}'"
+                     style="width:36px; height:36px; object-fit:cover; border-radius:50%; border:1px solid #3a0060; margin-bottom:3px;">
+                <div style="font-size:0.45em; color:#d4af37; letter-spacing:1px;">${gi.label}</div>
+            </div>`).join('')}
+        </div>
+
+        <!-- Estado Actual simulado -->
+        <p style="font-size:0.55em; color:#d4af37; margin:6px 14px 4px 14px; text-align:center;">Estado Actual</p>
+        <div style="padding:0 14px; display:grid; grid-template-columns:repeat(3,1fr); gap:4px; margin-bottom:8px;">
+            ${['Jugadores','NPCs','Misiones'].map(l => `
+            <div style="background:rgba(10,0,20,.8); border:1px solid #2a0050; border-radius:4px; padding:4px; text-align:center;">
+                <div style="font-size:0.7em; color:#d4af37; font-weight:bold;">—</div>
+                <div style="font-size:0.38em; color:#666; font-family:sans-serif;">${l}</div>
+            </div>`).join('')}
         </div>
 
         <!-- Hilos activos -->
+        <p style="font-size:0.55em; color:#d4af37; margin:6px 14px 4px 14px; text-align:center;">Hilos Activos</p>
         <div style="display:grid; grid-template-columns:1fr 1fr; gap:6px; padding:0 14px 14px 14px;">
-            <div style="background:rgba(10,0,20,.8); border:1px solid #2a0050; border-radius:5px; padding:6px; text-align:center;">
-                <div id="prev-nombre-rol" style="font-size:0.5em; color:#d4af37;">
+            <div style="background:rgba(10,0,20,.8); border:1px solid #2a0050; border-radius:5px; overflow:hidden; position:relative; height:44px;">
+                <img src="${STORAGE_URL}/imginterfaz/hex-002.png?v=${v}" style="width:100%;height:100%;object-fit:cover;opacity:0.5;">
+                <div id="prev-nombre-rol" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.42em;color:#d4af37;text-shadow:0 0 6px #000;">
                     ${_esc(c.nombre_rol||'ROL ACTUAL')}
                 </div>
             </div>
-            <div style="background:rgba(10,0,20,.8); border:1px solid #2a0050; border-radius:5px; padding:6px; text-align:center;">
-                <div id="prev-nombre-meta" style="font-size:0.5em; color:#d4af37;">
+            <div style="background:rgba(10,0,20,.8); border:1px solid #2a0050; border-radius:5px; overflow:hidden; position:relative; height:44px;">
+                <img src="${STORAGE_URL}/imginterfaz/met-004.png?v=${v}" onerror="this.onerror=null;this.src='${fb}'" style="width:100%;height:100%;object-fit:cover;opacity:0.5;">
+                <div id="prev-nombre-meta" style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:0.42em;color:#d4af37;text-shadow:0 0 6px #000;">
                     ${_esc(c.nombre_meta||'META')}
                 </div>
             </div>
@@ -435,12 +457,10 @@ function _exponerGlobales() {
         _uploadTarget = { key, archivo };
         document.getElementById('pag-upload-nombre').textContent     = label;
         document.getElementById('pag-upload-zona-label').textContent = zona;
-        document.getElementById('pag-upload-panel').style.display    = 'block';
+        document.getElementById('pag-upload-panel').style.display    = 'flex';
         document.getElementById('pag-upload-progress').style.display = 'none';
         document.getElementById('pag-prog-fill').style.width         = '0%';
         document.getElementById('pag-prog-msg').textContent          = '';
-        document.getElementById('pag-upload-panel')
-            .scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     };
 
     window._paginaCerrarUpload = () => {
