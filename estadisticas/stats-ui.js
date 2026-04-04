@@ -33,6 +33,20 @@ function asegurarEstructuras(p) {
     if(p.isActive === undefined) p.isActive = true;
 }
 
+// ============================================================================
+// HELPER: Badge de tipo NPC
+// ============================================================================
+
+function getNpcTipoBadge(p, size = 'normal') {
+    if (p.isPlayer) return '';
+    const esJugador = p.npc_tipo === 'jugador';
+    const color  = esJugador ? '#1a4a2e' : '#2a1a3e';
+    const border = esJugador ? '#2ecc71' : '#9b59b6';
+    const texto  = esJugador ? '🎮 NPC Jugador' : '⚙️ NPC Sistema';
+    const fs = size === 'small' ? '0.65em' : '0.75em';
+    return `<span style="background:${color}; border:1px solid ${border}; color:${border}; padding:2px 8px; border-radius:4px; font-size:${fs}; font-weight:bold; white-space:nowrap; display:inline-block;">${texto}</span>`;
+}
+
 function generarVidasHTML(p) {
     const maxRojo = calcularVidaRojaMax(p);
     let normalRojo = Math.min(p.vidaRojaActual, maxRojo); let vaciosRojo = Math.max(0, maxRojo - normalRojo); let extraRojo = Math.max(0, p.vidaRojaActual - maxRojo);
@@ -112,6 +126,7 @@ export function dibujarCatalogo() {
         let borderStyle = ""; let bgStyle = "background: #11001c;"; 
         
         if (p.isPlayer && p.isActive) { borderStyle = "border: 2px solid var(--gold); box-shadow: 0 4px 15px rgba(212, 175, 55, 0.2);"; } 
+        else if (!p.isPlayer && p.isActive && p.npc_tipo === 'jugador') { borderStyle = "border: 2px solid #2ecc71; box-shadow: 0 4px 10px rgba(46, 204, 113, 0.15);"; bgStyle = "background: #060f10;"; }
         else if (!p.isPlayer && p.isActive) { borderStyle = "border: 2px solid #00ffff; box-shadow: 0 4px 10px rgba(0, 255, 255, 0.1);"; bgStyle = "background: #060b19;"; } 
         else if (!p.isPlayer && !p.isActive) { borderStyle = "border: 2px solid #444;"; bgStyle = "background: #0a0a0a;"; } 
         else if (p.isPlayer && !p.isActive) { borderStyle = "border: 2px solid #cc0000; box-shadow: 0 4px 10px rgba(204, 0, 0, 0.2);"; bgStyle = "background: #1a0000;"; }
@@ -123,11 +138,15 @@ export function dibujarCatalogo() {
             btnEliminar = `<button onclick="window.borrarPersonaje('${safeNombre}', event)" style="position: absolute; top: 12px; right: 12px; background: rgba(255, 0, 0, 0.1); color: #ff5555; border: 1px solid rgba(255, 0, 0, 0.3); border-radius: 6px; width: 32px; height: 32px; font-size: 1.1em; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: 0.2s; z-index: 10;" onmouseover="this.style.background='#ff0000'; this.style.color='#fff'; this.style.borderColor='#ff0000';" onmouseout="this.style.background='rgba(255, 0, 0, 0.1)'; this.style.color='#ff5555'; this.style.borderColor='rgba(255, 0, 0, 0.3)';" title="Eliminar Personaje">🗑️</button>`;
         }
 
+        // Badge de tipo NPC visible en la tarjeta
+        const npcBadge = getNpcTipoBadge(p, 'small');
+
         html += `
         <div class="char-card ${claseInactiva}" style="position: relative; ${borderStyle} ${bgStyle} padding: 15px; border-radius: 12px; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'" onclick="window.abrirDetalle('${safeNombre}')">
             ${btnEliminar}
             <img src="${STORAGE_URL}/imgpersonajes/${iconoMuestra}icon.png" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.2); margin-bottom: 10px;" onerror="${imgError}">
-            <h3 style="margin: 0 0 10px 0; font-family: 'Cinzel', serif; font-size: 1.2em; text-transform: uppercase;">${nombre}</h3>
+            <h3 style="margin: 0 0 6px 0; font-family: 'Cinzel', serif; font-size: 1.2em; text-transform: uppercase;">${nombre}</h3>
+            ${npcBadge ? `<div style="margin-bottom:8px;">${npcBadge}</div>` : ''}
             <div style="background: rgba(0,0,0,0.5); padding: 8px; border-radius: 6px;">
                 <p style="margin: 0; font-size: 0.9em; color: #ddd;">HEX: <strong style="color: var(--gold);">${p.hex}</strong></p>
                 <p style="margin: 5px 0 0 0; font-size: 0.9em; color: #4a90e2;">VEX: <strong style="color: #4a90e2;">${calcularVexMax(p)}</strong></p>
@@ -309,12 +328,19 @@ export function dibujarDetalle() {
             ${btnIr(linkMisiones, '#ffaa00')}
         </div>` : '';
 
+    // Badge de tipo NPC con color expandido para la vista detalle
+    const npcTipoBadge = getNpcTipoBadge(p, 'normal');
+
     let html = `
     <div style="display: flex; align-items: center; gap: 30px; border-bottom: 2px solid #333; padding-bottom: 25px; opacity:${p.isActive ? '1' : '0.5'}; flex-wrap:wrap;">
         
         <div style="position: relative;">
             <img src="${STORAGE_URL}/imgpersonajes/${iconoGrande}icon.png" style="width: 140px; height: 140px; border-radius: 50%; border: 4px solid var(--gold); box-shadow: 0 0 20px rgba(212,175,55,0.3); object-fit: cover; background:#000;" onerror="${imgError}">
-            ${p.isNPC ? `<span style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); background: #4a0000; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.7em; font-weight: bold; border: 1px solid #ff0000;">NPC</span>` : ''}
+            ${p.isNPC ? `
+            <div style="position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 3px; white-space: nowrap;">
+                <span style="background: #4a0000; color: white; padding: 2px 8px; border-radius: 10px; font-size: 0.7em; font-weight: bold; border: 1px solid #ff0000;">NPC</span>
+                ${npcTipoBadge}
+            </div>` : ''}
         </div>
 
         <div style="text-align:left; flex:1;">
@@ -501,10 +527,36 @@ export function dibujarPanelEdicionOP() {
 
     const renderHeader = (num, title, color) => `<h3 style="color:${color}; border-bottom:2px solid ${color}; padding-bottom:8px; text-align:left; margin: 30px 0 15px 0; font-family:'Cinzel'; text-transform: uppercase; font-size: 1.1em; opacity: 0.9;"><span style="background:${color}; color:#000; padding:2px 8px; border-radius:4px; margin-right:8px; font-weight:bold;">${num}</span> ${title}</h3>`;
 
+    // ── Bloque de identidad: isPlayer + isActive + npc_tipo (solo si es NPC) ──
+    const esNPC = !p.isPlayer;
+    const npcTipoActual = p.npc_tipo || 'sistema';
+
+    const npcTipoEditor = esNPC ? `
+        <div style="background:#0d0d1a; border:1px solid #9b59b6; border-radius:8px; padding:12px; display:flex; flex-direction:column; gap:8px;">
+            <div style="color:#9b59b6; font-size:0.8em; font-weight:bold; text-align:center; letter-spacing:1px;">TIPO DE NPC</div>
+            <div style="display:flex; gap:8px;">
+                <button type="button" onclick="window.cambiarNpcTipo('${nombre}', 'jugador')"
+                    style="flex:1; padding:10px 6px; border-radius:6px; cursor:pointer; font-size:0.85em; font-weight:bold; transition:0.2s;
+                           background:${npcTipoActual === 'jugador' ? '#1a4a2e' : '#111'};
+                           border:2px solid ${npcTipoActual === 'jugador' ? '#2ecc71' : '#444'};
+                           color:${npcTipoActual === 'jugador' ? '#2ecc71' : '#888'};">
+                    🎮 Jugador<br><small style="font-weight:normal; font-size:0.8em;">Hz desde inventario</small>
+                </button>
+                <button type="button" onclick="window.cambiarNpcTipo('${nombre}', 'sistema')"
+                    style="flex:1; padding:10px 6px; border-radius:6px; cursor:pointer; font-size:0.85em; font-weight:bold; transition:0.2s;
+                           background:${npcTipoActual === 'sistema' ? '#2a1a3e' : '#111'};
+                           border:2px solid ${npcTipoActual === 'sistema' ? '#9b59b6' : '#444'};
+                           color:${npcTipoActual === 'sistema' ? '#9b59b6' : '#888'};">
+                    ⚙️ Sistema<br><small style="font-weight:normal; font-size:0.8em;">Hz siempre en cero</small>
+                </button>
+            </div>
+        </div>` : '';
+
     let html = `
-        <div style="display:flex; justify-content:center; gap:15px; margin-bottom:25px; background: #0a0a0a; padding: 15px; border-radius: 8px; border: 1px solid #333;">
-            <button type="button" onclick="window.toggleIdentidad('isPlayer')" style="flex: 1; padding: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; border: 2px solid ${p.isPlayer ? '#00e676' : '#ff1744'}; background: ${p.isPlayer ? '#003300' : '#330000'}; color: white; transition: 0.2s;">🎭 ${p.isPlayer ? 'ROL: JUGADOR' : 'ROL: NPC'}</button>
-            <button type="button" onclick="window.toggleIdentidad('isActive')" style="flex: 1; padding: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; border: 2px solid ${p.isActive ? '#00e676' : '#ff1744'}; background: ${p.isActive ? '#003300' : '#330000'}; color: white; transition: 0.2s;">🌟 ${p.isActive ? 'ESTADO: ACTIVO' : 'ESTADO: INACTIVO'}</button>
+        <div style="display:flex; gap:10px; margin-bottom:25px; background: #0a0a0a; padding: 15px; border-radius: 8px; border: 1px solid #333; flex-wrap:wrap; align-items:stretch;">
+            <button type="button" onclick="window.toggleIdentidad('isPlayer')" style="flex: 1; min-width:140px; padding: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; border: 2px solid ${p.isPlayer ? '#00e676' : '#ff1744'}; background: ${p.isPlayer ? '#003300' : '#330000'}; color: white; transition: 0.2s;">🎭 ${p.isPlayer ? 'ROL: JUGADOR' : 'ROL: NPC'}</button>
+            <button type="button" onclick="window.toggleIdentidad('isActive')" style="flex: 1; min-width:140px; padding: 12px; font-weight: bold; border-radius: 6px; cursor: pointer; border: 2px solid ${p.isActive ? '#00e676' : '#ff1744'}; background: ${p.isActive ? '#003300' : '#330000'}; color: white; transition: 0.2s;">🌟 ${p.isActive ? 'ESTADO: ACTIVO' : 'ESTADO: INACTIVO'}</button>
+            ${npcTipoEditor}
         </div>
         
         ${renderHeader(1, 'Acciones Rápidas (Vida y Energía)', 'var(--gold)')}
@@ -766,12 +818,14 @@ export function dibujarFormularioCrear() {
         
         <input type="text" id="npc-nombre" placeholder="Nombre del Personaje..." style="width:100%; max-width:500px; margin-bottom:30px; padding:15px; background:#000; color:var(--gold); border:2px solid var(--gold); border-radius: 8px; font-size:1.5em; text-align:center; font-family:'Cinzel'; box-shadow: 0 0 15px rgba(212,175,55,0.2);">
         
-        <div style="background:#1a0033; padding:20px; border-radius:12px; margin-bottom:30px; border:1px solid var(--gold); max-width:600px; margin-left:auto; margin-right:auto;">
+        <div style="background:#1a0033; padding:20px; border-radius:12px; margin-bottom:30px; border:1px solid var(--gold); max-width:700px; margin-left:auto; margin-right:auto;">
             <h3 style="color:var(--gold); margin-top:0; font-family: 'Cinzel';">Identidad Inicial</h3>
-            <div style="display:flex; justify-content:center; gap:20px;">
-                <button type="button" id="btn-crear-rol" onclick="window.toggleCrearRol()" data-val="npc" style="flex: 1; padding: 15px; background:#4a0000; border: 2px solid #ff0000; border-radius: 8px; color:white; font-weight: bold; font-size: 1.1em; cursor: pointer; transition: 0.2s;">🎭 ROL: NPC</button>
-                <button type="button" id="btn-crear-act" onclick="window.toggleCrearAct()" data-val="activo" style="flex: 1; padding: 15px; background:#004a00; border: 2px solid #00ff00; border-radius: 8px; color:white; font-weight: bold; font-size: 1.1em; cursor: pointer; transition: 0.2s;">🌟 ESTADO: ACTIVO</button>
+            <div style="display:flex; justify-content:center; gap:20px; flex-wrap:wrap;">
+                <button type="button" id="btn-crear-rol" onclick="window.toggleCrearRol()" data-val="npc" style="flex: 1; min-width:150px; padding: 15px; background:#4a0000; border: 2px solid #ff0000; border-radius: 8px; color:white; font-weight: bold; font-size: 1.1em; cursor: pointer; transition: 0.2s;">🎭 ROL: NPC</button>
+                <button type="button" id="btn-crear-act" onclick="window.toggleCrearAct()" data-val="activo" style="flex: 1; min-width:150px; padding: 15px; background:#004a00; border: 2px solid #00ff00; border-radius: 8px; color:white; font-weight: bold; font-size: 1.1em; cursor: pointer; transition: 0.2s;">🌟 ESTADO: ACTIVO</button>
+                <button type="button" id="btn-crear-npc-tipo" onclick="window.toggleCrearNpcTipo()" data-val="sistema" style="flex: 1; min-width:150px; padding: 15px; background:#2a1a3e; border: 2px solid #9b59b6; border-radius: 8px; color:#9b59b6; font-weight: bold; font-size: 1.1em; cursor: pointer; transition: 0.2s;">⚙️ TIPO: SISTEMA</button>
             </div>
+            <p style="color:#888; font-size:0.8em; margin:10px 0 0 0; font-style:italic;">* El tipo solo aplica a NPCs. "Sistema" = hz_ siempre en cero. "Jugador" = hz_ desde inventario.</p>
         </div>
 
         <h3 style="color:#aaa; border-bottom: 1px solid #333; padding-bottom: 10px; text-align: left; font-family: 'Cinzel'; margin-top: 30px;">1. Energía Base</h3>
