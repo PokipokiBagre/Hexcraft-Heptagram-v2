@@ -42,9 +42,9 @@ function getNpcTipoBadge(p, size = 'normal') {
     const esJugador = p.npc_tipo === 'jugador';
     const color  = esJugador ? '#1a4a2e' : '#2a1a3e';
     const border = esJugador ? '#2ecc71' : '#9b59b6';
-    const texto  = esJugador ? '🎮 NPC Jugador' : '⚙️ NPC Sistema';
-    const fs = size === 'small' ? '0.6em' : '0.7em';
-    return `<span style="background:${color}; border:1px solid ${border}; color:${border}; padding:1px 6px; border-radius:3px; font-size:${fs}; font-weight:normal; white-space:nowrap; display:inline-block; opacity:0.5;">${texto}</span>`;
+    const texto  = esJugador ? 'Jgdor.' : 'Sist.';
+    const fs = size === 'small' ? '0.55em' : '0.65em';
+    return `<span style="background:${color}; border:1px solid ${border}; color:${border}; padding:1px 5px; border-radius:3px; font-size:${fs}; font-weight:bold; white-space:nowrap; display:inline-block; opacity:0.7;">${texto}</span>`;
 }
 
 function generarVidasHTML(p) {
@@ -144,9 +144,11 @@ export function dibujarCatalogo() {
         html += `
         <div class="char-card ${claseInactiva}" style="position: relative; ${borderStyle} ${bgStyle} padding: 15px; border-radius: 12px; transition: transform 0.2s, box-shadow 0.2s;" onmouseover="this.style.transform='translateY(-5px)'" onmouseout="this.style.transform='translateY(0)'" onclick="window.abrirDetalle('${safeNombre}')">
             ${btnEliminar}
-            <img src="${STORAGE_URL}/imgpersonajes/${iconoMuestra}icon.png" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.2); margin-bottom: 10px;" onerror="${imgError}">
+            <div style="position:relative; display:inline-block; margin-bottom:10px;">
+                <img src="${STORAGE_URL}/imgpersonajes/${iconoMuestra}icon.png" style="width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 2px solid rgba(255,255,255,0.2); display:block;" onerror="${imgError}">
+                ${npcBadge ? `<div style="position:absolute; bottom:-6px; left:50%; transform:translateX(-50%);">${npcBadge}</div>` : ''}
+            </div>
             <h3 style="margin: 0 0 6px 0; font-family: 'Cinzel', serif; font-size: 1.2em; text-transform: uppercase;">${nombre}</h3>
-            ${npcBadge ? `<div style="margin-bottom:8px;">${npcBadge}</div>` : ''}
             <div style="background: rgba(0,0,0,0.5); padding: 8px; border-radius: 6px;">
                 <p style="margin: 0; font-size: 0.9em; color: #ddd;">HEX: <strong style="color: var(--gold);">${p.hex}</strong></p>
                 <p style="margin: 5px 0 0 0; font-size: 0.9em; color: #4a90e2;">VEX: <strong style="color: #4a90e2;">${calcularVexMax(p)}</strong></p>
