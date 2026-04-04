@@ -135,6 +135,13 @@ window.toggleNpcTipo = (nombre) => {
     window.encolarCambio(nombre); window.sincronizarUI();
 };
 
+// ── Cambiar npc_tipo directamente (botones del panel OP) ────────────────────
+window.cambiarNpcTipo = (nombre, tipo) => {
+    const p = statsGlobal[nombre]; if (!p || p.isPlayer) return;
+    p.npc_tipo = tipo;
+    window.encolarCambio(nombre); window.sincronizarUI();
+};
+
 // ── VEX directo para NPC sistema ────────────────────────────────────────────
 window.modVexSistema = (nombre, delta) => {
     const p = statsGlobal[nombre]; if (!p) return;
