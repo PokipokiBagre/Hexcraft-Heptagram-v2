@@ -43,8 +43,8 @@ function getNpcTipoBadge(p, size = 'normal') {
     const color  = esJugador ? '#1a4a2e' : '#2a1a3e';
     const border = esJugador ? '#2ecc71' : '#9b59b6';
     const texto  = esJugador ? '🎮 NPC Jugador' : '⚙️ NPC Sistema';
-    const fs = size === 'small' ? '0.65em' : '0.75em';
-    return `<span style="background:${color}; border:1px solid ${border}; color:${border}; padding:2px 8px; border-radius:4px; font-size:${fs}; font-weight:bold; white-space:nowrap; display:inline-block;">${texto}</span>`;
+    const fs = size === 'small' ? '0.6em' : '0.7em';
+    return `<span style="background:${color}; border:1px solid ${border}; color:${border}; padding:1px 6px; border-radius:3px; font-size:${fs}; font-weight:normal; white-space:nowrap; display:inline-block; opacity:0.5;">${texto}</span>`;
 }
 
 function generarVidasHTML(p) {
