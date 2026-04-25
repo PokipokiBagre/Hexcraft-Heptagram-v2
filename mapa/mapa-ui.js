@@ -484,6 +484,33 @@ export function actualizarPanelInfo() {
     const opDiv = document.getElementById('info-op');
     if (estadoMapa.esAdmin && !nodo.isHexNode) {
         const safeId = nodo.id.replace(/'/g, "\\'");
+        const jugadorSeleccionado = estadoMapa.jugadorActivo !== 'Todos' ? estadoMapa.jugadorActivo : null;
+        const yaLoTiene = jugadorSeleccionado && estadoMapa.vistaJugador.posesiones.has(nodo);
+
+        // Bloque asignación — solo visible si hay jugador seleccionado
+        const bloqueAsignacion = jugadorSeleccionado ? `
+            <div style="margin-top:10px; padding:10px; background:rgba(0,0,0,0.4); border-radius:8px; border:1px solid #333;">
+                <label style="color:#aaa; font-size:0.78em; font-family:'Cinzel'; display:block; margin-bottom:8px;">
+                    🎯 ASIGNAR A: <span style="color:var(--gold); font-weight:bold;">${jugadorSeleccionado}</span>
+                    ${yaLoTiene ? '<span style="color:#00ff88; font-size:0.9em;"> ✓ Ya lo posee</span>' : ''}
+                </label>
+                <div style="display:flex; gap:8px;">
+                    <button onclick="window.asignarHechizoPJ('${safeId}', false)"
+                        style="flex:1; padding:8px 6px; background:#1a0040; color:#cc88ff; border:1px solid #7744cc; border-radius:6px; cursor:pointer; font-family:'Cinzel'; font-size:0.75em; font-weight:bold; pointer-events:auto; transition:0.2s;"
+                        onmouseover="this.style.background='#2d0060'" onmouseout="this.style.background='#1a0040'">
+                        🎁 Asignar Gratis
+                    </button>
+                    <button onclick="window.asignarHechizoPJ('${safeId}', true)"
+                        style="flex:1; padding:8px 6px; background:#402000; color:#ffcc44; border:1px solid #cc8800; border-radius:6px; cursor:pointer; font-family:'Cinzel'; font-size:0.75em; font-weight:bold; pointer-events:auto; transition:0.2s;"
+                        onmouseover="this.style.background='#5a2e00'" onmouseout="this.style.background='#402000'">
+                        💰 Cobrar HEX (${nodo.hex})
+                    </button>
+                </div>
+            </div>` : `
+            <div style="margin-top:10px; padding:8px 10px; background:rgba(0,0,0,0.3); border-radius:6px; border:1px dashed #333;">
+                <span style="color:#555; font-size:0.78em; font-family:'Cinzel';">Selecciona un jugador en el panel para asignar hechizos</span>
+            </div>`;
+
         opDiv.innerHTML = `
             <hr style="border-color: #444; margin: 15px 0 10px 0;">
             <label style="color:var(--gold); font-size:0.85em; font-weight:bold; font-family:'Cinzel';">🛠️ ESTADO (MÁSTER):</label>
@@ -491,6 +518,7 @@ export function actualizarPanelInfo() {
                 <option value="si" ${nodo.esConocido ? 'selected' : ''}>👁️ SÍ (Descubierto)</option>
                 <option value="no" ${!nodo.esConocido ? 'selected' : ''}>🔒 NO (Sellado)</option>
             </select>
+            ${bloqueAsignacion}
         `;
     } else {
         opDiv.innerHTML = '';

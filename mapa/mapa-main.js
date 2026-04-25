@@ -1,7 +1,7 @@
 import { estadoMapa } from './mapa-state.js';
 import { cargarDatos, actualizarColoresFlechas, guardarPosicionesYVisibilidad } from './mapa-data.js';
 import { inicializarCanvas, dibujarFrame, actualizarPanelInfo, resetearPosicionPanel } from './mapa-ui.js';
-import { hexAuth } from '../hex-auth.js';
+import { hexAuth, supabase } from '../hex-auth.js';
 import { db }      from '../hex-db.js';
 
 window.onload = async () => {
@@ -302,6 +302,149 @@ window.cambiarEstadoNodo = (id, valor) => {
             actualizarPanelInfo(); 
             document.getElementById('btn-save-map').classList.remove('oculto');
         }
+    }
+};
+
+// ── LOG DE PORTAPAPELES ──────────────────────────────────────────
+const _logAsignaciones = []; // { texto: string, tipo: 'gratis'|'cobrado', ts: Date }
+
+function _crearPanelLog() {
+    if (document.getElementById('panel-log-asignaciones')) return;
+    const panel = document.createElement('div');
+    panel.id = 'panel-log-asignaciones';
+    panel.style.cssText = `
+        position: fixed; bottom: 25px; right: 25px; z-index: 200;
+        width: 420px; max-height: 320px;
+        background: rgba(8, 0, 18, 0.97);
+        border: 1px solid var(--gold);
+        border-radius: 10px;
+        font-family: 'Cinzel', serif;
+        box-shadow: 0 8px 30px rgba(0,0,0,0.9);
+        display: flex; flex-direction: column;
+        pointer-events: auto;
+    `;
+    panel.innerHTML = `
+        <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; border-bottom:1px solid #333;">
+            <span style="color:var(--gold); font-weight:bold; font-size:0.85em;">📋 LOG DE ASIGNACIONES</span>
+            <div style="display:flex; gap:8px;">
+                <button onclick="window.copiarLogAsignaciones()" title="Copiar al portapapeles"
+                    style="background:#1a1a00; color:var(--gold); border:1px solid var(--gold); border-radius:4px; padding:3px 10px; cursor:pointer; font-size:0.75em; font-family:'Cinzel';">
+                    📄 Copiar
+                </button>
+                <button onclick="window.limpiarLogAsignaciones()" title="Limpiar log"
+                    style="background:#1a0000; color:#ff5555; border:1px solid #ff5555; border-radius:4px; padding:3px 10px; cursor:pointer; font-size:0.75em; font-family:'Cinzel';">
+                    🗑 Limpiar
+                </button>
+                <button onclick="document.getElementById('panel-log-asignaciones').style.display='none'"
+                    style="background:#111; color:#888; border:1px solid #444; border-radius:4px; padding:3px 8px; cursor:pointer; font-size:0.8em;">✕</button>
+            </div>
+        </div>
+        <div id="log-asignaciones-lista" style="overflow-y:auto; flex:1; padding:8px 12px; font-size:0.78em; line-height:1.7;"></div>
+    `;
+    document.body.appendChild(panel);
+}
+
+function _renderLog() {
+    _crearPanelLog();
+    const panel = document.getElementById('panel-log-asignaciones');
+    if (panel) panel.style.display = 'flex';
+
+    const lista = document.getElementById('log-asignaciones-lista');
+    if (!lista) return;
+    lista.innerHTML = _logAsignaciones.length === 0
+        ? '<span style="color:#555; font-style:italic;">Sin asignaciones aún...</span>'
+        : _logAsignaciones.map(e => `
+            <div style="padding:4px 0; border-bottom:1px solid #1a1a1a; color:${e.tipo === 'cobrado' ? '#ffcc44' : '#cc88ff'};">
+                ${e.texto}
+            </div>`).join('');
+    lista.scrollTop = lista.scrollHeight;
+}
+
+window.copiarLogAsignaciones = () => {
+    const texto = _logAsignaciones.map(e => e.texto).join('\n');
+    navigator.clipboard.writeText(texto).then(() => {
+        const btn = document.querySelector('#panel-log-asignaciones button');
+        if (btn) { const orig = btn.textContent; btn.textContent = '✓ Copiado'; setTimeout(() => btn.textContent = orig, 1500); }
+    });
+};
+
+window.limpiarLogAsignaciones = () => {
+    _logAsignaciones.length = 0;
+    _renderLog();
+};
+
+// ── ASIGNAR HECHIZO A PERSONAJE ──────────────────────────────────
+window.asignarHechizoPJ = async (nodoId, cobrarHex) => {
+    const jugador = estadoMapa.jugadorActivo;
+    if (!jugador || jugador === 'Todos') {
+        alert('Selecciona un jugador en el panel izquierdo primero.');
+        return;
+    }
+
+    const nodo = estadoMapa.nodos.find(n => n.id === nodoId);
+    if (!nodo) return;
+
+    // Verificar si ya lo tiene
+    if (estadoMapa.vistaJugador.posesiones.has(nodo)) {
+        alert(`${jugador} ya posee "${nodo.nombreOriginal}".`);
+        return;
+    }
+
+    const nombreHechizo = nodo.nombreOriginal.replace(/\s*\(\d+\)$/, '').trim();
+    const hexCosto = nodo.hex || 0;
+
+    try {
+        // 1. Agregar al inventario en Supabase
+        const { error: errInv } = await supabase.from('hechizos_inventario').upsert({
+            personaje_nombre: jugador,
+            hechizo_nombre:   nodo.id,
+            hechizo_afinidad: nodo.afinidad || '',
+            hechizo_hex:      hexCosto,
+            tipo:             'Normal'
+        }, { onConflict: 'personaje_nombre,hechizo_nombre' });
+
+        if (errInv) throw errInv;
+
+        // 2. Si cobrar HEX: leer hex actual y restar
+        let hexAntes = null;
+        let hexDespues = null;
+        if (cobrarHex && hexCosto > 0) {
+            const { data: pjData, error: errPj } = await supabase
+                .from('personajes').select('hex').eq('nombre', jugador).single();
+            if (errPj) throw errPj;
+
+            hexAntes = pjData.hex || 0;
+            hexDespues = Math.max(0, hexAntes - hexCosto);
+
+            const { error: errUpd } = await supabase
+                .from('personajes').update({ hex: hexDespues }).eq('nombre', jugador);
+            if (errUpd) throw errUpd;
+        }
+
+        // 3. Actualizar estado local del mapa
+        const invSet = estadoMapa.inventario[jugador] || new Set();
+        invSet.add(nodo.id.toLowerCase().trim());
+        invSet.add(nombreHechizo.toLowerCase().trim());
+        estadoMapa.inventario[jugador] = invSet;
+
+        // Re-calcular vista del jugador activo
+        window.seleccionarJugador(jugador);
+
+        // 4. Registrar en log
+        let lineaLog;
+        if (cobrarHex && hexCosto > 0) {
+            lineaLog = `${jugador} -${hexCosto} HEX (${hexDespues} restantes) | Hechizo aprendido | ${nodo.afinidad} | ${nodo.id} | ${nombreHechizo.toUpperCase()}`;
+        } else {
+            lineaLog = `${jugador} +0 HEX | Hechizo asignado (gratis) | ${nodo.afinidad} | ${nodo.id} | ${nombreHechizo.toUpperCase()}`;
+        }
+        _logAsignaciones.push({ texto: lineaLog, tipo: cobrarHex ? 'cobrado' : 'gratis' });
+        _renderLog();
+
+        actualizarPanelInfo();
+
+    } catch (e) {
+        console.error('Error asignando hechizo:', e);
+        alert('Error al asignar: ' + (e.message || e));
     }
 };
 
